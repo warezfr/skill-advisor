@@ -11,9 +11,9 @@
 ![Node.js 22+](https://img.shields.io/badge/node-22%2B-16a34a)
 ![Tested on macOS, Windows 11, Linux](https://img.shields.io/badge/tested-macOS%20%C2%B7%20Windows%2011%20%C2%B7%20Linux-64748b)
 
-[![Skill Advisor in 20 seconds](docs/assets/demo.gif)](https://github.com/warezfr/skill-advisor/releases/download/v0.1.0/skill-advisor-demo.mp4)
+[![Skill Advisor in 20 seconds](docs/assets/video-youtube.jpg)](https://www.youtube.com/watch?v=hjwuJ8zlqQc)
 
-*Click the animation to watch the full video (MP4).*
+*Click the image to watch the video on YouTube.*
 
 </div>
 
