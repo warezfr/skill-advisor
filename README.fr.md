@@ -42,6 +42,30 @@ Un Agent Skill est un dossier avec un fichier `SKILL.md`. Il apprend à un agent
 
 ## Démarrage rapide
 
+### Un seul script
+
+Un script télécharge Skill Advisor, le contrôle et l'ouvre dans votre navigateur. Il demande votre langue, français ou anglais. Il n'installe aucun logiciel système et ne demande aucun droit d'administrateur.
+
+macOS et Linux :
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/warezfr/skill-advisor/main/install.sh
+bash install.sh
+```
+
+Windows, dans PowerShell :
+
+```powershell
+irm https://raw.githubusercontent.com/warezfr/skill-advisor/main/install.ps1 -OutFile install.ps1
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
+
+Lisez un script avant de le lancer. Les options sont dans le [manuel](docs/install/INSTALL.fr.md).
+
+![Le script d'installation](docs/assets/screenshots/15-terminal-install-fr.png)
+
+### À la main
+
 Il vous faut un navigateur web. Pour les commandes, il faut aussi [Node.js](https://nodejs.org) 22 ou plus récent (testé avec Node.js 26).
 
 ```bash
@@ -165,6 +189,8 @@ tools/         skill-scan.mjs, le contrôle de sécurité statique
 examples/      Deux skills d'exemple pour le contrôle : un sûr, un écrit pour échouer
 essais/        Scripts de test et résultats bruts pour Windows, Linux et macOS
 docs/          Manuel d'installation, captures d'écran et rapports de test
+install.sh    Script d'installation pour macOS et Linux
+install.ps1   Script d'installation pour Windows
 ```
 
 ## Feuille de route

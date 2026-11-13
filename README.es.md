@@ -42,6 +42,30 @@ Un Agent Skill es una carpeta con un archivo `SKILL.md`. Ese archivo enseña a u
 
 ## Inicio rápido
 
+### Un solo script
+
+Un script descarga Skill Advisor, lo comprueba y lo abre en su navegador. Pregunta su idioma, francés o inglés. No instala ningún software del sistema y no pide permisos de administrador.
+
+macOS y Linux:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/warezfr/skill-advisor/main/install.sh
+bash install.sh
+```
+
+Windows, en PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/warezfr/skill-advisor/main/install.ps1 -OutFile install.ps1
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
+
+Lea un script antes de ejecutarlo. Las opciones están en el [manual](docs/install/INSTALL.es.md).
+
+![El script de instalación](docs/assets/screenshots/15-terminal-install-en.png)
+
+### A mano
+
 Necesita un navegador web. Para los comandos necesita además [Node.js](https://nodejs.org) 22 o posterior (probado con Node.js 26).
 
 ```bash
@@ -165,6 +189,8 @@ tools/         skill-scan.mjs, the static security check
 examples/      Two example skills for the check: one safe, one written to fail
 essais/        Test scripts and raw results for Windows, Linux and macOS
 docs/          Installation manual, screenshots and test reports
+install.sh    Installation script for macOS and Linux
+install.ps1   Installation script for Windows
 ```
 
 ## Hoja de ruta

@@ -26,6 +26,52 @@
 
 ---
 
+## الطريق السريع · سكربت التثبيت
+
+السكربت ينفّذ الخطوات من 1 إلى 3 بدلًا منك: يتحقق من أدواتك وينزّل Skill Advisor ويفتح العرض التجريبي. يسألك عن اللغة: الفرنسية أو الإنجليزية. لا يثبّت أي برنامج في النظام ولا يطلب صلاحيات المدير. اقرأه قبل تشغيله: [install.sh](../../install.sh) و [install.ps1](../../install.ps1).
+
+على macOS و Linux:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/warezfr/skill-advisor/main/install.sh
+bash install.sh
+```
+
+على Windows، في PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/warezfr/skill-advisor/main/install.ps1 -OutFile install.ps1
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
+
+الخيار `-ExecutionPolicy Bypass` يسري على هذا التشغيل فقط. ولا يغيّر إعدادات نظامك.
+
+**النتيجة المتوقعة:** أربع خطوات مرقّمة في الطرفية، ثم شاشة "Ma machine" (جهازي) في متصفحك.
+
+![سكربت التثبيت](../assets/screenshots/15-terminal-install-en.png)
+
+<div dir="rtl">
+
+| على macOS و Linux | على Windows | الأثر |
+|---|---|---|
+| الخيار `--lang fr` أو `--lang en` | الخيار `-Lang fr` أو `-Lang en` | اختيار اللغة دون السؤال |
+| الخيار `--dir <folder>` | الخيار `-Dir <folder>` | التثبيت في مجلد آخر. المجلد الافتراضي هو `skill-advisor` في مجلدك الشخصي |
+| الخيار `--no-git` | الخيار `-NoGit` | تنزيل الأرشيف حتى لو كان git مثبّتًا |
+| الخيار `--no-open` | الخيار `-NoOpen` | عدم فتح المتصفح في النهاية |
+
+</div>
+
+ما الذي يفعله السكربت:
+
+1. يتحقق من وجود git و Node.js. لا يُشترط أيٌّ منهما.
+2. ينزّل Skill Advisor عبر git، أو كأرشيف إذا لم يكن git موجودًا.
+3. يشغّل اختبار الواجهة إذا وُجد Node.js الإصدار 22 أو أحدث.
+4. يفتح الملف `prototype/dist/preview.html` في متصفحك.
+
+جُرّب السكربت على macOS و Debian 12 و Windows 11. شغّله مرة أخرى لتحديث نسخة مثبّتة عبر git. ثم تابع من الخطوة 4.
+
+---
+
 ## الخطوة 1 · تحقق مما تحتاجه
 
 <div dir="rtl">

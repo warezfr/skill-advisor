@@ -22,6 +22,48 @@ Ce manuel vous mène de zéro à un skill vérifié et installé dans votre agen
 
 ---
 
+## Voie rapide · Le script d'installation
+
+Le script fait les étapes 1 à 3 pour vous : il vérifie vos outils, télécharge Skill Advisor et ouvre la démonstration. Il demande votre langue, français ou anglais. Il n'installe aucun logiciel système et ne demande aucun droit d'administrateur. Lisez-le avant de le lancer : [install.sh](../../install.sh), [install.ps1](../../install.ps1).
+
+macOS et Linux :
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/warezfr/skill-advisor/main/install.sh
+bash install.sh
+```
+
+Windows, dans PowerShell :
+
+```powershell
+irm https://raw.githubusercontent.com/warezfr/skill-advisor/main/install.ps1 -OutFile install.ps1
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
+
+L'option `-ExecutionPolicy Bypass` vaut pour ce seul lancement. Elle ne change pas les réglages de votre système.
+
+**Résultat attendu :** quatre étapes numérotées dans le terminal, puis l'écran « Ma machine » dans votre navigateur.
+
+![Le script d'installation](../assets/screenshots/15-terminal-install-fr.png)
+
+| macOS, Linux | Windows | Effet |
+|---|---|---|
+| `--lang fr`, `--lang en` | `-Lang fr`, `-Lang en` | Choisir la langue sans la question |
+| `--dir <dossier>` | `-Dir <dossier>` | Installer dans un autre dossier. Par défaut : `skill-advisor` dans votre dossier personnel |
+| `--no-git` | `-NoGit` | Télécharger l'archive même si git est installé |
+| `--no-open` | `-NoOpen` | Ne pas ouvrir le navigateur à la fin |
+
+Ce que fait le script :
+
+1. Il regarde si git et Node.js sont présents. Aucun des deux n'est obligatoire.
+2. Il télécharge Skill Advisor avec git, ou sous forme d'archive si git est absent.
+3. Il lance le test de l'interface si Node.js 22 ou plus récent est présent.
+4. Il ouvre `prototype/dist/preview.html` dans votre navigateur.
+
+Le script a été testé sur macOS, Debian 12 et Windows 11. Relancez-le pour mettre à jour une copie installée avec git. Continuez ensuite à l'étape 4.
+
+---
+
 ## Étape 1 · Vérifier ce qu'il vous faut
 
 | Outil | Utile pour | Comment vérifier | Où le trouver |

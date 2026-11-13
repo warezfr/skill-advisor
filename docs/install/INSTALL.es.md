@@ -22,6 +22,48 @@ Este manual le lleva desde cero hasta una skill verificada e instalada en su age
 
 ---
 
+## Vía rápida · El script de instalación
+
+El script hace los pasos 1 a 3 por usted: comprueba sus herramientas, descarga Skill Advisor y abre la demostración. Pregunta su idioma, francés o inglés. No instala ningún software del sistema y no pide permisos de administrador. Léalo antes de ejecutarlo: [install.sh](../../install.sh), [install.ps1](../../install.ps1).
+
+macOS y Linux:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/warezfr/skill-advisor/main/install.sh
+bash install.sh
+```
+
+Windows, en PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/warezfr/skill-advisor/main/install.ps1 -OutFile install.ps1
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
+
+La opción `-ExecutionPolicy Bypass` vale solo para esta ejecución. No cambia la configuración de su sistema.
+
+**Resultado esperado:** cuatro pasos numerados en la terminal y, después, la pantalla "Ma machine" (Mi máquina) en su navegador.
+
+![El script de instalación](../assets/screenshots/15-terminal-install-en.png)
+
+| macOS, Linux | Windows | Efecto |
+|---|---|---|
+| `--lang fr`, `--lang en` | `-Lang fr`, `-Lang en` | Elegir el idioma sin la pregunta |
+| `--dir <carpeta>` | `-Dir <carpeta>` | Instalar en otra carpeta. Por defecto: `skill-advisor` en su carpeta personal |
+| `--no-git` | `-NoGit` | Descargar el archivo aunque git esté instalado |
+| `--no-open` | `-NoOpen` | No abrir el navegador al final |
+
+Qué hace el script:
+
+1. Comprueba si git y Node.js están presentes. Ninguno es obligatorio.
+2. Descarga Skill Advisor con git, o como archivo si git no está.
+3. Ejecuta la prueba de la interfaz si hay Node.js 22 o posterior.
+4. Abre `prototype/dist/preview.html` en su navegador.
+
+El script se probó en macOS, Debian 12 y Windows 11. Ejecútelo de nuevo para actualizar una copia instalada con git. Después continúe en el paso 4.
+
+---
+
 ## Paso 1 · Compruebe lo que necesita
 
 | Herramienta | Para qué se necesita | Cómo comprobarla | Dónde obtenerla |

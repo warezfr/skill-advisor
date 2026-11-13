@@ -46,6 +46,30 @@
 
 ## البدء السريع
 
+### سكربت واحد
+
+سكربت واحد ينزّل Skill Advisor ويفحصه ويفتحه في متصفحك. يسألك عن اللغة: الفرنسية أو الإنجليزية. لا يثبّت أي برنامج في النظام ولا يطلب صلاحيات المدير.
+
+على macOS و Linux:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/warezfr/skill-advisor/main/install.sh
+bash install.sh
+```
+
+على Windows، في PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/warezfr/skill-advisor/main/install.ps1 -OutFile install.ps1
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
+
+اقرأ أي سكربت قبل تشغيله. الخيارات مذكورة في [الدليل](docs/install/INSTALL.ar.md).
+
+![سكربت التثبيت](docs/assets/screenshots/15-terminal-install-en.png)
+
+### يدويًا
+
 تحتاج إلى متصفح ويب. وللأوامر تحتاج أيضًا إلى [Node.js](https://nodejs.org) الإصدار 22 أو أحدث (جُرّب مع Node.js 26).
 
 ```bash
@@ -189,6 +213,8 @@ tools/         skill-scan.mjs, the static security check
 examples/      Two example skills for the check: one safe, one written to fail
 essais/        Test scripts and raw results for Windows, Linux and macOS
 docs/          Installation manual, screenshots and test reports
+install.sh    Installation script for macOS and Linux
+install.ps1   Installation script for Windows
 ```
 
 ## خارطة الطريق

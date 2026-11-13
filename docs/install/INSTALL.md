@@ -22,6 +22,48 @@ This manual takes you from nothing to a checked skill installed in your agent. E
 
 ---
 
+## Fast path · The installation script
+
+The script does steps 1 to 3 for you: it checks your tools, downloads Skill Advisor and opens the demonstration. It asks for your language, French or English. It installs no system software and needs no administrator rights. Read it before you run it: [install.sh](../../install.sh), [install.ps1](../../install.ps1).
+
+macOS and Linux:
+
+```bash
+curl -fsSLO https://raw.githubusercontent.com/warezfr/skill-advisor/main/install.sh
+bash install.sh
+```
+
+Windows, in PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/warezfr/skill-advisor/main/install.ps1 -OutFile install.ps1
+powershell -ExecutionPolicy Bypass -File install.ps1
+```
+
+The option `-ExecutionPolicy Bypass` applies to this one run. It does not change the settings of your system.
+
+**Expected result:** four numbered steps in the terminal, then the screen "Ma machine" (My machine) in your browser.
+
+![The installation script](../assets/screenshots/15-terminal-install-en.png)
+
+| macOS, Linux | Windows | Effect |
+|---|---|---|
+| `--lang fr`, `--lang en` | `-Lang fr`, `-Lang en` | Choose the language without the question |
+| `--dir <folder>` | `-Dir <folder>` | Install into another folder. The default is `skill-advisor` in your home folder |
+| `--no-git` | `-NoGit` | Download the archive even when git is installed |
+| `--no-open` | `-NoOpen` | Do not open the browser at the end |
+
+What the script does:
+
+1. It checks whether git and Node.js are present. Neither is required.
+2. It downloads Skill Advisor with git, or as an archive when git is absent.
+3. It runs the interface test when Node.js 22 or later is present.
+4. It opens `prototype/dist/preview.html` in your browser.
+
+The script was tested on macOS, Debian 12 and Windows 11. Run it again to update a copy installed with git. Then continue at step 4.
+
+---
+
 ## Step 1 · Check what you need
 
 | Tool | Needed for | How to check | Where to get it |
