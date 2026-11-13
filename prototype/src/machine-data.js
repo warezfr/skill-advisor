@@ -109,4 +109,27 @@
   );
 
   SA.data.mine = mine;
+
+  /* Sauvegardes d'exemple : une par origine, sur des skills fictifs. Copiées dans SA.state au démarrage de la démo (SA.demoBackups). */
+  function bk(id, label, note, origin, at, size, items) {
+    var f = items[0];
+    return { id: id, label: label, note: note, origin: origin, at: at, size: size, items: items, name: f.name, src: f.src, agents: f.agents.slice() };
+  }
+  SA.data.backups = [
+    bk('20261112-174210-changelog-writer', 'changelog-writer', '', 'remove', '2026-11-12T17:42:10.000Z', 18432, [
+      { name: 'changelog-writer', src: 'exemple/outils-git', agents: ['claude', 'cursor'], verdict: 'vert' }
+    ]),
+    bk('20261110-091500-avant-la-demo', 'Avant la démo du salon', 'Version stable des skills de relecture.', 'manual', '2026-11-10T09:15:00.000Z', 64512, [
+      { name: 'review-notes', src: 'exemple/relecture', agents: ['claude', 'gemini'], verdict: 'vert' },
+      { name: 'test-plan', src: 'exemple/relecture', agents: ['claude', 'gemini'], verdict: 'vert-remarques' },
+      { name: 'docs-tone', src: 'exemple/relecture', agents: ['claude'], verdict: 'orange' }
+    ]),
+    bk('20261108-140302-skills-equipe', 'Skills de l’équipe front', 'Archive reçue de l’équipe, recontrôlée à l’import.', 'import', '2026-11-08T14:03:02.000Z', 120832, [
+      { name: 'design-tokens', src: 'exemple/fondations-app', agents: [], verdict: 'vert' },
+      { name: 'deploy-check', src: 'exemple/fondations-app', agents: [], verdict: 'rouge' }
+    ]),
+    bk('20261105-083000-sql-helpers', 'sql-helpers', 'Version présente avant d’appliquer une sauvegarde.', 'replace', '2026-11-05T08:30:00.000Z', 9216, [
+      { name: 'sql-helpers', src: 'exemple/donnees-propres', agents: ['claude', 'gemini', 'cursor'], verdict: 'vert' }
+    ])
+  ];
 })();

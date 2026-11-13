@@ -7,6 +7,9 @@
 
   var esc = function (s) { return SA.esc(s); };
   function mine() { return SA.state.mine || []; }
+  /* Non contrôlé : sans note d'avertissement, ou, en mode réel, sans résultat du contrôle (scan: null). */
+  function unscanned(r) { return r.warn == null || (!!(SA.live && SA.live.on) && !r.scan); }
+  function riskyDiff(r) { return !!(r.diff && r.diff.scan && r.diff.scan.level === 2); }
   function agentName(id) {
     var out = id;
     SA.agents().forEach(function (a) { if (a.id === id) out = a.name; });
@@ -29,7 +32,7 @@
     m.filter(function (r) { return r.warn === 2 && !r.real; }).forEach(function (r) {
       out.push({ lvl: 'bad', t: r.name + ' : motifs à risque dans un skill ' + (r.kind === 'manuel' ? 'copié à la main' : 'installé'), d: (r.local || []).map(function (f) { return f.label; }).join(' · '), a: 'Voir le contrôle', attr: 'data-local="' + esc(r.id) + '"' });
     });
-    var risky = m.filter(function (r) { return r.st === 'maj' && r.diff && r.diff.scan.level === 2; });
+    var risky = m.filter(function (r) { return r.st === 'maj' && riskyDiff(r); });
     risky.forEach(function (r) {
       out.push({ lvl: 'bad', t: r.name + ' : la mise à jour ajoute un motif à risque', d: r.diff.scan.text, a: 'Voir ce qui change', attr: 'data-hm-diff="' + esc(r.id) + '"' });
     });
@@ -84,8 +87,8 @@
       }
       var iss = issues();
       var tok = Math.round(c.chars / 4 / 100) * 100;
-      var ok = mine().filter(function (r) { return r.warn === 0; }).length;
-      var un = mine().filter(function (r) { return r.warn == null; }).length;
+      var ok = mine().filter(function (r) { return r.warn === 0 && !unscanned(r); }).length;
+      var un = mine().filter(unscanned).length;
       return '<p class="eye" data-st>Ma machine</p>' +
         SA.h(SA.pl(c.total, 'skill', 'skills') + ' dans ' + SA.pl(n, 'agent', 'agents')) +
         '<p class="lede" data-st>Ce que vos agents ont sous la main, et ce qui demande votre attention.</p>' +
@@ -115,7 +118,7 @@
           '<p class="hm-search mut" data-st>Ou cherchez dans la base : touche <span class="kbd">/</span></p>' +
         '</section>' +
         '<section class="hm-sec" aria-labelledby="hm-t3" data-st><h2 class="h2" id="hm-t3">Contrôle de sécurité</h2>' +
-          '<p class="sub">' + SA.pl(c.total - un, 'skill lu', 'skills lus') + ' sur cette machine : ' + ok + ' sans motif connu, ' + c.review + ' à relire' + (un ? ', ' + un + ' non contrôlés' : '') + '.</p>' +
+          '<p class="sub">' + SA.pl(c.total - un, 'skill lu', 'skills lus') + ' sur cette machine : ' + ok + ' sans motif connu, ' + c.review + ' à relire' + (un ? ', ' + un + (un > 1 ? ' non contrôlés' : ' non contrôlé') : '') + '.</p>' +
           '<p class="mut hm-note">Le contrôle lit le texte des fichiers et signale des motifs, pas une intention. Il ne retire jamais rien de lui-même.</p></section>';
     },
 

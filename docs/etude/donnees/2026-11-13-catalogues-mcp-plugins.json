@@ -1,0 +1,1057 @@
+{
+ "date": "2026-11-13",
+ "note": "Recherche documentaire : catalogues de serveurs MCP et de plugins, signaux de classement, contrôles de sécurité, commandes d’installation. Chaque ligne porte sa source et sa fiabilité.",
+ "groups": [
+  {
+   "key": "mcp-catalogues",
+   "research": {
+    "rows": [
+     {
+      "name": "Official MCP Registry (modelcontextprotocol)",
+      "kind": "mcp-registry",
+      "what": "The official, centralised metadata registry for publicly accessible MCP servers, backed by Anthropic, GitHub, PulseMCP and Microsoft. Each entry is a server.json record with a reverse-DNS name (io.github.user/server or com.example/server), a description, a version, a repository, and either packages (npm, pypi, nuget, cargo, oci, mcpb) or remotes (streamable-http, sse). The registry has been in preview since 2025-09-08, and breaking changes or data resets may still occur. It publishes no total count. Third-party counts, reported only: 30,375 servers (99,114 version records) on 2026-09-10, and 52,042 latest-version servers on 2026-10-28 via the API. These figures depend on whether you count latest versions or all version records.",
+      "access": "Base URL: https://registry.modelcontextprotocol.io. It needs no authentication and is read-only. Use API v0.1, which has been frozen since 2025-10-24; v0 still changes. Endpoints: GET /v0.1/servers, GET /v0.1/servers/{serverName}/versions and GET /v0.1/servers/{serverName}/versions/{version}. The version can be 'latest', and path parameters must be URL-encoded. Query parameters: limit, cursor (taken from metadata.nextCursor), updated_since (RFC 3339), search (matches a substring of the name, with no ranking), and version=latest. Without version=latest, the list returns every version of every server. Tested today with GET /v0.1/servers?limit=1&search=io.github.github/github-mcp-server&version=latest, which returned HTTP 200. The entry held $schema (2025-12-11), name, title, description, repository.url, version 2.1.0, packages[] (registryType oci, identifier ghcr.io/github/github-mcp-server:2.1.0, transport stdio, runtimeArguments with variables marked isSecret), remotes[] (streamable-http https://api.githubcopilot.com/mcp/ with headers) and _meta['io.modelcontextprotocol.registry/official'] {status, statusChangedAt, publishedAt, updatedAt, isLatest}. The rate limit was not found, because the test returned no rate-limit headers. The maximum page size was not tested. The docs recommend doing an initial full crawl once, then running incremental syncs with updated_since about once an hour, using compression and backoff. Incremental results include servers whose status changed to deprecated or deleted.",
+      "signals": "Popularity: none. The registry is deliberately unopinionated and leaves ratings to aggregators. Trust: namespace authentication proves control of the GitHub account or the domain (through GitHub OAuth or OIDC, a DNS challenge or an HTTP challenge). Package ownership is verified per type: mcpName in package.json for npm, an 'mcp-name:' string in the README for PyPI, NuGet and Cargo, the OCI label io.modelcontextprotocol.server.name, and a fileSha256 for mcpb. Each record has a status field (active, deprecated or deleted); 'deleted' usually means moderation removed it as spam or malware. Freshness: publishedAt, updatedAt and statusChangedAt. A record also shows whether the server is remote or local, through remotes[] versus packages[]. Categories and tags: none. Security scanning is delegated to the package registries and to downstream aggregators.",
+      "terms": "No data licence or terms of use for the metadata were found. The repository LICENSE covers code (Apache-2.0, with some older parts MIT) and documentation (CC-BY-4.0), not the server metadata. The aggregators guide explicitly intends the data for downstream aggregators, which scrape it and persist it in their own store. The registry gives no uptime or data-durability guarantee.",
+      "install": "Each record is machine-readable install data. For npm with runtimeHint npx, run 'npx -y <identifier>'. For PyPI, run 'uvx <identifier>'. For NuGet, run 'dnx'. For Cargo, run 'cargo install' and then call the binary by name. For OCI, run 'docker run'. For mcpb, verify fileSha256 before installing. Remotes give a URL plus headers. For Claude Code, verified today: 'claude mcp add --transport stdio <name> --env KEY=VALUE -- <command> [args]', 'claude mcp add --transport http <name> <url> --header \"Authorization: Bearer ...\"', 'claude mcp add-json <name> '<json>'', and the scopes '--scope local|project|user'. Project scope writes .mcp.json. Also 'claude mcp list', 'claude mcp get' and 'claude mcp remove <name>'. Commands for other agents: not found in this research.",
+      "notes": "This registry is the best backbone, because it is open, needs no key, uses a standard schema and supports incremental sync. It has no popularity data, so ranking needs a join with GitHub stars (via repository.url), npm or PyPI downloads (via packages[].identifier), or Docker pull_count. Verified risk: entries under the ai.smithery/* namespace point to server.smithery.ai and require a Smithery Bearer key. For example, ai.smithery/Hint-Services-obsidian-github-mcp is still status=active and isLatest=true. The Smithery /future page says server.smithery.ai URLs stopped working on 2026-10-31. The catalogue build should therefore filter out remotes on server.smithery.ai and run.tools. The registry OpenAPI spec lets sub-registries inject their own data under _meta, with a namespaced key such as 'com.example.subregistry/custom'.",
+      "source": "https://modelcontextprotocol.io/registry/about ; https://modelcontextprotocol.io/registry/registry-aggregators.md ; https://modelcontextprotocol.io/registry/package-types.md ; https://github.com/modelcontextprotocol/registry ; https://raw.githubusercontent.com/modelcontextprotocol/registry/main/LICENSE ; https://code.claude.com/docs/en/mcp ; reported counts: https://agentndx-web.pages.dev/blog/how-many-mcp-servers-exist-census-2026 , https://dev.to/amareswer/the-mcp-registry-by-the-numbers-38nc",
+      "confidence": "verified"
+     },
+     {
+      "name": "GitHub MCP Registry (github.com/mcp)",
+      "kind": "mcp-registry",
+      "what": "GitHub's curated MCP server directory, which acts as a sub-registry of the official MCP Registry. Tested today, it holds 771 servers in total (metadata.total = 771). The web page sorts them by GitHub stars in descending order; its first entry, microsoft/markitdown, shows 195,222, which equals the API's stargazerCount. Each card shows a logo, a name, a publisher, a one-line description, the star count and an Install button.",
+      "access": "Tested today with GET https://api.mcp.github.com/v0.1/servers?limit=1, which returned HTTP 200 without a key. The endpoint follows the v0.1 registry shape and adds metadata {count, nextCursor, per_page, total, total_pages}. The cursor encodes the star count, so pages come in star order. Fields of one entry: server.name ('microsoft/markitdown'), description, version, repository {id, source, url}, packages[] (registryType pypi, identifier markitdown-mcp, runtimeHint uvx, transport stdio) and _meta['io.modelcontextprotocol.registry/publisher-provided'].github. That github object holds stargazerCount, license ('MIT License'), topics[], primaryLanguage, isInOrganization, pushedAt, ownerAvatarUrl, displayName and readme (the full README text). The entry also has _meta official {status, publishedAt, updatedAt, isLatest}. The host api.mcp.github.com has no public documentation, so it may change without notice. Rate limit: not found.",
+      "signals": "Popularity: stargazerCount. Trust: the list is curated by GitHub and small (771 servers). isInOrganization shows whether the repository belongs to an organisation. Each entry carries a licence and a status. Freshness: pushedAt (the last push to the repository), readmeUpdatedAt and updatedAt. Topics can serve as tags. Remote or local is visible from remotes[] versus packages[].",
+      "terms": "No terms specific to this API were found. The web page links to the general GitHub Terms of Service. Reuse terms for the data: not found.",
+      "install": "Same as the official registry: the packages[] and remotes[] data map to install commands. The web Install button targets clients that this research did not establish. GitHub documents that Copilot can use a registry URL as an enterprise allowlist, and that Copilot appends /v0.1 to it itself.",
+      "notes": "Use this as the shortlist of the best servers, with stars, licence, topics and README already joined in, all from a single source with no key. The endpoint was tested but is undocumented, so treat it as unstable.",
+      "source": "https://github.com/mcp ; https://api.mcp.github.com/v0.1/servers?limit=1 ; https://docs.github.com/en/copilot/how-tos/administer-copilot/manage-mcp-usage/restrict-based-on-registry",
+      "confidence": "verified"
+     },
+     {
+      "name": "Smithery (now part of Arcade)",
+      "kind": "mcp-registry",
+      "what": "An MCP server registry and hosting proxy. Tested today, it lists 20,750 servers (pagination.totalCount = 20750). Its /future page says that on 2026-10-31 Smithery shut down its server URLs on run.tools and server.smithery.ai, the Smithery API, Connect and Toolbox, accounts and API keys, and the CLI and SDKs. It says it will continue as a public, non-proxied MCP registry: the smithery.ai directory, now powered by Arcade.dev, with a curated set of verified servers that show direct MCP URLs.",
+      "access": "Tested today: GET https://registry.smithery.ai/servers?pageSize=1 and GET https://api.smithery.ai/servers?pageSize=1 both returned HTTP 200 without a key, even though the /future page lists the API as shut down. List fields: id, qualifiedName, namespace, displayName, description, iconUrl, verified, useCount, remote, isDeployed, unlisted, inactive, createdAt, homepage, bySmithery, owner and score (null in the test), plus pagination {currentPage, pageSize, totalPages (500), totalCount}. Tested GET https://api.smithery.ai/servers/brave, which returned remote, deploymentUrl (https://brave.run.tools), connections[] with a JSON Schema in configSchema, security (null), and tools[] with inputSchema. Reported by secondary sources: a semantic search parameter q, filters such as is:deployed, owner: and repo:, and Bearer authentication. The documentation pages returned 404 today. Rate limit: not found.",
+      "signals": "Popularity: useCount (87,579 for Brave Search in the test). Trust: verified, bySmithery, and remote or isDeployed. Freshness: only createdAt was seen. The detail record has a 'security' field, which was null in the test. The tool list is useful for search.",
+      "terms": "Not found: smithery.ai/terms returned 404, and the /tos and /terms-of-service pages redirect to a 'Not found' page.",
+      "install": "Historically Smithery offered a CLI and hosted URLs, which have been deprecated or shut down since 2026-10-31. The detail record's configSchema could still help build environment prompts. To connect, use the vendor's direct MCP URL, which the /future page says is shown on each server page.",
+      "notes": "Do not use Smithery as a backbone. Its API is officially shut down and could stop at any moment. Its terms are missing. Its hosted URLs are dead, and these dead URLs also appear in official registry entries under the ai.smithery/* namespace. At most, use useCount as an optional, best-effort extra popularity signal while the endpoint still answers.",
+      "source": "https://smithery.ai/future ; https://registry.smithery.ai/servers?pageSize=1 ; https://api.smithery.ai/servers/brave",
+      "confidence": "verified"
+     },
+     {
+      "name": "Glama MCP directory",
+      "kind": "mcp-registry",
+      "what": "The largest directory found. Its page showed 120,628 servers on 2026-11-13, sourced from community submissions, automated discovery with manual curation, the official registry and awesome-mcp-servers. Attribute counts on the page: Remote 47,366, Local 45,816 and Hybrid 22,579; Official 8,092 and Claimed 11,402; Python 50,437 and TypeScript 41,168. There are many categories. Each server has letter grades from A to D for licence, quality and maintenance.",
+      "access": "Base URL: https://glama.ai/api/mcp. Its endpoints list servers, list attributes, get one server, list remote connectors, list hosted instances, and accept telemetry. Tested today: GET https://glama.ai/api/mcp/v1/servers?first=1 returned HTTP 401 'This endpoint requires an API key', so a Bearer key from a Glama account is required. Pagination is a cursor (pass endCursor as 'after' until hasNextPage is false). Rate limit: 100 requests per second per IP, with RateLimit-* headers; repeated 429s can lead to a permanent 403. The field list of a server object was not found, because the reference page did not show it.",
+      "signals": "Sorting by Recent Usage, Weekly npm Downloads, Weekly PyPI Downloads, GitHub Stars, Recent GitHub Stars, Date Added and Date Updated. Trust: the official, claimed and hosting attributes, plus the licence, quality and maintenance grades. The cards show no separate security grade, although a security category exists. Glama score badges appear on many entries in awesome-mcp-servers.",
+      "terms": "The API Data License is section 15 of the terms, effective 2026-08-25, and the terms as a whole are effective 2026-08-27. It is a limited, revocable licence that requires an API key. Every page that shows Glama data must visibly credit Glama with a link, and each record must link to its Glama listing. It forbids bulk redistribution, building a product that competes with the Glama directory, and embedding a key in a publicly distributed client. Cached data must be deleted within 30 days of termination.",
+      "install": "Not found in this research.",
+      "notes": "Glama is unsuitable as the data source for a free public catalogue. It needs an account and key, a public client may not embed that key, it forbids competing directories, and it forbids bulk republication. At most, a link to a server's Glama page could be shown.",
+      "source": "https://glama.ai/mcp/reference ; https://glama.ai/policies/terms-of-service ; https://glama.ai/mcp/servers ; https://glama.ai/api/mcp/v1/servers?first=1",
+      "confidence": "verified"
+     },
+     {
+      "name": "PulseMCP",
+      "kind": "mcp-registry",
+      "what": "An MCP server directory that showed 21,552 servers today. It sorts by Most Popular (all time, this month or this week), Recently Released and Last Updated. Its filters are Remote Available and a classification of Anthropic References, Official Providers or Community. New submissions are currently paused. It also offers a Sub-Registry API that implements the generic registry API with its own extensions.",
+      "access": "Tested today: GET https://api.pulsemcp.com/v0beta/servers returned HTTP 410 API_SUNSET, because v0beta was fully retired in September 2026. GET https://api.pulsemcp.com/v0.1/servers?limit=1 returned HTTP 401 'Invalid or missing API key' (the X-API-Key header). The docs also require an X-Tenant-ID header and describe the service as a 'private B2B integration'; keys are requested by email. Endpoints follow the v0.1 registry shape, with limit from 1 to 100, cursor, updated_since, search and version=latest. Rate limits: 200 requests per minute, 5,000 per hour and 10,000 per day.",
+      "signals": "Under _meta['com.pulsemcp/server']: visitorsEstimateMostRecentWeek, visitorsEstimateLastFourWeeks and visitorsEstimateTotal, updated weekly and partly derived from public download counts, plus isOfficial (the maintainer owns the service it integrates with). The version-level _meta has status, publishedAt and updatedAt. Premium fields: isSelfHosted, authOptions and tools. Security scans are marked 'Coming Soon'.",
+      "terms": "Not found. The docs say to contact the company by email.",
+      "install": "Not applicable: PulseMCP holds metadata only.",
+      "notes": "Not usable without a partner agreement. isOfficial would be a valuable trust signal, but no open source for it was found.",
+      "source": "https://www.pulsemcp.com/api ; https://www.pulsemcp.com/api/docs/v0.1 ; https://www.pulsemcp.com/servers ; https://api.pulsemcp.com/v0.1/servers?limit=1",
+      "confidence": "verified"
+     },
+     {
+      "name": "mcp.so",
+      "kind": "mcp-registry",
+      "what": "An independent community directory. Its page, updated 2026-11-13, showed 20,399 MCP servers (1,409 of them remote), 394 clients, 268 agent skills and 177 CLI tools. It has categories (Developer Tools, AI & Agents, Cloud & Infrastructure, Memory & Knowledge, Media & Design, and others), a 'Featured' label, an 'Official' label on CLI tools, and sorting by featured, star (trending) or latest.",
+      "access": "No API or data export was found; the site only links to a feed.",
+      "signals": "Featured status, stars or trending, date and category. Download counts and verification: not found.",
+      "terms": "Terms last updated 2026.07.01. They state that the service's original content is owned by mcp.so and protected by copyright, and they forbid disrupting the service. No permission to reuse data was found.",
+      "install": "Not found.",
+      "notes": "Not suitable as a data source, because it has no API and its terms are restrictive.",
+      "source": "https://mcp.so ; https://mcp.so/terms-of-service",
+      "confidence": "verified"
+     },
+     {
+      "name": "Docker MCP Catalog (Docker Hub mcp namespace and docker/mcp-registry)",
+      "kind": "mcp-registry",
+      "what": "Docker's curated catalogue of containerised MCP servers. The docs say it has '300+' servers. Tested today, the docker/mcp-registry GitHub repository has 327 entries in its servers/ folder, with the last commit on 2026-11-10. The Docker Hub 'mcp' namespace has 244 repositories, which are the Docker-built images. Option A, recommended: Docker builds, signs and publishes the image with provenance and an SBOM. Option B: the author supplies a pre-built image. Remote and partner servers are also mentioned.",
+      "access": "Tested today: GET https://hub.docker.com/v2/namespaces/mcp/repositories?page_size=2 returned HTTP 200 without a key, with count 244. Fields: name, description, star_count, pull_count (1,990,466 for mcp/fetch), last_updated, date_registered and categories. The catalogue source data comes from the GitHub repository at servers/<name>/server.yaml; the GitHub contents API worked without a key, with its limit of 60 requests per hour. Sample github-official/server.yaml fields: name, image (ghcr.io/github/github-mcp-server), type, meta.category (devops), meta.tags, about {title, description, icon}, source {project, commit}, run.allowHosts (a network allowlist), config.secrets[] {name, env, example, description} and oauth[]. The Docker Hub API rate limit was not checked.",
+      "signals": "Popularity: pull_count and star_count from Docker Hub. Trust: images in the mcp/ namespace are built and signed by Docker, with provenance and an SBOM. source.commit pins the code to a commit. run.allowHosts gives a declared network allowlist that a security score can use. Freshness: last_updated and the repository's commit dates. Each entry has a category and tags.",
+      "terms": "The docker/mcp-registry repository is MIT-licensed, as read on the repository page. Docker Hub API terms were not read in this research.",
+      "install": "Commands verified today in the Docker docs: 'docker mcp catalog server ls mcp/docker-mcp-catalog', 'docker mcp profile create --name <id>', 'docker mcp profile server add <id> --server <uri>', 'docker mcp profile server remove <id> --name <server>', 'docker mcp profile config <id> --set <server>.<key>=<value>', 'docker mcp client connect <client> --profile <id>' (for example vscode), and 'docker mcp gateway run --profile <id>'. Removing a profile cannot be undone. The list of supported clients was not found in the docs.",
+      "notes": "This is the best source for security signals: signed images, an SBOM, a pinned commit, an allowlist of network hosts, and declared secrets. The server.yaml files are MIT-licensed and readable through GitHub. The gateway is an alternative install path for agents that Docker supports.",
+      "source": "https://github.com/docker/mcp-registry ; https://raw.githubusercontent.com/docker/mcp-registry/main/servers/github-official/server.yaml ; https://hub.docker.com/v2/namespaces/mcp/repositories?page_size=2 ; https://docs.docker.com/ai/mcp-catalog-and-toolkit/catalog/ ; https://docs.docker.com/ai/mcp-catalog-and-toolkit/cli/",
+      "confidence": "verified"
+     },
+     {
+      "name": "awesome-mcp-servers lists (punkpeye, wong2, appcypher) and modelcontextprotocol/servers",
+      "kind": "other",
+      "what": "Curated Markdown lists. punkpeye/awesome-mcp-servers has 97,682 stars, an MIT licence, and a last push on 2026-11-06; it holds about 4,633 entries (an approximate count of lines that start with '- ['). Each entry has a GitHub link, often a Glama score badge, and legend emojis: an official implementation, a language, cloud or local service, and the operating system. wong2/awesome-mcp-servers has 4,409 stars, an MIT licence and a last push on 2026-07-13. appcypher/awesome-mcp-servers is archived. modelcontextprotocol/servers holds the reference servers; it has 91,971 stars, its licence shows as NOASSERTION, and its last push was on 2026-11-12.",
+      "access": "The raw README is at https://raw.githubusercontent.com/punkpeye/awesome-mcp-servers/main/README.md, which was tested today. Repository data comes from https://api.github.com/repos/{owner}/{repo} without a key, at 60 requests per hour. The lists must be parsed from Markdown.",
+      "signals": "An official badge, the categories (the list's sections), and the local or cloud marker. The GitHub stars of each linked repository can be fetched separately.",
+      "terms": "punkpeye's list and wong2's list are MIT-licensed. appcypher's list has no licence and is archived.",
+      "install": "Not applicable: the lists only link to repositories.",
+      "notes": "Use these lists only as extra seeds for categories and the 'official' badge, not as a main source.",
+      "source": "https://github.com/punkpeye/awesome-mcp-servers ; https://api.github.com/repos/punkpeye/awesome-mcp-servers ; https://github.com/wong2/awesome-mcp-servers ; https://github.com/modelcontextprotocol/servers",
+      "confidence": "verified"
+     },
+     {
+      "name": "npm download counts API and npm search",
+      "kind": "other",
+      "what": "Download statistics for npm packages, to rank MCP servers whose registry record has packages[].registryType=npm. npm search for keywords:mcp-server reported 11,475 packages today.",
+      "access": "Tested today: GET https://api.npmjs.org/downloads/point/last-week/@modelcontextprotocol/server-filesystem returned {downloads: 1351391, start: 2026-11-06, end: 2026-11-12, package}. Bulk requests take up to 128 comma-separated packages, but not scoped packages; a scoped bulk test returned the error 'scoped packages are not currently supported in bulk lookups'. A range request covers at most 18 months, or 365 days in bulk. Per-version counts cover the last 7 days only. Data is processed once a day after UTC midnight. Tested search: GET https://registry.npmjs.org/-/v1/search?text=keywords:mcp-server&size=1 returned total, package {name, date}, score {popularity, quality, maintenance}, downloads {weekly, monthly} and dependents. No key is needed. Rate limits are not documented.",
+      "signals": "Weekly or monthly downloads, dependents, the date of the last publish, and the npm search score.",
+      "terms": "The download-counts documentation states no API-specific terms; its footer links to the GitHub terms. Reuse terms for the data: not found.",
+      "install": "Not applicable: these are signals only.",
+      "notes": "Scoped packages need one request each. Cache the results daily.",
+      "source": "https://github.com/npm/registry/blob/main/docs/download-counts.md ; https://api.npmjs.org/downloads/point/last-week/@modelcontextprotocol/server-filesystem ; https://registry.npmjs.org/-/v1/search?text=keywords:mcp-server&size=1",
+      "confidence": "verified"
+     },
+     {
+      "name": "PyPI download stats (pypistats.org API)",
+      "kind": "other",
+      "what": "Recent download counts for Python MCP server packages, used for records with registryType=pypi.",
+      "access": "Tested today: GET https://pypistats.org/api/packages/markitdown-mcp/recent returned {data: {last_day: 5144, last_week: 28114, last_month: 109782}}. Other endpoints: overall, python_major, python_minor and system. No key is needed. Rate limits are applied per IP, but the exact limits were not found. Data is updated once a day and kept for 180 days.",
+      "signals": "Downloads over the last day, week and month.",
+      "terms": "No formal terms were found. The site's guidance asks users not to download history for every package, to use the BigQuery PyPI tables for bulk work, and to cache results.",
+      "install": "Not applicable: these are signals only.",
+      "notes": "Fine for the few thousand PyPI MCP servers with one daily request each. Use BigQuery for anything larger.",
+      "source": "https://pypistats.org/api/ ; https://pypistats.org/api/packages/markitdown-mcp/recent",
+      "confidence": "verified"
+     }
+    ],
+    "recommendation": "1. Backbone: the official MCP Registry v0.1. It is open and needs no key. Do one full crawl, then a daily sync with updated_since and version=latest. Drop records with status deleted, and drop remotes on server.smithery.ai and run.tools, which have been dead since 2026-10-31.\n2. Shortlist of the best servers: the GitHub MCP Registry, at api.mcp.github.com/v0.1/servers. It has 771 servers in star order, with licence, topics and README, and needs no key. The endpoint is undocumented, so treat it as unstable.\n3. Popularity (weight 40): join GitHub stars through repository.url, npm weekly downloads, pypistats, and Docker Hub pull_count.\n4. Source reputation (25): the namespace (a verified domain or the publisher's own GitHub organisation), isInOrganization, inclusion in the GitHub list, the Docker mcp/ namespace, and the 'official' badge in punkpeye's list.\n5. Freshness (15): updatedAt from the registry, pushedAt from GitHub, the last npm or PyPI publish date, and last_updated on Docker Hub.\n6. Security (20): almost no source scans servers upstream. Use your own skill-scan, plus Docker-built signed images with an SBOM, source.commit, allowHosts and declared secrets. Also use the mcpb SHA-256 and the licence.\n7. Do not use Glama: it needs a key and its licence forbids competing directories and bulk use. Do not use PulseMCP (private B2B), Smithery (API shut down, no terms) or mcp.so (no API).\n8. Install: build commands from packages[] and remotes[]. Docker, through 'docker mcp client connect', offers a second install path. Only the Claude Code commands were verified; other agents are not covered here.\n9. Plugin marketplaces were outside this subtask and still need separate research."
+   },
+   "check": {
+    "checked": []
+   }
+  },
+  {
+   "key": "plugin-catalogues",
+   "research": {
+    "rows": [
+     {
+      "name": "Claude Code official marketplace (claude-plugins-official)",
+      "kind": "plugin-marketplace",
+      "what": "Anthropic's official plugin directory, stored as one marketplace.json file. 316 plugin entries on 2026-11-13. Categories: development 123, productivity 70, database 39, monitoring 22, security 18, deployment 9, design 8, others small, 14 with no category. Built into Claude Code under the reserved name `claude-plugins-official`. The same repo also has a `renames` map (old name to new name). Separate demo marketplace anthropics/claude-code/.claude-plugin/marketplace.json (`claude-code-plugins`) has 12 entries.",
+      "access": "GET https://raw.githubusercontent.com/anthropics/claude-plugins-official/main/.claude-plugin/marketplace.json (tested 200, 191 KB, no auth). Top-level keys: $schema (https://anthropic.com/claude-code/marketplace.schema.json), name, description, owner, renames, plugins. Entry fields: name, description, source, category (302/316), homepage (300), author (234), plus rare displayName, version, strict, lspServers, skills, tags, keywords. Source types seen: url 163, git-subdir 98, relative path string 54, command 1 (Apple xcode: `xcrun agent plugin path --plugin-format claude`). Example: {name:'42crunch-api-security-testing', category:'security', source:{source:'git-subdir', url:'https://github.com/42Crunch-AI/claude-plugins.git', path:'plugins/api-security-testing', ref:'v1.5.5', sha:'faf53053…'}, homepage:'https://42crunch.com'}. Raw file has no pagination. GitHub REST API is limited to 60 req/h without a token (I hit this limit during research).",
+      "signals": "Official Anthropic curation. Repo has 47,153 stars and was pushed 2026-11-13. Many git sources are pinned with ref and/or sha, which helps the security check. Popularity comes from the separate stats file (see next row). No per-entry date: freshness has to come from the source repo's commits.",
+      "terms": "Repo LICENSE is Apache-2.0 (read at raw.githubusercontent.com/anthropics/claude-plugins-official/main/LICENSE). Each listed plugin keeps its own licence.",
+      "install": "claude plugin install <name>@claude-plugins-official [-s user|project|local] [--config key=value] [-y] [--json]. claude plugin update <plugin> [-s user|project|local|managed] [-y] [--json]. claude plugin uninstall <plugin> [-s …] [--json]. claude plugin enable|disable <plugin> [-s …] [--json]. claude plugin list. claude plugin marketplace add <owner/repo|path|url>, marketplace remove, marketplace update. claude plugin validate <dir>. For command-source plugins, -y or --accept-command <sha256> is needed when not on a TTY. Source: https://code.claude.com/docs/en/plugins/cli-reference.md",
+      "notes": "Best plugin backbone: official, machine-readable, licensed, with categories. A `command` source runs a local command at install, so the security check should flag it.",
+      "source": "https://github.com/anthropics/claude-plugins-official ; https://code.claude.com/docs/en/plugin-marketplaces ; https://code.claude.com/docs/en/plugins/cli-reference.md",
+      "confidence": "verified"
+     },
+     {
+      "name": "Claude Code official plugin install counts (stats branch)",
+      "kind": "plugin-marketplace",
+      "what": "All-time unique install counts for the official marketplace. 323 plugins (metrics.total_plugins 323). Generated 2026-11-13T06:00:15Z. Commits on 2026-11-13 and 2026-11-06 suggest a weekly refresh. Top values: frontend-design 1,291,514; superpowers 1,147,042; code-review 480,856; context7 443,472; skill-creator 431,658; code-simplifier 372,960; playwright 363,396; github 346,816.",
+      "access": "GET https://raw.githubusercontent.com/anthropics/claude-plugins-official/stats/stats/plugin-installs.json (tested 200, 32 KB, no auth). Shape: {generated_at, description:'Claude Code plugin installation statistics (all-time)', metrics:{total_plugins}, plugins:[{plugin:'frontend-design@claude-plugins-official', unique_installs:1291514}]}.",
+      "signals": "Real first-party popularity: unique installs. This is the best popularity signal for the 40% weight. Has an all-time total only, with no 30-day or trending view. Week-to-week deltas can be computed by diffing commits.",
+      "terms": "not found. The stats branch root has no LICENSE file and the file is undocumented. The main-branch Apache-2.0 licence probably covers the repo, but that is not confirmed for this branch. Stability of the URL: unknown.",
+      "install": "n/a",
+      "notes": "323 counted vs 316 listed: some counted plugins were renamed or removed. Join on name@marketplace and use the `renames` map. Secondary sources say the counts also appear on claude.com/plugins and in the /plugin Discover tab (reported).",
+      "source": "https://raw.githubusercontent.com/anthropics/claude-plugins-official/stats/stats/plugin-installs.json",
+      "confidence": "verified"
+     },
+     {
+      "name": "claudemarketplaces.com",
+      "kind": "other",
+      "what": "Independent community directory of Claude Code skills, MCP servers, plugin marketplaces and plugins. llms.txt (last updated 2026-11-13) claims 23,400+ skills, 8,462+ MCP servers, 3,638+ plugin marketplaces and 17,249+ plugins. Plugins are ranked by marketplace stars. Skill 'best of' pages rank by install-command copies over 90 days. Run by Mert Düzgün and sponsor-funded, with labelled ads.",
+      "access": "https://claudemarketplaces.com/llms.txt (tested 200, plain text, top lists only). No API is documented. GET /api/marketplaces returned 429 (Vercel Security Checkpoint, bot challenge).",
+      "signals": "Marketplace GitHub stars, plugin count per marketplace, install-command copy counts (on-site metric, skills only), categories for skills, MCP and marketplaces. A weekly check removes deleted repos.",
+      "terms": "not found: no data-reuse terms on the About page. The advertising terms page was not read.",
+      "install": "n/a. It shows native /plugin marketplace add and /plugin install commands.",
+      "notes": "Good for discovering third-party marketplaces, not usable as a data feed: no API, and the site blocks bots.",
+      "source": "https://claudemarketplaces.com/about ; https://claudemarketplaces.com/llms.txt",
+      "confidence": "verified"
+     },
+     {
+      "name": "claude-plugins.dev registry (Kamalnrf/claude-plugins)",
+      "kind": "plugin-marketplace",
+      "what": "Auto-discovered registry of public Claude Code plugins and Agent Skills from GitHub. The README says 11,989 plugins and 63,065 skills. The API returned total 57,308 for an empty plugin search on 2026-11-13. These numbers do not match.",
+      "access": "API root https://api.claude-plugins.dev/ (tested 200) lists: GET /api/search?q=&category=&limit=20&offset=0 ; GET /api/resolve/:owner/:marketplace/:plugin ; GET /api/plugins/:owner/:marketplace/:plugin/stats ; GET /api/skills/search?q=&limit=&offset= ; GET /api/skills/:owner/:repo/:skillName(/stats). No auth. Rate limit: not found. Plugin fields: id, name, namespace ('@anthropics/claude-code-plugins'), gitUrl, description, version, author, keywords, skills, category, stars, verified, downloads, metadata{homepage, repository, license, commands, agents, mcpServers}, createdAt, updatedAt. Example: frontend-design, stars 143538 (repo stars), downloads 11243, updatedAt 2026-08-31.",
+      "signals": "stars (repo-level), downloads (counts installs via its own CLI only), verified flag, category. updatedAt on the sample was 2026-08-31, so data may be stale.",
+      "terms": "Code licence is reported MIT (README badge). The GitHub API shows license null. Data terms: not found.",
+      "install": "npx claude-plugins install @owner/marketplace/plugin ; npx skills-installer install @owner/repo/skill [--local]. The skills installer targets Claude, Cursor, Windsurf, OpenCode, Codex, VS Code, Amp, Goose, Letta, Gemini CLI, Antigravity, Trae, Qoder and CodeBuddy.",
+      "notes": "The website claude-plugins.dev returned HTTP 402 DEPLOYMENT_DISABLED on 2026-11-13, but the API host still answers. Treat it as unreliable, enrichment only.",
+      "source": "https://api.claude-plugins.dev/ ; https://github.com/Kamalnrf/claude-plugins",
+      "confidence": "verified"
+     },
+     {
+      "name": "ClaudePluginHub (claudepluginhub.com)",
+      "kind": "other",
+      "what": "Community directory auto-indexed from GitHub. llms-full.txt claims 117,018 plugins, 122,605 commands, 118,709 agents, 738,625 skills, 22,048 hooks, 15,821 MCP servers and 320 LSP servers. The API pagination total on 2026-11-13 was 117,065.",
+      "access": "GET https://www.claudepluginhub.com/api/plugins (tested 200, no auth). Returns {items[96], promoted, pagination{currentPage, totalPages:1220, total}}. Item fields: id, slug, name, displayName, description, repositoryUrl, repoOwnerLogin, starCount, installCount, activeSparks, alwaysOnTokens, hasVerifiedOwner, isVerifiedOrg, lastCommitDate, maintenanceScore, enrichedTechnologies, enrichedTopics, docsSignals{hasReadme, hasInstallSection, score}, publicReposSeenIn, communityHealthPercentage, freshness, license, confidence, repositoryMismatch, hasBin, hasMods, currentVersion. Rate limit: not found.",
+      "signals": "Rich trust and quality signals: verified owner or org, maintenance score, docs score, community health, lastCommitDate, publicReposSeenIn (adoption proxy), alwaysOnTokens (context cost), hasBin (ships binaries), repositoryMismatch. installCount is its own metric: superpowers shows 20,264 here vs 1,147,042 officially.",
+      "terms": "not found. /terms returned 403.",
+      "install": "npx claudepluginhub p/<slug> (its wrapper), or native: /plugin marketplace add owner/repo, then /plugin install name@marketplace",
+      "notes": "Best source of extra quality signals (maintenance, binaries, token cost) for the long tail. Reuse terms are unknown, so use it only to enrich entries or link out, not to republish its data.",
+      "source": "https://www.claudepluginhub.com/llms.txt ; https://www.claudepluginhub.com/llms-full.txt ; https://www.claudepluginhub.com/api/plugins",
+      "confidence": "verified"
+     },
+     {
+      "name": "Agent Plugins 1.0 (agent-plugins.org)",
+      "kind": "other",
+      "what": "Open, vendor-neutral package format for skills and MCP servers. Spec version 1.0.0. Required root plugin.json with a closed set of fields: $schema, name, version, description, author, homepage, repository, license, keywords, extensions. Skills go in skills/<name>/SKILL.md, MCP servers in mcp.json, client extensions in reverse-domain folders (e.g. com.github.copilot/). The steering committee includes Amazon, Cursor, Microsoft, OpenAI and Vercel. Spec repo created 2026-04-03, 1,453 stars.",
+      "access": "No registry, index or API exists. The spec says distribution and installation 'remain under each client's control'. JSON Schemas are published at https://agent-plugins.org/schemas/ (e.g. 1.0.0/plugin.schema.json). Docs index: https://agent-plugins.org/llms.txt.",
+      "signals": "n/a (a format, not a catalogue). Supported by Cursor, Copilot CLI, Codex (plugin.json with extensions.com.openai), Kiro and the npm `plugins` CLI.",
+      "terms": "Spec text and docs: CC-BY-4.0. Schemas and code: Apache-2.0 (read in LICENSE.md).",
+      "install": "n/a. Each client installs with its own command.",
+      "notes": "Use it as Skill Advisor's normalised internal plugin model and validator. Path-containment rules in the spec give ready-made security checks.",
+      "source": "https://agent-plugins.org/ ; https://github.com/agentplugins/agent-plugins-spec",
+      "confidence": "verified"
+     },
+     {
+      "name": "npm `plugins` CLI (vercel-labs/plugins)",
+      "kind": "install-command",
+      "what": "Cross-agent plugin installer. npm package `plugins` v1.3.6 (modified 2026-10-30), 17,731 downloads in the week 2026-11-06 to 11-12. It is an installer, not a catalogue: it finds plugins in a given repo via marketplace.json, a root plugin, or a recursive scan 2 levels deep.",
+      "access": "No index or API. The bundle contains only https://plugins-telemetry.labs.vercel.dev/t (anonymous telemetry; disable with DISABLE_TELEMETRY or DO_NOT_TRACK). Package metadata: https://registry.npmjs.org/plugins.",
+      "signals": "npm weekly downloads. No per-plugin popularity is published.",
+      "terms": "package.json has no licence field. GitHub repo licence: unknown (API rate limit hit).",
+      "install": "npx plugins add <owner/repo|url|path> [-t claude-code|cursor|codex|grok|kimi|copilot|vscode] [-s user|project|local] [-y]. Also npx plugins discover <source> (dry run) and npx plugins targets. It auto-detects and installs to all agents found. Copilot goes through `copilot plugin marketplace add` then install. VS Code uses chat.pluginLocations. The project/local scope works only for the Claude Code target with vercel/vercel-plugin.",
+      "notes": "A model for multi-agent install, or a possible dependency. It has no uninstall or update subcommand in its README (update means re-running add).",
+      "source": "https://unpkg.com/plugins@1.3.6/README.md ; https://registry.npmjs.org/plugins",
+      "confidence": "verified"
+     },
+     {
+      "name": "Gemini CLI extensions gallery (geminicli.com/extensions)",
+      "kind": "plugin-marketplace",
+      "what": "Auto-indexed gallery of Gemini CLI extensions: public GitHub repos with the `gemini-cli-extension` topic and a gemini-extension.json file. The JSON has 2,198 entries (the HTML page shows 2,197 cards). 78 are Google-owned, 1,069 include MCP, 1,357 include skills.",
+      "access": "GET https://geminicli.com/extensions.json (tested 200, 1.8 MB, no auth, cache max-age 3600). It is a plain array with no pagination. Fields: id, rank, url, fullName, repoDescription, stars, lastUpdated, extensionName, extensionVersion, extensionDescription, avatarUrl, hasMCP, hasContext, hasHooks, hasSkills, hasCustomCommands, isGoogleOwned, licenseKey. Example: rank 1 @obra/superpowers, stars 299294, licence mit.",
+      "signals": "GitHub stars, rank, isGoogleOwned (official flag), licenseKey (mit 1,293, apache-2.0 373, none 353), component flags, lastUpdated. No install counts.",
+      "terms": "not found for the gallery data. Licences of the listed extensions are given per entry.",
+      "install": "gemini extensions install <github-url|path> [--ref <ref>] [--auto-update] [--pre-release] [--consent] [--skip-settings]. gemini extensions update <name> or --all. gemini extensions uninstall <name...>. gemini extensions enable|disable <name> [--scope user|workspace].",
+      "notes": "Stale: Last-Modified is 2026-10-16 and the newest lastUpdated is 2026-10-15, even though the docs say it crawls daily. The docs carry a banner: 'Gemini CLI was replaced by Antigravity CLI on June 18th, 2026' (for unpaid and Google One users). Use it as a lagging snapshot, not a live backbone.",
+      "source": "https://geminicli.com/extensions.json ; https://geminicli.com/docs/extensions/releasing/ ; https://geminicli.com/docs/extensions/reference/",
+      "confidence": "verified"
+     },
+     {
+      "name": "Antigravity plugin marketplace (antigravity-plugins-official)",
+      "kind": "plugin-marketplace",
+      "what": "Google's built-in marketplace for the Antigravity app and CLI (agy). Plugins use a plugin.json that bundles skills, MCP servers, agents, rules and hooks. Size: not found (the 'Discover (15)' in the docs is a screenshot). Launch around 2026-10-29/30 (reported, from a Korean blog).",
+      "access": "No API or JSON index is documented. `agy plugin list --json` lists installed plugins only. No public repo found: google/antigravity-plugins-official and two similar names return 404.",
+      "signals": "not found (no install counts or badges documented)",
+      "terms": "not found",
+      "install": "agy plugin install <name> (a bare name means @antigravity-plugins-official; only the official marketplace name is accepted) or agy plugin install https://github.com/<owner>/<repo> or a local path. agy plugin uninstall|enable|disable <name>. agy plugin list [--json]. agy plugin validate --strict. Update command: not found. Listing is by interest form (https://forms.gle/2EX5RFYPoJe1UgxR9).",
+      "notes": "Install target only: the catalogue cannot be harvested. Third-party marketplaces are not supported, only URLs or paths.",
+      "source": "https://antigravity.google/docs/marketplace",
+      "confidence": "verified"
+     },
+     {
+      "name": "GitHub Copilot CLI marketplaces (awesome-copilot, copilot-plugins)",
+      "kind": "plugin-marketplace",
+      "what": "awesome-copilot ships with Copilot CLI and cannot be removed: 220 plugins (owner GitHub, metadata v1.0.0). github/copilot-plugins has 18 plugins (workiq, microsoft-365-agents-toolkit, spark, advanced-security, azure-devops, fabric, power-platform…). It is no longer a default and must be added by hand.",
+      "access": "GET https://raw.githubusercontent.com/github/awesome-copilot/main/.github/plugin/marketplace.json (tested 200) and https://raw.githubusercontent.com/github/copilot-plugins/main/.github/plugin/marketplace.json (tested 200). Entry fields (awesome-copilot): name, description, version, source (all 220); author, repository, keywords (107); license (106); homepage (74). No auth. marketplace.json lookup order: marketplace.json, .plugin/, .github/plugin/, .claude-plugin/.",
+      "signals": "awesome-copilot repo: 41,125 stars, pushed 2026-11-13. copilot-plugins: 383 stars, pushed 2026-10-14. No install counts. Keywords instead of categories. Licence per entry (about half have one).",
+      "terms": "Both repos are MIT (LICENSE read for awesome-copilot; GitHub API says MIT for both).",
+      "install": "copilot plugin install <name>@<marketplace> (or owner/repo, git URL, subdir, local path). copilot plugin update <name> or --all. copilot plugin uninstall|enable|disable <name>. copilot plugin list [--json]. copilot plugin marketplace add owner/repo, marketplace remove <name> [--force], marketplace list|browse [--json]. Installs go to ~/.copilot/installed-plugins/<marketplace>/<plugin>.",
+      "notes": "Supports Agent Plugins 1.0 (root plugin.json with $schema) and the legacy layout. Licensed and machine-readable, so good to include in the backbone.",
+      "source": "https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-plugin-reference ; https://docs.github.com/en/copilot/concepts/agents/about-plugins ; https://github.com/github/awesome-copilot",
+      "confidence": "verified"
+     },
+     {
+      "name": "Cursor Marketplace (cursor.com/marketplace)",
+      "kind": "plugin-marketplace",
+      "what": "Curated official Cursor plugin marketplace ('cursor-public'). Every plugin and every update is reviewed by hand, all must be open source, and none ship binaries. The page embeds data for 503 unique plugins on 2026-11-13. The in-repo file cursor/plugins/.cursor-plugin/marketplace.json lists 137 (subset hosted in that repo; fields name, source, description, minClientVersions). Many entries bundle MCP servers. For community plugins and MCP servers, Cursor points to cursor.directory.",
+      "access": "No public API is documented. Data is embedded in the page HTML (Next.js 'initialPlugins'); my JSON parse failed, so the fields come from regex. Fields seen: id, name, displayName, description, status (PLUGIN_STATUS_APPROVED), repositoryUrl, logoUrl, isPublished, createdAt/updatedAt (epoch ms), publisher{name, displayName, isVerified, websiteUrl}, marketplace{name:'cursor-public'}, gitUrl, gitRef (commit sha), gitPath, mcpServers[{name, sourcePath, sourceUrl}]. Raw repo file: https://raw.githubusercontent.com/cursor/plugins/main/.cursor-plugin/marketplace.json (tested 200).",
+      "signals": "Manual security review, verified publisher flag (isVerified:true appears 249 times; the share of the 503 is unclear), git commit pinning, timestamps. No install counts. Category appears 27 times with one value, so there is no usable taxonomy.",
+      "terms": "not found. No root LICENSE in cursor/plugins under LICENSE, LICENSE.md or LICENSE.txt. Site terms not read. Scraping the page is unsupported.",
+      "install": "UI only: Customize, Install, then pick project or user scope. Local development from ~/.cursor/plugins/local. MCP deeplink: cursor://anysphere.cursor-deeplink/mcp/install?name=$NAME&config=$BASE64_ENCODED_CONFIG. Team marketplaces are imported from a repo (Teams: 1, Enterprise: unlimited). Cursor CLI plugin install command: not found. Alternative: npx plugins add <repo> -t cursor.",
+      "notes": "Strong trust signal (human review), but no API or licence, so use it to set a 'Cursor-reviewed' flag by name or repo match. Supports both Agent Plugins (root plugin.json) and .cursor-plugin/plugin.json.",
+      "source": "https://cursor.com/marketplace ; https://cursor.com/docs/plugins.md ; https://cursor.com/help/security-and-privacy/marketplace-security.md",
+      "confidence": "verified"
+     },
+     {
+      "name": "cursor.directory",
+      "kind": "other",
+      "what": "Community directory of Cursor plugins and MCP servers that Cursor's docs point to. Size: not found.",
+      "access": "Blocked: GET https://cursor.directory/ and /llms.txt returned 429 Vercel Security Checkpoint (bot challenge). API: not found.",
+      "signals": "not found",
+      "terms": "not found",
+      "install": "n/a",
+      "notes": "Not testable today.",
+      "source": "https://cursor.com/docs/plugins.md",
+      "confidence": "unknown"
+     },
+     {
+      "name": "OpenAI Codex / ChatGPT plugins (openai-curated, openai/plugins)",
+      "kind": "plugin-marketplace",
+      "what": "One public plugin catalogue shared by ChatGPT and Codex. The openai/plugins repo marketplace `openai-curated` (display name 'Codex official') has 65 plugins. Categories: Developer Tools 27, Productivity 12, Creativity 9, Communication 5, Education & Research 4, Data & Analytics 3, others. Directory tabs: OpenAI, workspace, Personal.",
+      "access": "GET https://raw.githubusercontent.com/openai/plugins/main/.agents/plugins/marketplace.json (tested 200, no auth). Entry fields: name, source{source:'local', path}, policy{installation:'AVAILABLE', authentication:'ON_INSTALL'}, category, interface (3). Example: {name:'linear', category:'Productivity'}. No API for the universal directory.",
+      "signals": "OpenAI curation and an auth-required policy. No install counts, stars or dates in the file.",
+      "terms": "not found. No root LICENSE in openai/plugins under LICENSE, LICENSE.md or LICENSE.txt.",
+      "install": "Codex CLI: the /plugins browser (install or uninstall; Space toggles). codex plugin marketplace add owner/repo[@ref] [--ref main] [--sparse PATH] or a local root. Install is mainly through the ChatGPT desktop app. A non-interactive `codex plugin install` is not in the official docs (third-party blogs show different forms): not found. Plugin ids: name@openai-curated. Disable with enabled=false in ~/.codex/config.toml. Repo marketplace: $REPO_ROOT/.agents/plugins/marketplace.json. Personal: ~/.agents/plugins/marketplace.json. .claude-plugin/marketplace.json is also read.",
+      "notes": "Root plugin.json follows Agent Plugins (extensions.com.openai). .codex-plugin/plugin.json is a fallback. Many entries are app connectors needing OAuth. Developer docs now redirect to learn.chatgpt.com.",
+      "source": "https://learn.chatgpt.com/docs/plugins.md ; https://developers.openai.com/plugins/build/plugins.md ; https://github.com/openai/plugins",
+      "confidence": "verified"
+     },
+     {
+      "name": "Kiro powers directory (kiro.dev/powers)",
+      "kind": "plugin-marketplace",
+      "what": "AWS Kiro's curated registry of 'powers' (Agent Plugins or legacy POWER.md packages, usually MCP plus steering). 158 powers on the page on 2026-11-13: publisherTier Official 137, Community 21. Categories: Cloud & Infrastructure 28, AI & Agents 24, Data & Storage 24, Security & Compliance 18, Backend & APIs 18, Observability 12, Testing & QA 11, CI/CD & Automation 10, Planning & Design 9, Frontend & UI 4. publishedAt ranges from 2025-12-04 to 2026-11-06.",
+      "access": "No API is documented. Data is embedded in the page HTML ('cards' array, parsed OK). Fields: name, displayName, author, authorUrl, description, iconUrl, repositoryUrl, launchUrl (kiro://kiro.powers/add?name=<name>), license (empty for all 158), repositoryCloneUrl, pathInRepo, repositoryBranch, category, publishedAt, publisherTier, authType (oauth 47, none 47, awsCredentials 31, apiKey 29, bearerToken 4). The kirodotdev/powers GitHub repo hosts only some of them.",
+      "signals": "publisherTier (Official or Community), authType (useful for setup and security notes), publishedAt, category. No install counts or stars. AWS quality review before listing (reported).",
+      "terms": "not found (site terms not read; the licence field is empty)",
+      "install": "Deeplink kiro://kiro.powers/add?name=<name> (the 'Add to Kiro' button), or the IDE Powers panel: Install, Add Custom Power from a GitHub URL or folder, Check for updates. Uninstall: kiro-cli powers uninstall <name> or /powers uninstall <name>. kiro-cli install and update commands: not found. Legacy powers write their MCP servers to ~/.kiro/settings/mcp.json.",
+      "notes": "Clean, categorised data, but scraped from the page with no licence, so use it for link-out and an official-tier flag only.",
+      "source": "https://kiro.dev/powers/ ; https://kiro.dev/docs/powers/installation/",
+      "confidence": "verified"
+     },
+     {
+      "name": "skills.sh (Vercel)",
+      "kind": "other",
+      "what": "Agent Skills directory only. No plugin or MCP server listings: /plugins and /mcp return 404. Site routes include packs (unlisted skill bundles behind Vercel sign-in), official, audits, picks, topic, trending, hot. Packs bundle skills only.",
+      "access": "Documented API v1 (needs a Vercel OIDC bearer token; 600 req/min per team and project): GET /api/v1/skills?view=all-time|trending|hot&page&per_page<=500 ; /api/v1/skills/search?q&limit<=200&owner ; /api/v1/skills/curated ; /api/v1/skills/{source}/{skill} ; /api/v1/skills/audit/{source}/{skill}. The legacy GET https://skills.sh/api/search?q=mcp&limit=2 answered without auth (tested 200): {query, searchType:'fuzzy', searchVersion:'algolia', skills:[{id:'anthropics/skills/mcp-builder', source, skillId, name, installs:141433}], count}.",
+      "signals": "Skill installs, trending and hot deltas, partner audits (pass, warn or fail with riskLevel). Nothing for plugins or MCP.",
+      "terms": "not found (the /terms page exists but was not read)",
+      "install": "npx skills add (skills only)",
+      "notes": "Answer to the question: skills.sh does not list plugins or MCP servers. Skill Advisor needs other sources for those.",
+      "source": "https://www.skills.sh/docs/api ; https://www.skills.sh/packs",
+      "confidence": "verified"
+     }
+    ],
+    "recommendation": "1. Backbone, licensed and machine-readable: anthropics/claude-plugins-official marketplace.json (316 entries, Apache-2.0, categories, pinned ref/sha) joined with its stats/plugin-installs.json (unique installs, refreshed about weekly; terms not found, so cite it and link back). Add github/awesome-copilot (220) and github/copilot-plugins (18), both MIT.\n2. Normalise every plugin to the Agent Plugins 1.0 manifest (CC-BY-4.0 spec, Apache-2.0 schemas). Cursor, Copilot, Codex and Kiro already read it, so one internal model can install to several agents.\n3. Install layer: call each agent's native CLI (claude plugin …, copilot plugin …, gemini extensions …, agy plugin …, codex plugin marketplace add), or reuse `npx plugins add -t <target> -y` (7 targets). Cursor and Kiro have no CLI install (UI or deeplink), and Antigravity has no update command.\n4. Enrichment only (terms not found, no republishing): ClaudePluginHub's open API (maintenance, verified org, hasBin, token cost), openai-curated (65, no LICENSE), Cursor Marketplace (503, human-reviewed, page data only) and Kiro powers (158, Official/Community tier). Use them as trust flags and link-outs.\n5. Gemini extensions.json (2,198 entries, stars, isGoogleOwned) is open but stale since 2026-10-16, and Gemini CLI was replaced by Antigravity CLI for unpaid and Google One users. Use it only as a snapshot.\n6. Popularity counts cannot be compared across sources (superpowers: 1.15M official vs 20k on ClaudePluginHub). Score them per source and never add them up. skills.sh has no plugins or MCP. claude-plugins.dev has been unreliable since its site went down (402). claudemarketplaces and cursor.directory block bots."
+   },
+   "check": {
+    "checked": [
+     {
+      "name": "cursor.directory",
+      "claim": "Community directory of Cursor plugins and MCP servers that Cursor's docs point to. Size not found. Access blocked (429 Vercel Security Checkpoint on / and /llms.txt). API not found. Signals, terms not found. Install n/a. Source https://cursor.com/docs/plugins.md, confidence unknown.",
+      "verdict": "corrected",
+      "correction": "Mostly right, with corrections and additions. (1) Docs pointer: verified today. https://cursor.com/docs/plugins and https://cursor.com/docs/context/mcp both say to browse cursor.directory for community plugins and MCP servers. The official Cursor Marketplace is separate (cursor.com/marketplace, manually reviewed). The cited source URL https://cursor.com/docs/plugins.md returned 404 to WebFetch today, so cite https://cursor.com/docs/plugins instead. (2) Access: confirmed. WebFetch got HTTP 429 on https://cursor.directory/ and https://cursor.directory/llms.txt today. No public catalogue API was found. 'API: not found' should be reworded: the source repo README documents an MCP server at https://cursor.directory/api/mcp with tools search_plugins, get_plugin, approve_plugin, block_plugin and rescan_plugin. That server is admin-only: it needs an allowlisted client_id and an admin user. Write tools are rate-limited by a 60 requests/hour per-user rule. So there is no public read API (verified from the README). (3) Source and data model: the site's code is the GitHub repo cursor/community-plugins (README tagline 'The directory of plugins from the Cursor community'; about 4.0k stars, 676 forks, 996 commits on the page today). Stack: Next.js, Bun, Supabase Postgres with pgmq. 'All data lives in the database — there is no local data in the repo', so the repo cannot serve as a catalogue dump. (4) Signals: was 'not found'. The README describes a security verdict per plugin (safe, suspicious or malicious) from an automatic scan by a Cursor SDK agent (composer-2) on a fresh clone. The verdict goes to an admin moderation queue. Whether it is shown publicly is not found. Popularity counts: not found. Separately, Cursor 3.9 is reported to have added an in-app leaderboard of most-used plugins, skills and MCPs (tessl.io, secondary source). (5) Submission and install: was 'n/a'. Authors submit at cursor.directory/plugins/new by pasting a GitHub repo URL after signing in with GitHub or Google. Components are auto-detected: rules, MCP servers (.mcp.json), skills, agents, hooks and LSP servers, under the Open Plugins / Agent Plugins standard (https://agent-plugins.org, spec at github.com/agentplugins/agent-plugins-spec, schema https://agent-plugins.org/schemas/1.0.0/plugin.schema.json). Cursor-side install mechanisms are verified on official docs. MCP deeplink: cursor://anysphere.cursor-deeplink/mcp/install?name=$NAME&config=$BASE64_ENCODED_CONFIG (config is JSON.stringify of the mcp.json entry, then base64). MCP config files: .cursor/mcp.json (project) and ~/.cursor/mcp.json (global). Local plugins: ~/.cursor/plugins/local/<plugin>, then restart or run 'Developer: Reload Window'. (6) Terms and licence: still not found. No LICENSE file was found (github.com/cursor/community-plugins/blob/main/LICENSE returned 404). The README has no terms or data-reuse section. The site's own terms page could not be read because of the 429. Treat the data as not cleared for reuse. (7) Size: still not found. Third-party mirror counts (neura.market, claudemarket.ai) are not cursor.directory's own figures. Confidence: verified for the Cursor docs, the deeplink format and the repo README facts; unknown for size, licence, terms and public signals.",
+      "source": "https://cursor.com/docs/plugins ; https://cursor.com/docs/context/mcp ; https://cursor.com/docs/context/mcp/install-links ; https://github.com/cursor/community-plugins ; https://raw.githubusercontent.com/cursor/community-plugins/main/README.md ; https://tessl.io/blog/cursors-leaderboard-teams-popular-plugins-skills-and-mcps/ (reported)"
+     }
+    ]
+   }
+  },
+  {
+   "key": "security",
+   "research": {
+    "rows": [
+     {
+      "name": "Snyk Agent Scan (ex Invariant mcp-scan)",
+      "kind": "security-tool",
+      "what": "CLI that discovers agents, MCP servers, skills and some plugin dirs (Copilot installed-plugins, Claude Desktop plugins) on the machine, connects to MCP servers, fetches tool descriptions and analyses them. invariantlabs-ai/mcp-scan now redirects to snyk/agent-scan (Invariant was bought by Snyk in 2025).",
+      "access": "`uvx snyk-agent-scan@latest` (whole machine), `uvx snyk-agent-scan@latest ~/.vscode/mcp.json`, `... path/SKILL.md`, `snyk-agent-scan inspect` (list only, no analysis), `--ci --dangerously-run-mcp-servers`, `--no-skills`. Needs a Snyk account and SNYK_TOKEN. Sends agent details, MCP configs and signatures, tool names and descriptions and skill content to the Agent Scan API (secrets redacted first). It starts stdio servers, so the README recommends a sandbox. Remote requests block link-local and cloud-metadata IPs. The README says CLI output fields and issue codes are experimental and may change.",
+      "signals": "v0.6.11 released 2026-11-06; 3239 stars; last push 2026-11-13. v0.5.x checks: prompt injection, tool poisoning (E001), tool shadowing (E002), toxic flows; for skills: malware payloads, untrusted content, credentials, hardcoded secrets. v0.6+ uses scored risk indicators: prompt injection, untrusted content, private data, destructive capabilities. The current README does not mention rug-pull detection or hash pinning (that was in old mcp-scan).",
+      "terms": "Apache-2.0 code; analysis is a Snyk cloud service under a Snyk account. Not usable offline or without an account.",
+      "install": "uvx snyk-agent-scan@latest (Python/uv)",
+      "notes": "Not suitable as Skill Advisor's default check: it needs an account, sends data out and runs servers. It could be an opt-in 'deep scan' if the user already has SNYK_TOKEN. Do not parse its output as a stable contract.",
+      "source": "https://github.com/snyk/agent-scan ; https://api.github.com/repos/snyk/agent-scan/releases/latest ; https://pypi.org/pypi/snyk-agent-scan/json",
+      "confidence": "verified"
+     },
+     {
+      "name": "Cisco AI Defense MCP Scanner",
+      "kind": "security-tool",
+      "what": "Python CLI, library and REST API that scans MCP tools, prompts, resources and server instructions. Analyzers: YARA (custom rules allowed), LLM-as-judge, Cisco AI Defense API, behavioral source-code analysis (docstring vs implementation, cross-file dataflow, 10 languages), readiness (20 heuristic rules), prompt defense, vulnerable-package (pip-audit), VirusTotal hash lookup, opt-in schema ($ref) analyzer, and pypi-scan / npm-scan.",
+      "access": "`uv tool install cisco-ai-mcp-scanner`. Subcommands: remote, stdio, config, known-configs, prompts, resources, instructions, static, behavioral, supplychain, vulnerable-package, virustotal, pypi-scan, npm-scan. Offline: `mcp-scanner static --tools tools.json [--prompts ..] [--resources ..]` scans pre-exported JSON without a live server. Examples: `mcp-scanner --scan-known-configs --analyzers yara --format summary`; `mcp-scanner --stdio-command uvx --stdio-arg=--from --stdio-arg=mcp-server-fetch ... --analyzers yara`. No key is needed for YARA, readiness, prompt-defense, vulnerable-package and static YARA. The LLM and behavioral analyzers need an LLM key (a local Ollama works with a placeholder key). The AI Defense API and VirusTotal need their own keys.",
+      "signals": "Latest release 4.8.7 (2026-10-20); 1118 stars; last push 2026-11-12; maintained by Cisco.",
+      "terms": "Apache-2.0 (verified via the GitHub API). Can be bundled or invoked from a free tool.",
+      "install": "uv tool install --python 3.13 cisco-ai-mcp-scanner (Python 3.11+)",
+      "notes": "Best offline, no-account option for MCP. Skill Advisor can export tools/list JSON once, or take descriptions from registry metadata, then run `static` with YARA. Only the YARA, static and readiness paths are offline.",
+      "source": "https://github.com/cisco-ai-defense/mcp-scanner ; https://api.github.com/repos/cisco-ai-defense/mcp-scanner/releases/latest",
+      "confidence": "verified"
+     },
+     {
+      "name": "Cisco AI Defense Skill Scanner",
+      "kind": "security-tool",
+      "what": "Scanner for Agent Skills (SKILL.md plus scripts). Analyzers: static YAML+YARA (no key), behavioral dataflow, bytecode, LLM judge, meta second pass, VirusTotal, AI Defense cloud. Subcommands: scan, scan-all --recursive, scan-repo <github url>. Outputs SARIF, HTML and JSON.",
+      "access": "`skill-scanner scan ./skill --use-llm --policy balanced --fail-on-severity high`; `skill-scanner scan-all ./skills --recursive --format sarif`. Rules-only mode needs no key; --use-llm needs a key (Bedrock IAM or the experimental on-device Apple model also work).",
+      "signals": "2725 stars; last push 2026-11-10. Its own benchmark says rules alone catch 7.7% of malicious skills at HIGH, with a 4.0% false-positive rate; every recommended setup uses the LLM judge.",
+      "terms": "The README badge says Apache-2.0, but the GitHub API reports NOASSERTION. Check the LICENSE file before bundling.",
+      "install": "pip/uv install of skill-scanner (see README)",
+      "notes": "Relevant to plugins because plugins bundle skills. Key lesson: a static pass must never be shown as 'safe', only as 'no known pattern found'.",
+      "source": "https://github.com/cisco-ai-defense/skill-scanner",
+      "confidence": "verified"
+     },
+     {
+      "name": "Ramparts (highflame-ai, ex getjavelin)",
+      "kind": "security-tool",
+      "what": "Rust CLI that scans MCP servers (tools, resources, prompts) and skill files. Pipeline: 40 YARA rules (some adapted from NVIDIA SkillSpector), an evasion-resistant rescan (zero-width characters stripped, NFKC homoglyph folding, base64/hex decoding), optional LLM analysis, cross-origin analysis (tools spanning several domains), OSV.dev supply-chain CVEs, OWASP MCP Top 10 tags, and rug-pull/drift detection (fingerprints configs, tools and skills against a baseline: MCPConfigChanged / MCPToolChanged / SkillContentChanged).",
+      "access": "`cargo install ramparts`; scans a server by URL or stdio command, and auto-discovers IDE configs.",
+      "signals": "99 stars; last push 2026-10-08; crate versions 0.7.x on docs.rs.",
+      "terms": "Apache-2.0 (GitHub API).",
+      "install": "cargo install ramparts",
+      "notes": "Its normalisation (zero-width, homoglyph, base64 decoding) and drift-baseline ideas can be copied into Skill Advisor's own static checks. I did not test whether YARA mode runs without any network access.",
+      "source": "https://github.com/highflame-ai/ramparts",
+      "confidence": "verified"
+     },
+     {
+      "name": "MCP-Shield (riseandignite)",
+      "kind": "security-tool",
+      "what": "npx CLI that scans installed MCP servers for tool poisoning, exfiltration channels and cross-origin escalation. Options: --claude-api-key for AI analysis, --identify-as to detect bait-and-switch by client name, --safe-list.",
+      "access": "`npx mcp-shield [--path config.json]`. No key needed for the basic pass. It connects to the servers.",
+      "signals": "555 stars; last push 2025-04-26, so stale.",
+      "terms": "MIT (GitHub API).",
+      "install": "npx mcp-shield",
+      "notes": "Stale. The --identify-as trick (does the server answer differently to another client name?) is a useful runtime check.",
+      "source": "https://github.com/riseandignite/mcp-shield",
+      "confidence": "verified"
+     },
+     {
+      "name": "Nova-Proximity (ex fr0gger/proximity)",
+      "kind": "security-tool",
+      "what": "Scanner for MCP servers and Agent Skills that probes a server for its tools, prompts and resources, then matches them against NOVA prompt-pattern rules.",
+      "access": "Repository CLI (Python). Probes local or remote servers.",
+      "signals": "306 stars; last push 2026-03-26; covered by Help Net Security on 2025-10-29.",
+      "terms": "GPL-3.0 (GitHub API). Copyleft: invoke it as a separate tool, do not bundle it.",
+      "install": "see repository README",
+      "notes": "Licence matters if Skill Advisor wants to embed it.",
+      "source": "https://github.com/Nova-Hunting/nova-proximity ; https://www.helpnetsecurity.com/2025/10/29/proximity-open-source-mcp-security-scanner",
+      "confidence": "verified"
+     },
+     {
+      "name": "mcp-context-protector (Trail of Bits)",
+      "kind": "security-tool",
+      "what": "Wrapper proxy with trust-on-first-use pinning of server instructions, tool descriptions and parameters. A changed or new tool is withheld; changed server instructions block the whole server. Comparison is semantic and ignores ordering. Optional LlamaFirewall guardrail and ANSI sanitising.",
+      "access": "Runs as a wrapper around a server; review with --review-server; approvals are stored in a local JSON file (path differs between sources).",
+      "signals": "228 stars; the repository is ARCHIVED (last push 2026-04-14). Launch post dated 2025-07-28.",
+      "terms": "Apache-2.0 (GitHub API).",
+      "install": "n/a (archived)",
+      "notes": "Archived, so do not depend on it. Its rug-pull design (hash descriptions at approval, block on diff) is the reference pattern for Skill Advisor's own update check.",
+      "source": "https://github.com/trailofbits/mcp-context-protector ; https://blog.trailofbits.com/2025/07/28/we-built-the-security-layer-mcp-always-needed/",
+      "confidence": "verified"
+     },
+     {
+      "name": "cc-audit (ryo-ebata)",
+      "kind": "security-tool",
+      "what": "AI-free static scanner for Claude Code artifacts (skills, hooks, MCP configs, Docker files, dependencies) to run before install. Commands: `cc-audit check ./skill/ --format json|html`, `--type mcp ~/.claude/mcp.json`, `--all-clients`, `--client cursor|claude`, `--strict`, `--watch`.",
+      "access": "Local and offline (no LLM).",
+      "signals": "26 stars; last push 2026-11-12; crate versions up to 3.2.x on docs.rs.",
+      "terms": "MIT (GitHub API).",
+      "install": "brew install ryo-ebata/tap/cc-audit | cargo install cc-audit | npm install -g @cc-audit/cc-audit",
+      "notes": "Small project but offline and MIT. Could be an optional backend for plugin and hook checks. Its rule quality is not assessed.",
+      "source": "https://github.com/ryo-ebata/cc-audit",
+      "confidence": "verified"
+     },
+     {
+      "name": "HOL Guard (hashgraph-online, ex ai-plugin-scanner)",
+      "kind": "security-tool",
+      "what": "Self-described 'open-source antivirus and firewall for AI agents' covering risky tools, secret access, prompt injection, malicious packages, MCP servers, plugins and skills. Its predecessor plugin-scanner linted and verified marketplace roots and plugin manifests for Codex, Claude Code, Gemini CLI and OpenCode, with SARIF output (per secondary sources).",
+      "access": "pip install hol-guard. I could not confirm offline mode or the exact checks from the README.",
+      "signals": "1099 stars; last push 2026-11-13.",
+      "terms": "Apache-2.0 (GitHub API).",
+      "install": "pip install hol-guard",
+      "notes": "The only active tool found that explicitly targets plugin manifests and marketplaces across several agents. Its capabilities are reported, not tested.",
+      "source": "https://github.com/hashgraph-online/hol-guard ; https://hol.org/docs/libraries/ai-plugin-scanner/overview/",
+      "confidence": "reported"
+     },
+     {
+      "name": "claude plugin validate / Claude Code plugin CLI",
+      "kind": "install-command",
+      "what": "Built-in validation of marketplace.json and plugin.json. It checks JSON syntax, required fields (name, owner, plugins), naming rules, relative sources containing '..', and unknown fields (as warnings). Reserved official marketplace names (e.g. claude-plugins-official) are refused when a marketplace is added.",
+      "access": "`claude plugin validate <dir>`, `claude plugin marketplace add <owner/repo|path|url>`, `claude plugin install <name>@<marketplace>`, `claude plugin list`, `claude plugin details <name>` (component inventory), `claude plugin marketplace remove <name>` (also uninstalls its plugins). Plugin source types: relative path, github, git-subdir, url, archive (zip over HTTPS), npm, command (runs a command on the installing machine). git sources can be pinned with `ref` or `sha`.",
+      "signals": "Official Anthropic docs, read today.",
+      "terms": "n/a",
+      "install": "Non-interactive: claude plugin marketplace add X && claude plugin install P@M",
+      "notes": "Validation is structural only, not security. The `command` and `archive` source types and hooks, MCP and bin components all execute code, so flag them. I did not see the auto-update and strictKnownMarketplaces details on the page I read; they are documented elsewhere (unknown).",
+      "source": "https://code.claude.com/docs/en/plugin-marketplaces",
+      "confidence": "verified"
+     },
+     {
+      "name": "Official MCP Registry (registry.modelcontextprotocol.io)",
+      "kind": "mcp-registry",
+      "what": "Official metadata registry (preview). Entries are server.json: name, description, repository, version, packages (npm, PyPI, Docker... with version, runtimeHint, transport, env vars with isSecret), remotes. _meta has status (active, deprecated, deleted), publishedAt, updatedAt and isLatest.",
+      "access": "GET https://registry.modelcontextprotocol.io/v0.1/servers?limit=1&search=filesystem tested today with no key. Cursor pagination via metadata.nextCursor.",
+      "signals": "Trust comes only from namespace authentication: io.github.<user>/* needs GitHub auth; reverse-DNS names need DNS or HTTP proof. No security score. The docs say it 'delegates security scanning' to package registries and downstream aggregators. Manual takedown for spam or malware.",
+      "terms": "Docs say it is meant for downstream aggregators, which may add ratings and curation; recommended polling about once an hour. I did not read a separate data licence (unknown).",
+      "install": "Entries give runtimeHint (npx, uvx, docker) plus an exact package version, so a pinned command can be built (e.g. npx -y pkg@0.1.2).",
+      "notes": "Good backbone for identity and install data. Security signals must come from elsewhere.",
+      "source": "https://modelcontextprotocol.io/registry/about ; https://registry.modelcontextprotocol.io/v0.1/servers?limit=1&search=filesystem",
+      "confidence": "verified"
+     },
+     {
+      "name": "Smithery security scans",
+      "kind": "mcp-registry",
+      "what": "In April 2025 Smithery announced that every server it lists would be scanned with Invariant MCP-Scan, with results shown on the server page.",
+      "access": "Server pages I tried returned 404 and the registry API returned HTTP 500 without a key. I could not test them.",
+      "signals": "The only verified fact is the 2025-04-24 announcement. Secondary sources mention numeric x/100 scores and say there is no 'verified' badge. Whether scans are current under the Snyk name is unknown.",
+      "terms": "unknown (not read)",
+      "install": "n/a",
+      "notes": "Smithery hosting had a path-traversal flaw in 2025 that exposed a fly.io token (see incidents). Do not rely on Smithery scores.",
+      "source": "https://invariantlabs.ai/blog/smithery-mcp-scan",
+      "confidence": "unknown"
+     },
+     {
+      "name": "Glama MCP directory scores",
+      "kind": "mcp-registry",
+      "what": "Listing pages show letter grades A–D (or 'Not graded') for license, quality and maintenance, plus a tool definition quality section. I saw no graded security category on the pages I fetched. Per a Glama help page (secondary), quality = 70% tool definition quality + 30% server coherence. Servers without a LICENSE cannot be installed.",
+      "access": "GET https://glama.ai/api/mcp/v1/servers?first=1 returned 401: an API key is required. Rate limit header: 100.",
+      "signals": "Grades: license, quality, maintenance (activity, responsiveness).",
+      "terms": "The API Data License requires visible attribution to Glama on every page that shows the data and a link to each record's Glama listing (quoted in the 401 body).",
+      "install": "n/a",
+      "notes": "Ruled out by the no-key rule, and the attribution clause is heavy. A security grade per server was not found.",
+      "source": "https://glama.ai/api/mcp/v1/servers?first=1 ; https://glama.ai/mcp/servers/druce/MCP/score",
+      "confidence": "verified"
+     },
+     {
+      "name": "Docker MCP Catalog / docker/mcp-registry",
+      "kind": "mcp-registry",
+      "what": "Curated catalogue of MCP servers as Docker images. 'Built by Docker' servers get signatures, SBOMs, provenance attestations and vulnerability scanning. Since 2025-12-03: each server.yaml must pin source.commit (enforced in CI, copied to the org.opencontainers.image.revision label). A nightly job bumps pins through reviewed PRs. Claude Code and Codex audit each diff in an isolated, offline container (security-risk:high and security-blocked labels; critical findings block merge). The catalog shows publisher trust levels (known publisher vs community).",
+      "access": "Repository files servers/<name>/server.yaml on GitHub (MIT). Runtime check: `docker mcp gateway run --verify-signatures`.",
+      "signals": "docker/mcp-registry: 584 stars, last push 2026-11-13. docker/mcp-gateway: 1632 stars. Commit pin plus agentic audit plus trust level.",
+      "terms": "MIT (docker/mcp-registry repo, GitHub API).",
+      "install": "docker mcp CLI (Docker Desktop MCP Toolkit) or image mcp/<name>",
+      "notes": "The strongest public per-server audit signal found. A server present in docker/mcp-registry with a commit pin counts as a positive trust signal. Self-built community images do not get signing.",
+      "source": "https://www.docker.com/?p=83505 ; https://github.com/docker/mcp-registry ; https://docs.docker.com/ai/mcp-catalog-and-toolkit/faqs/",
+      "confidence": "verified"
+     },
+     {
+      "name": "npm provenance (Sigstore / SLSA attestations)",
+      "kind": "other",
+      "what": "Per-version attestations: npm publish attestation plus SLSA provenance v1, signed through Sigstore, linking the tarball to its source repo, commit and CI workflow.",
+      "access": "No key. GET https://registry.npmjs.org/<pkg>/<ver> has dist.attestations.url and provenance.predicateType. GET https://registry.npmjs.org/-/npm/v1/attestations/<pkg>@<ver> returns bundles (DSSE payload base64). Tested on @modelcontextprotocol/server-filesystem@2.3.0 (published 2026-11-11): repo modelcontextprotocol/servers, workflow .github/workflows/release.yml, ref refs/tags/v2.4.0, GitHub-hosted runner. Local check: `npm audit signatures`.",
+      "signals": "Provenance present or absent, source repo match with server.json repository, GitHub-hosted builder, trusted publishing.",
+      "terms": "Public npm registry metadata.",
+      "install": "n/a",
+      "notes": "npm docs: provenance does not guarantee the package is free of malicious code; it only proves origin. Do not require 'tag == version': the official package has version 2.3.0 built from tag v2.4.0 (monorepo). Check repo match instead. postmark-mcp-style impersonation fails the repo-match test.",
+      "source": "https://docs.npmjs.com/generating-provenance-statements ; https://registry.npmjs.org/-/npm/v1/attestations/@modelcontextprotocol%2fserver-filesystem@2.3.0",
+      "confidence": "verified"
+     },
+     {
+      "name": "PyPI Integrity API (PEP 740 attestations)",
+      "kind": "other",
+      "what": "Per-file provenance (in-toto statement, Sigstore) for PyPI uploads made with Trusted Publishing.",
+      "access": "No key. GET https://pypi.org/integrity/<project>/<version>/<filename>/provenance returned 200 for mcp-server-fetch 2026.11.11 (wheel) with attestation_bundles. GET https://pypi.org/pypi/<project>/json gives the filenames.",
+      "signals": "Attestation present, publisher identity (repo and workflow).",
+      "terms": "Public PyPI API.",
+      "install": "n/a",
+      "notes": "Same trust signal as npm provenance, for uvx-run servers.",
+      "source": "https://pypi.org/integrity/mcp-server-fetch/2026.11.11/mcp_server_fetch-2026.11.11-py3-none-any.whl/provenance",
+      "confidence": "verified"
+     },
+     {
+      "name": "deps.dev API (Google Open Source Insights)",
+      "kind": "other",
+      "what": "Per-version package data: licences, advisoryKeys, deprecation, links, slsaProvenances (with verified flag and commit), attestations; per-project: stars, licence, OpenSSF scorecard when available.",
+      "access": "No key. GET https://api.deps.dev/v3/systems/npm/packages/%40modelcontextprotocol%2Fserver-filesystem/versions/2.3.0 returned slsaProvenances verified:true, commit e1dc4b1…, advisoryKeys []. GET /v3/projects/github.com%2Fmodelcontextprotocol%2Fservers returned stars 91873 and no scorecard.",
+      "signals": "Verified provenance, advisories, licence, stars, deprecation in one call; covers npm, PyPI, Go, Cargo, Maven, NuGet.",
+      "terms": "I did not read the data terms today (secondary: CC-BY 4.0), so check before redistributing.",
+      "install": "n/a",
+      "notes": "One call gives provenance, advisories and licence. Good for the daily catalogue job.",
+      "source": "https://api.deps.dev/v3/systems/npm/packages/%40modelcontextprotocol%2Fserver-filesystem/versions/2.3.0",
+      "confidence": "verified"
+     },
+     {
+      "name": "OSV.dev and GitHub Advisory Database",
+      "kind": "other",
+      "what": "Vulnerability and malware advisories. OSV includes OpenSSF malicious-packages entries (MAL-*). GitHub advisories support type=malware and affects=<pkg>.",
+      "access": "No key. GET https://api.osv.dev/v1/vulns/CVE-2025-6514 (alias GHSA-6xpm-ggf7-wc3p). GET https://api.github.com/advisories?ecosystem=npm&affects=mcp-remote returned the critical reviewed advisory. GET https://api.github.com/advisories?ecosystem=npm&type=malware returns the newest malware entries (2026-11-13). Unauthenticated GitHub API limit: 60 requests per hour. OSV batch lookups use POST /v1/querybatch (not tested).",
+      "signals": "Known CVEs and known-malicious versions per package.",
+      "terms": "GitHub Advisory Database CC-BY-4.0; OSV per-source licences (reported, not read today).",
+      "install": "n/a",
+      "notes": "`affects=postmark-mcp` returned no GitHub advisory, so the malware list is incomplete. Combine it with Skill Advisor's own blocklist.",
+      "source": "https://api.osv.dev/v1/vulns/CVE-2025-6514 ; https://api.github.com/advisories?ecosystem=npm&affects=mcp-remote",
+      "confidence": "verified"
+     },
+     {
+      "name": "OpenSSF Scorecard API",
+      "kind": "other",
+      "what": "Per-repo security-practice score (branch protection, signed releases, pinned dependencies, etc.).",
+      "access": "No key. GET https://api.securityscorecards.dev/projects/github.com/modelcontextprotocol/servers returned 404 (repo not in the weekly scan set).",
+      "signals": "Score 0–10 when present.",
+      "terms": "unknown (not read)",
+      "install": "n/a",
+      "notes": "Coverage is spotty for MCP repos. Use it only when present; a missing score must not be read as a penalty.",
+      "source": "https://api.securityscorecards.dev/projects/github.com/modelcontextprotocol/servers",
+      "confidence": "verified"
+     },
+     {
+      "name": "MCP Security Best Practices (spec)",
+      "kind": "other",
+      "what": "Official threat list: confused deputy (static client ID plus dynamic registration plus consent cookie), token passthrough (forbidden), SSRF in OAuth discovery (block private, link-local and metadata IPs, require https), state handle hijacking, local server compromise (show the full command, highlight sudo, rm -rf, curl and sensitive paths, sandbox), OAuth authorization URL validation (http/https only, no shell open; see CVE-2025-6514), stdio proxy escalation, mix-up, localhost redirect impersonation, scope minimization (avoid *, all, full-access, omnibus scopes).",
+      "access": "Web page.",
+      "signals": "Normative MUST and SHOULD rules usable as a check list.",
+      "terms": "Spec docs.",
+      "install": "n/a",
+      "notes": "The 'local server compromise' consent rules match Skill Advisor's install-confirmation screen directly.",
+      "source": "https://modelcontextprotocol.io/specification/draft/basic/security_best_practices",
+      "confidence": "verified"
+     },
+     {
+      "name": "Incident (malicious, in the wild): postmark-mcp",
+      "kind": "other",
+      "what": "First publicly reported malicious MCP server. An npm package impersonating Postmark's own MCP server. From 1.0.16 (about 2025-09-17) a one-line change to sendEmail added a hidden BCC to an address at giftshop[.]club. 1.0.15 was clean. Publisher 'phanpak'; the package was later deleted.",
+      "access": "n/a",
+      "signals": "Snyk post dated 2025-09-25. Download counts conflict (Koi: 1,500 a week; The Hacker News: 1,643 total).",
+      "terms": "n/a",
+      "install": "n/a",
+      "notes": "Lessons: clean versions first, then a rug pull, so unpinned npx -y pkg was the vector. The package repo did not match the vendor, and there was no provenance. A static diff between versions would show a new hardcoded email or domain.",
+      "source": "https://snyk.io/blog/malicious-mcp-server-on-npm-postmark-mcp-harvests-emails ; https://thehackernews.com/2025/09/first-malicious-mcp-server-found.html",
+      "confidence": "verified"
+     },
+     {
+      "name": "Incident (malicious, in the wild): SANDWORM_MODE npm worm",
+      "kind": "other",
+      "what": "Feb 2026. At least 19 typosquat npm packages (aliases official334 and javaorg), including Claude Code and OpenClaw look-alikes. The McpInject module writes a hidden MCP server (staged in ~/.dev-utils/) into the configs of Claude Code, Claude Desktop, Cursor, Continue and Windsurf; sources differ on the exact list. Its tool descriptions carry prompt injection that makes the agent collect SSH, AWS and npm secrets.",
+      "access": "n/a",
+      "signals": "Socket research, covered by Help Net Security on 2026-02-24.",
+      "terms": "n/a",
+      "install": "n/a",
+      "notes": "Lesson: Skill Advisor's 'manage' view should flag MCP entries it did not install (config drift or unknown entries) and commands pointing into hidden home directories.",
+      "source": "https://www.helpnetsecurity.com/2026/02/24/npm-worm-sandworm-mode-supply-cain-attack ; https://infosecurity-magazine.com/news/shai-hulud-like-worm-devs-npm-ai",
+      "confidence": "reported"
+     },
+     {
+      "name": "Incident (malicious, in the wild): ClawHavoc on ClawHub (OpenClaw skills)",
+      "kind": "other",
+      "what": "Koi audit of 2,857 ClawHub skills (about 2026-02-01) found 341 malicious, 335 from one campaign. Fake 'prerequisites' install the Atomic Stealer (AMOS) macOS stealer; others carried a reverse shell or credential theft. Later counts conflict (824, 1,103, 1,184).",
+      "access": "n/a",
+      "signals": "The Hacker News, 2026-02.",
+      "terms": "n/a",
+      "install": "n/a",
+      "notes": "Skills and plugins: install-time 'run this setup command' text is the pattern to flag (curl|sh, base64, password-protected zip).",
+      "source": "https://thehackernews.com/2026/02/researchers-find-341-malicious-clawhub.html",
+      "confidence": "reported"
+     },
+     {
+      "name": "Incident (malicious, in the wild): s1ngularity / Nx compromise",
+      "kind": "other",
+      "what": "2025-08-26. Malicious Nx npm versions ran a postinstall telemetry.js that called local AI CLIs (claude, gemini, q) with --dangerously-skip-permissions or --yolo to search for secrets, then published them to s1ngularity-repository repos. 2,349 secrets leaked (Socket). Linked to the Shai-Hulud wave.",
+      "access": "n/a",
+      "signals": "Wiz, StepSecurity and The Hacker News.",
+      "terms": "n/a",
+      "install": "n/a",
+      "notes": "Shows that agent CLIs themselves are a target; package install scripts matter for npx-run MCP servers.",
+      "source": "https://thehackernews.com/2025/08/malicious-nx-packages-in-s1ngularity.html",
+      "confidence": "reported"
+     },
+     {
+      "name": "Incident (malicious, in the wild, IDE extension not agent plugin): trojanized Claude Code extension on Cursor marketplace",
+      "kind": "other",
+      "what": "2026-10-29. A tampered Claude Code extension (2.1.313; some sources say 2.1.312 and 2.1.313) was on Cursor's marketplace for about 11 hours. A JS loader prepended to extension.js added an SSH key ('svc-telemetry'), tried a reverse tunnel and set up persistence. Up to 5,000 developers exposed. The official VS Code Marketplace, Open VSX and npm were not affected; 2.1.314 was published.",
+      "access": "n/a",
+      "signals": "BleepingComputer, CSA.",
+      "terms": "n/a",
+      "install": "n/a",
+      "notes": "Publisher-name trust on a marketplace is not enough; compare the hash against the vendor's canonical artefact.",
+      "source": "https://www.bleepingcomputer.com/news/security/malicious-claude-code-extension-on-cursor-planted-ssh-backdoors/",
+      "confidence": "reported"
+     },
+     {
+      "name": "Vulnerability/research: Plugin4Shell (agent plugin pin bypass)",
+      "kind": "other",
+      "what": "AIR, disclosed 2026-09-17. Claude Code, Codex, Copilot and Gemini CLI checked out a plugin's pinned commit SHA without verifying that HEAD actually equalled it. A branch named like a 40-hex hash (allowed by Bitbucket and self-hosted git; rejected by GitHub) let the attacker swap code. Background auto-update made it zero-click. Fixed in Claude Code 2.1.179 and Codex 0.146.0; Copilot unpatched; Gemini CLI deprecated. No CVE at the time.",
+      "access": "n/a",
+      "signals": "Help Net Security 2026-09-18; CSA research note.",
+      "terms": "n/a",
+      "install": "n/a",
+      "notes": "Static check for Skill Advisor: after any git checkout, verify `git rev-parse HEAD` == pinned sha, and reject refs that look like a 40-hex string. Offer 'disable auto-update' for agents that are not patched.",
+      "source": "https://www.helpnetsecurity.com/2026/09/18/plugin4shell-ai-coding-agents-vulnerability/",
+      "confidence": "reported"
+     },
+     {
+      "name": "Vulnerability/research: Claude Code project-file flaws (Check Point)",
+      "kind": "other",
+      "what": "Published 2026-02-25. (1) Project .claude/settings.json hooks ran without consent (GHSA-ph6w-f82w-28w6, fixed 2025-08-26). (2) CVE-2025-59536: enableAllProjectMcpServers or enabledMcpjsonServers in the repo settings auto-started .mcp.json servers before the trust dialog (fixed 2025-09-22). (3) CVE-2026-21852: ANTHROPIC_BASE_URL in the project config sent the API key to an attacker before consent (fixed 2025-12-28).",
+      "access": "n/a",
+      "signals": "Check Point Research primary write-up, read today. Version numbers are not given there.",
+      "terms": "n/a",
+      "install": "n/a",
+      "notes": "Static checks: flag a repo or plugin that sets hooks, enableAllProjectMcpServers, enabledMcpjsonServers or ANTHROPIC_BASE_URL or other env overrides.",
+      "source": "https://research.checkpoint.com/2026/rce-and-api-token-exfiltration-through-claude-code-project-files-cve-2025-59536/",
+      "confidence": "verified"
+     },
+     {
+      "name": "Vulnerability/research: Tool poisoning, rug pull, shadowing (Invariant) and GitHub MCP toxic flow",
+      "kind": "other",
+      "what": "Invariant 2025-04-01: hidden <IMPORTANT> instructions in tool descriptions (an 'add' tool reading ~/.cursor/mcp.json and ~/.ssh/id_rsa into a 'sidenote' parameter), rug pull (description changed after approval), shadowing (a tool description rewrites how another server's send_email is used). Invariant 2025-05-26: a malicious public GitHub issue steered an agent using the official GitHub MCP server into leaking private repos (toxic flow / 'lethal trifecta'); no server-side fix.",
+      "access": "n/a",
+      "signals": "The tool-poisoning post was read today; the GitHub case is from secondary coverage.",
+      "terms": "n/a",
+      "install": "n/a",
+      "notes": "Defines the static description checks and the toxic-flow (private data + untrusted input + exfil sink) combination check.",
+      "source": "https://invariantlabs.ai/blog/mcp-security-notification-tool-poisoning-attacks ; https://invariantlabs.ai/blog/mcp-github-vulnerability",
+      "confidence": "verified"
+     },
+     {
+      "name": "Vulnerability/research: MCP server and client CVEs 2025-2026",
+      "kind": "other",
+      "what": "mcp-remote CVE-2025-6514 (JFrog, CVSS 9.6, OS command injection through a malicious authorization_endpoint; reported affected 0.0.5–0.1.15, fixed 0.1.16). MCP Inspector CVE-2025-49596 (CVSS 9.4, CSRF + 0.0.0.0, fixed 0.14.1). Filesystem server EscapeRoute CVE-2025-53109/53110 (Cymulate, symlink and prefix bypass, fixed 0.6.3 / 2025.7.1). mcp-server-git CVE-2025-68143/68144/68145 (Cyata, git_init removed, fixed 2025.12.18). Cursor MCPoison CVE-2025-54136 (Check Point, an approved mcp.json changed later without re-approval, fixed 1.3). Smithery hosting path traversal (GitGuardian, reported 2025-06-13, fixed 2025-06-15, fly.io token, about 3,000 servers).",
+      "access": "Advisories are queryable through OSV/GHSA (CVE-2025-6514 verified there).",
+      "signals": "CVE-2025-6514 verified on OSV and GHSA; the others come from secondary coverage.",
+      "terms": "n/a",
+      "install": "n/a",
+      "notes": "Minimum-version rules for the catalogue: mcp-remote >= 0.1.16, inspector >= 0.14.1, server-filesystem >= 2025.7.1, mcp-server-git >= 2025.12.18. MCPoison is the client-side rug pull: re-approve on any config hash change.",
+      "source": "https://jfrog.com/blog/2025-6514-critical-mcp-remote-rce-vulnerability/ ; https://api.osv.dev/v1/vulns/CVE-2025-6514 ; https://research.checkpoint.com/2025/cursor-vulnerability-mcpoison/ ; https://www.theregister.com/2026/01/20/anthropic_prompt_injection_flaws/ ; https://blog.gitguardian.com/breaking-mcp-server-hosting/",
+      "confidence": "reported"
+     },
+     {
+      "name": "Public per-server audit data comparable to skills.sh audits",
+      "kind": "other",
+      "what": "Search for a skills.sh-style audit feed for MCP servers or plugins (per-item scan verdicts from several vendors, open API).",
+      "access": "not found",
+      "signals": "The nearest are Docker MCP Registry (commit pin + agentic audit, MIT, on GitHub), Smithery (scan announced 2025; current state unknown), Glama (grades, key and attribution required). Per-server OAuth-scope data: not found.",
+      "terms": "n/a",
+      "install": "n/a",
+      "notes": "Skill Advisor must compute its own security score for MCP and plugins.",
+      "source": "https://www.docker.com/?p=83505 ; https://glama.ai/api/mcp/v1/servers?first=1",
+      "confidence": "unknown"
+     },
+     {
+      "name": "Checks Skill Advisor can do itself STATICALLY (no server run, no account)",
+      "kind": "other",
+      "what": "1. Identity: registry namespace vs repo owner; remote URL host vs namespace domain; package repository field == server.json repository == provenance sourceRepository; typosquat distance to known names.\n2. Supply chain: npm/PyPI provenance present and verified (deps.dev slsaProvenances.verified); OSV/GHSA advisories and MAL- entries; minimum safe versions; licence present; deprecation and status (deleted, deprecated).\n3. Pinning: rewrite installs to exact versions (npx -y pkg@x.y.z, uvx pkg==x.y.z, docker image@sha256); flag unpinned npx/uvx/@latest and git branches; for plugins, require ref+sha, then after checkout verify HEAD==sha and reject 40-hex ref names (Plugin4Shell).\n4. Command review (MCP spec): show the full command; flag sudo, rm -rf, curl|sh, base64, eval, network fetch at start, paths in ~/.ssh, ~/.aws or hidden home dirs (SANDWORM ~/.dev-utils), env overrides (ANTHROPIC_BASE_URL etc.).\n5. Plugin manifest: list hooks (especially SessionStart), MCP servers, bin/LSP, `command`/`archive`/`npm` sources, enableAllProjectMcpServers/enabledMcpjsonServers; npm install scripts (postinstall).\n6. Text checks on descriptions available without running (registry description, README, skill/agent markdown, Docker catalog tools list): <IMPORTANT>-style hidden instructions, references to other tools (shadowing), sensitive paths, 'do not tell the user', zero-width/homoglyph/base64 normalisation before matching (Ramparts approach); optional offline YARA through `mcp-scanner static`.\n7. Remote servers: https only; block private, link-local and metadata IPs; domain age or allowlist; declared OAuth scopes when present (flag *, all, admin).\n8. Drift: store a hash per installed config, package version and description set; alert on unknown MCP entries in agent configs and on any change after approval (MCPoison, rug pull).\n9. Trust bonus: listed in docker/mcp-registry with commit pin; official namespace (io.github.<vendor> / vendor domain).",
+      "access": "n/a",
+      "signals": "Cisco skill-scanner benchmark: rules alone catch 7.7% of malicious skills, so a static pass is only 'no known pattern', never 'safe'.",
+      "terms": "n/a",
+      "install": "n/a",
+      "notes": "All sources needed (official MCP registry, npm/PyPI JSON, deps.dev, OSV, GitHub advisories) were tested without a key today.",
+      "source": "https://modelcontextprotocol.io/specification/draft/basic/security_best_practices ; https://github.com/cisco-ai-defense/skill-scanner ; https://github.com/highflame-ai/ramparts",
+      "confidence": "verified"
+     },
+     {
+      "name": "Checks that NEED running or connecting to the server",
+      "kind": "other",
+      "what": "1. Real tools/list, prompts/list, resources/list and server instructions (the descriptions the model actually sees; they may differ from the README or registry).\n2. Rug-pull baseline: hash of live descriptions at approval, re-fetched on every update or session (TOFU like mcp-context-protector).\n3. Bait-and-switch: compare answers under different client names (MCP-Shield --identify-as).\n4. Toxic-flow analysis across all installed servers (private-data source + untrusted input + exfil sink), which needs the live tool set.\n5. OAuth behaviour of remote servers: actual authorization_endpoint and scheme (CVE-2025-6514), requested scopes, redirect targets, SSRF attempts.\n6. Behaviour: network egress, file access outside the declared roots, spawned processes. This needs a sandbox or container (Docker MCP gateway, or the agent-scan --dangerously-run-mcp-servers CI mode).\n7. Behavioral source analysis with an LLM (Cisco behavioral, Snyk API). This needs a key or an account and is optional.",
+      "access": "Run only in a sandbox, only after explicit user consent, with the exact command shown (MCP spec MUST).",
+      "signals": "Tools that do this: Cisco mcp-scanner (stdio/remote, YARA offline), Ramparts, Snyk Agent Scan (account), MCP-Shield (stale).",
+      "terms": "n/a",
+      "install": "n/a",
+      "notes": "Starting a stdio server executes its code. Never do it implicitly during browsing or scoring.",
+      "source": "https://github.com/snyk/agent-scan ; https://github.com/cisco-ai-defense/mcp-scanner ; https://modelcontextprotocol.io/specification/draft/basic/security_best_practices",
+      "confidence": "verified"
+     }
+    ],
+    "recommendation": "1. Identity backbone: the official MCP Registry API (no key, server.json with exact package versions and runtimeHint). It proves only namespace ownership and does not scan.\n2. Trust signals for the daily job, all free and keyless (tested today): npm attestations, the PyPI Integrity API, deps.dev (verified SLSA, advisories, licence, stars), OSV plus GitHub Advisories (CVE and malware), and docker/mcp-registry (commit pin plus agentic audit, MIT).\n3. Skip Glama: its API needs a key and per-page attribution. Skip Smithery scores: their current state is unknown and its API needs a key. OpenSSF Scorecard: use only when present.\n4. Security score: compute it locally. Static checks cover identity and repo match, provenance, advisories, pinning (rewrite to exact versions, Plugin4Shell HEAD==sha check), command and hook review, normalised text rules on descriptions, and drift hashes.\n5. Optional offline engine: Cisco mcp-scanner (Apache-2.0, `static` plus YARA, no key). cc-audit (MIT, offline) is optional for plugins and hooks.\n6. Snyk Agent Scan stays opt-in only, because it needs an account, sends data to Snyk and runs servers. Treat Nova-Proximity (GPL-3.0) as external only; mcp-context-protector is archived and MCP-Shield is stale.\n7. Live-description scanning, rug-pull TOFU and toxic-flow analysis need the server running. Do them only in a sandbox, with explicit consent and the full command shown.\n8. Display rule: a static pass means 'no known pattern found', never 'safe'. Cisco measured that rules alone catch 7.7% of malicious skills.\n9. Incidents to encode: postmark-mcp (unpinned rug pull), SANDWORM_MODE (injected config entries), Check Point (project hooks and env overrides), Plugin4Shell (pin bypass), CVE minimum versions."
+   },
+   "check": {
+    "checked": [
+     {
+      "name": "HOL Guard (hashgraph-online, ex ai-plugin-scanner)",
+      "claim": "Open-source antivirus/firewall for AI agents; predecessor plugin-scanner lints marketplace roots and manifests for Codex, Claude Code, Gemini CLI, OpenCode with SARIF; install pip install hol-guard; 1099 stars; last push 2026-11-13; Apache-2.0.",
+      "verdict": "corrected",
+      "correction": "Verified today. README tagline is 'Open-source antivirus and firewall for AI agents'. PyPI summary: 'antivirus and runtime protection for AI agents, tools, MCP servers, plugins, skills, and package installs'. Latest version hol-guard 3.59.0, uploaded 2026-11-04, Python >=3.10, Apache-2.0. The README install is `pipx install hol-guard` then `hol-guard init`. The HOL docs also give `pip install hol-guard`. Local protection, CLI, approvals and receipts work without sign-in; Guard Cloud is optional. The README does not state full offline operation. The README lists 16 supported agents: Codex, Claude Code, Copilot CLI, Cursor, Cline, Gemini CLI, Grok, Hermes, Kimi Code, Pi, oh-my-pi, OpenClaw, OpenCode, Antigravity, ZCode and Devin. plugin-scanner is not a predecessor. It is a sibling product in the same repo, still current at 3.59.0, Apache-2.0, installed with `pipx install plugin-scanner` (docs also give pip). It has built-in adapters for Codex, Claude Code, Gemini CLI and OpenCode, and commands scan, lint, verify, submit and doctor. It outputs text, JSON, Markdown and SARIF (`plugin-scanner scan . --format sarif`). Stars: 1099, verified from the GitHub page. Last push 2026-11-13: not verified, because the GitHub API was rate-limited.",
+      "source": "https://github.com/hashgraph-online/hol-guard ; https://pypi.org/pypi/hol-guard/json ; https://pypi.org/pypi/plugin-scanner/json ; https://hol.org/docs/libraries/ai-plugin-scanner/overview/"
+     },
+     {
+      "name": "Smithery security scans",
+      "claim": "Smithery announced Invariant MCP-Scan on every listed server on 2025-04-24; server pages 404; registry API returns HTTP 500 without a key; terms unknown.",
+      "verdict": "corrected",
+      "correction": "The announcement is verified: dated 2025-04-24, it says all Smithery servers are scanned by MCP-Scan, with results on each server's registry page. The access claim is wrong today. A GET to https://registry.smithery.ai/servers?pageSize=1 returned HTTP 200 without a key, reporting totalCount 20750 and totalPages 500. List items carry the fields verified, useCount, remote, isDeployed, bySmithery, createdAt and score; score was null on every item sampled. The detail endpoint https://registry.smithery.ai/servers/{qualifiedName} also returned 200 without a key. It has a `security` field, but the field was null on all 6 servers sampled (brave, slack, googledrive and others). So scans are not exposed as usable data today. There is a 'verified' boolean in the API, which contradicts the secondary claim that there is no verified badge. Terms not found: smithery.ai/terms returns 404. A site banner says Smithery's MCP Proxy and managed identity shut down on October 31 (reported, from a search snippet).",
+      "source": "https://invariantlabs.ai/blog/smithery-mcp-scan ; https://registry.smithery.ai/servers?pageSize=1 ; https://registry.smithery.ai/servers/brave"
+     },
+     {
+      "name": "Incident (malicious, in the wild): SANDWORM_MODE npm worm",
+      "claim": "Feb 2026; at least 19 typosquat packages from official334 and javaorg; McpInject writes a hidden MCP server in ~/.dev-utils/ into Claude Code, Claude Desktop, Cursor, Continue and Windsurf configs; prompt injection collects SSH, AWS and npm secrets.",
+      "verdict": "corrected",
+      "correction": "Confirmed on Socket's primary post (published 2026-02-20, not 2026-02-24; Help Net Security covered it on 2026-02-24). At least 19 packages, aliases official334 and javaorg. McpInject is one of five Stage 2 exports. It writes server.js under a randomized hidden home directory, for example ~/.dev-utils/. Configs written: Claude Code ~/.claude/settings.json, Claude Desktop (Mac/Linux/Windows), Cursor ~/.cursor/mcp.json, VS Code Continue ~/.continue/config.json, Windsurf/Codeium ~/.windsurf/mcp.json. Targets: ~/.ssh/id_rsa, ~/.ssh/id_ed25519, ~/.aws/credentials, ~/.npmrc, project .env files, and env vars containing TOKEN, KEY, SECRET or PASSWORD. Use the Socket post as the primary source. Its claims are verified but describe third-party malware.",
+      "source": "https://socket.dev/blog/sandworm-mode-npm-worm-ai-toolchain-poisoning ; https://www.helpnetsecurity.com/2026/02/24/npm-worm-sandworm-mode-supply-cain-attack"
+     },
+     {
+      "name": "Incident (malicious, in the wild): ClawHavoc on ClawHub (OpenClaw skills)",
+      "claim": "Koi audited 2,857 ClawHub skills (~2026-02-01), found 341 malicious, 335 from one campaign; fake prerequisites install AMOS; later counts 824/1,103/1,184.",
+      "verdict": "confirmed",
+      "correction": "Secondary sources agree on 2,857 audited, 341 malicious and 335 in ClawHavoc. The payload is AMOS through fake prerequisites and ClawHub typosquats such as clawhub1 and clawhubb; some skills carried Windows infostealers. Koi researcher: Oren Yomtov. The later counts are separate audits, not revisions: 1,103 by RankClaw out of 14,706 skills (March), and 1,184 elsewhere. The 824 figure was not found. The Koi primary URL now 301-redirects to paloaltonetworks.com, and The Hacker News returned 403. So the primary source was not read. Confidence stays reported.",
+      "source": "https://thehackernews.com/2026/02/researchers-find-341-malicious-clawhub.html ; https://www.scworld.com/news/openclaw-agents-targeted-with-341-malicious-clawhub-skills ; https://blog.polyswarm.io/the-clawhavoc-campaign"
+     },
+     {
+      "name": "Incident (malicious, in the wild): s1ngularity / Nx compromise",
+      "claim": "2025-08-26; postinstall telemetry.js ran claude, gemini and q with --dangerously-skip-permissions or --yolo; published to s1ngularity-repository; 2,349 secrets leaked (Socket).",
+      "verdict": "corrected",
+      "correction": "The 2,349 distinct secrets were counted by GitGuardian, not Socket (1,079 or 1,346 repositories depending on the report). Wiz lists three flags: --dangerously-skip-permissions (Claude Code), --yolo (Gemini CLI) and --trust-all-tools (Amazon Q). Affected versions: nx 20.9.0, 20.10.0, 20.11.0, 20.12.0, 21.5.0, 21.6.0, 21.7.0 and 21.8.0, plus some @nx plugins. The rest is consistent. The Hacker News returned 403, so this is secondary only.",
+      "source": "https://wiz.io/blog/s1ngularity-supply-chain-attack ; https://blog.gitguardian.com/the-nx-s1ngularity-attack-inside-the-credential-leak/ ; https://snyk.io/blog/weaponizing-ai-coding-agents-for-malware-in-the-nx-malicious-package"
+     },
+     {
+      "name": "Incident (malicious, in the wild, IDE extension not agent plugin): trojanized Claude Code extension on Cursor marketplace",
+      "claim": "2026-10-29; tampered 2.1.313 on Cursor marketplace ~11 h; loader prepended to extension.js, SSH key svc-telemetry, reverse tunnel, persistence; up to 5,000 exposed; VS Code Marketplace, Open VSX and npm unaffected; 2.1.314 published.",
+      "verdict": "corrected",
+      "correction": "BleepingComputer (dated 2026-10-30) confirms: version 2.1.313, a window of about 02:27 to 13:35 PT on Oct 29 (about 11 h), and a loader prepended to extension.js. The loader adds the svc-telemetry SSH key and retries a reverse tunnel every minute. Persistence uses a macOS LaunchAgent or a Windows scheduled task or Startup entry. Up to 5,000 developers were exposed. Initial reports named npm, Open VSX and the VS Code Marketplace, but it was later confirmed that Cursor was the only distributor. Cursor shut its marketplace temporarily to audit and rotate keys. The article does not name a fixed version. A secondary blog reports 2.1.314 on GitHub and npm on 2026-10-30 and says 2.1.313 is absent from the npm records and the changelog. Treat '2.1.314 is the fix' as reported.",
+      "source": "https://www.bleepingcomputer.com/news/security/malicious-claude-code-extension-on-cursor-planted-ssh-backdoors/ ; https://labmemo.com/?p=61096"
+     },
+     {
+      "name": "Vulnerability/research: Plugin4Shell (agent plugin pin bypass)",
+      "claim": "AIR, disclosed 2026-09-17; pinned SHA checked out without verifying HEAD; 40-hex branch name (Bitbucket and self-hosted allow, GitHub rejects); zero-click via auto-update; fixed Claude Code 2.1.179 and Codex 0.146.0; Copilot unpatched; Gemini CLI deprecated; no CVE.",
+      "verdict": "confirmed",
+      "correction": "Help Net Security (2026-09-18) confirms all the technical points, the fixed versions, Copilot unpatched, and Gemini CLI deprecated rather than patched (Google points users to Antigravity). No CVE is mentioned. Small corrections. AIR found the flaw in May 2026 and disclosed it to vendors the following month; the article gives no 2026-09-17 date, so the public date is unverified. Claude Code, Codex and Copilot share one variant; Gemini CLI has a separate fetch and checkout mechanism. The primary AIR advisory was not read, so this stays reported.",
+      "source": "https://www.helpnetsecurity.com/2026/09/18/plugin4shell-ai-coding-agents-vulnerability/"
+     },
+     {
+      "name": "Vulnerability/research: MCP server and client CVEs 2025-2026",
+      "claim": "mcp-remote CVE-2025-6514 9.6, 0.0.5–0.1.15, fixed 0.1.16; Inspector CVE-2025-49596 9.4 fixed 0.14.1; filesystem CVE-2025-53109/53110 fixed 0.6.3 / 2025.7.1; mcp-server-git CVE-2025-68143/68144/68145 fixed 2025.12.18; Cursor CVE-2025-54136 fixed 1.3; Smithery traversal 2025-06-13/15. Minimum versions: mcp-remote >= 0.1.16, inspector >= 0.14.1, server-filesystem >= 2025.7.1, mcp-server-git >= 2025.12.18.",
+      "verdict": "corrected",
+      "correction": "Verified on OSV/GHSA, NVD and the primary blogs today. Corrections: (1) server-filesystem: there is no 0.6.3 on npm. GHSA marks 0.x as last_affected 0.6.2 and 2025.1.14 through 2025.7.0 as affected, fixed in 2025.7.1. The package then moved to 1.0.0 (2026-10-11) and 2.3.0 (latest, 2026-11-11). A naive semver rule '>= 2025.7.1' would wrongly flag 2.3.0, so match against OSV ranges instead. (2) Inspector: CVE-2025-49596 is verified (NVD CVSS 4.0 9.4, fixed 0.14.1). A later CVE-2025-58444 (XSS leading to command execution, CVSS 8.6) is fixed in 0.16.6, so the minimum must be >= 0.16.6; latest is 2.15.0. (3) mcp-server-git: CVE-2025-68143 (git_init) is fixed in 2025.9.25; CVE-2025-68144 and 68145 are fixed in 2025.12.18. A newer CVE-2026-27735 (git_add path traversal) is fixed in 2026.1.14, so the minimum must be >= 2026.1.14; latest is 2026.11.11. (4) Cursor CVE-2025-54136: per NVD, versions <= 1.2.4 are affected, CVSS 7.2 and 8.8. Check Point confirms the fix in Cursor 1.3 (2025-07-29): any edit to an MCP config re-prompts. (5) mcp-remote: JFrog confirms 9.6, 0.0.5–0.1.15, fixed 0.1.16, via the authorization_endpoint passed to `open` (full RCE on Windows, limited on macOS and Linux). (6) Smithery: GitGuardian confirms found 06-10, reported 06-13, partial fix 06-14, full fix 06-15, through the smithery.yaml dockerBuildPath. An overprivileged fly.io token reached an org of 3,000+ apps; no exploitation was found. The Cyata attribution and The Register were not read. Min-version rules: mcp-remote >= 0.1.16, inspector >= 0.16.6, server-filesystem not in [<=0.6.2] or [2025.1.14, 2025.7.1), mcp-server-git >= 2026.1.14.",
+      "source": "https://api.osv.dev/v1/vulns/GHSA-6xpm-ggf7-wc3p ; https://api.osv.dev/v1/vulns/GHSA-7f8r-222p-6f5g ; https://api.osv.dev/v1/query (inspector: GHSA-g9hg-qhmf-q45m) ; https://api.osv.dev/v1/vulns/GHSA-q66q-fx2p-7w4m ; https://api.osv.dev/v1/vulns/GHSA-hc55-p739-j48w ; https://api.osv.dev/v1/vulns/GHSA-5cgr-j3jf-jw3v ; https://api.osv.dev/v1/vulns/GHSA-9xwc-hfwc-8w59 ; https://api.osv.dev/v1/vulns/GHSA-j22h-9j4x-23w5 ; https://api.osv.dev/v1/vulns/GHSA-vjqx-cfc4-9h6v ; https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2025-54136 ; https://research.checkpoint.com/2025/cursor-vulnerability-mcpoison/ ; https://jfrog.com/blog/2025-6514-critical-mcp-remote-rce-vulnerability/ ; https://blog.gitguardian.com/breaking-mcp-server-hosting/ ; https://registry.npmjs.org/@modelcontextprotocol%2fserver-filesystem"
+     },
+     {
+      "name": "Public per-server audit data comparable to skills.sh audits",
+      "claim": "No skills.sh-style multi-vendor audit feed for MCP/plugins; nearest are Docker MCP Registry (commit pin + agentic audit, MIT), Smithery (state unknown), Glama (key and attribution required).",
+      "verdict": "corrected",
+      "correction": "The conclusion holds: no open per-item multi-vendor verdict feed was found. Docker: verified from the post 'Securing the Docker MCP Catalog' (2025-12-03). It covers source.commit pins enforced by CI, nightly pin-bump PRs, and a Claude Code + Codex AI review in sandboxed containers. Results appear as GitHub status checks and labels such as security-risk:high and security-blocked. Images are cosign-signed, and there are known-publisher trust icons. The repo is MIT. The full audit agent is private; only an example is in the repo. Verdicts live in PR checks and labels, not in an API. The README also claims SBOMs and provenance for Docker-built images. Smithery: the state is now known. Its public no-key API has a `security` field, but it was null on every server sampled, and score was null. Glama: a GET without a key returned 401. The error text requires an API key and says the 'API Data License' requires visible attribution and a link to the Glama listing (verified).",
+      "source": "https://www.docker.com/?p=83505 ; https://raw.githubusercontent.com/docker/mcp-registry/main/README.md ; https://registry.smithery.ai/servers/brave ; https://glama.ai/api/mcp/v1/servers?first=1"
+     }
+    ]
+   }
+  },
+  {
+   "key": "install",
+   "research": {
+    "rows": [
+     {
+      "name": "add-mcp (CLI + Node library)",
+      "kind": "install-command",
+      "what": "Open-source CLI and library that writes one canonical MCP server config into the native config file of 25 agents: Antigravity, Cline, Cline CLI, Claude Code, Claude Desktop, Codex, Cursor, Factory Droid, fx, Gemini CLI, Goose, GitHub Copilot CLI, Grok Build, Hermes, Junie, Kilo Code, Kimi Code, Kiro CLI, Mastra Code, MCPorter, OpenCode, Pi, VS Code, Windsurf and Zed. Commands: implicit add, find/search, list, remove, sync/unify, list-agents. npm version 2.6.1 (npm modified 2026-11-01).",
+      "access": "CLI: `npx add-mcp <url|package|\"command\"> [-a agent]... [-g] [-y] [--all] [-n name] [-t http|sse] [--header 'K: V'] [--env K=V] [--timeout ms] [--scopes a,b] [--auto-approve [--approve-tool t]] [--gitignore]`. Other commands: `npx add-mcp find <kw> -a claude-code -g -y`, `list [-g] [-a]`, `remove <name|url|pkg> [-g] [-a] -y`, `sync -g -y`. Library (ESM): `upsertServer(agent, name, {type:'http',url}|{command,args,env}, {local:true,cwd})`, `removeServer(agent, name, opts)`, `listInstalledServers({cwd}|{global:true})`, `detectProjectAgents(cwd)`, `detectGlobalAgents()`. upsertServer and removeServer return `{success, path, error?}` and do not throw. The find command sends GET `<registry>?version=latest&limit=100&search=<kw>&source=cli`. Default registry: https://add-mcp.com/registry/api/v1/servers. Optional registry: https://registry.modelcontextprotocol.io/v0.1/servers, configured in ~/.config/add-mcp/config.json under `findRegistries`.",
+      "signals": "GitHub neon-solutions/add-mcp: 321 stars, last push 2026-11-01, Apache-2.0 (GitHub API, read today). Maintained under the Neon org. The default registry is generated from integrations.sh plus registry.overlay.json.",
+      "terms": "Apache-2.0 (npm metadata and GitHub API, read today). The licence of add-mcp registry data (integrations.sh) was not found.",
+      "install": "Registry server.json to config mapping, read in src/find.ts and src/installer.ts today: (1) The entry needs name, description and version. Only `packages[]` with registryType `npm` are used, so pypi, oci, nuget and mcpb packages are dropped. Entries with neither an npm package nor remotes are skipped. (2) With `-y`, a remote is chosen over a package, and streamable-http over sse. (3) A remote maps to `{type: http|sse, url}`. Required URL variables and required headers get placeholder values under -y. (4) A package maps to `command: \"npx\", args: [\"-y\", <identifier>, ...packageArguments]`. The registry `version` is NOT written, so the package floats unpinned. Required environmentVariables get placeholders. (5) The server name comes from the lowercased title, or else from the name with 'mcp' and 'com' removed. (6) `find <kw> -y` installs the FIRST hit (`visibleEntries[0]`) without a prompt. Per-OS global paths: Windows %APPDATA%\\Code\\User, macOS ~/Library/Application Support, Linux $XDG_CONFIG_HOME or ~/.config (src/agents.ts).",
+      "notes": "Best fit for Skill Advisor: import the library in-process, with no child process, so the Windows .cmd problem does not arise. Without `-a` and with `-y`, the CLI writes to ALL detected agents. With no agent detected, it writes to all project-capable agents. Always pass explicit `-a`. `-y` writes placeholder secrets (e.g. `<your-header-value-here>`), so collect real values first. Exit codes from source: 0 on success, 1 on error (process.exit(1) or exitCode=1). No --json output flag was found in the README. --auto-approve writes Claude permission rules to .claude/settings.local.json or ~/.claude/settings.json, and Codex approval_mode. .mcp.json is shared by Claude Code and Copilot CLI, so removing a server for one agent removes it for both. add-mcp does not wrap npx in `cmd /c` on Windows: no 'cmd' string found in the source.",
+      "source": "https://github.com/neon-solutions/add-mcp (README, src/find.ts, src/installer.ts, src/agents.ts, src/lib.ts); https://registry.npmjs.org/add-mcp",
+      "confidence": "verified"
+     },
+     {
+      "name": "Official MCP Registry and add-mcp registry (server.json API)",
+      "kind": "mcp-registry",
+      "what": "Registry-compatible REST APIs that return server.json entries: name, title, description, version, repository, remotes[] (type streamable-http|sse, url, headers, variables) and packages[] (registryType npm|pypi|oci|nuget|mcpb, identifier, version, environmentVariables, packageArguments).",
+      "access": "Tested today with one GET each, no key needed. `GET https://registry.modelcontextprotocol.io/v0.1/servers?limit=1&search=context7&version=latest` returned servers[].server (schema 2025-09-29), `_meta['io.modelcontextprotocol.registry/official']` {status, publishedAt, updatedAt, isLatest} and `metadata.nextCursor` for pagination. `GET https://add-mcp.com/registry/api/v1/servers?limit=1&search=neon&version=latest` returned com.neon/mcp (schema 2025-12-11) with title, websiteUrl, icons and remotes, plus metadata.count.",
+      "signals": "Official registry fields: status, publishedAt, updatedAt and isLatest, which give freshness. No popularity counts were seen in either response. The add-mcp entries carry icons and websiteUrl.",
+      "terms": "Not checked in this task. Read the registry terms separately before redistributing the data.",
+      "install": "See the add-mcp row for the mapping. Only npm packages and remotes can be installed through add-mcp.",
+      "notes": "Search hits on the official registry include forks and third-party wrappers. For example, the first 'context7' hit was a Smithery fork, so trust scoring is needed. The add-mcp registry looks curated: one canonical entry per vendor.",
+      "source": "https://registry.modelcontextprotocol.io/v0.1/servers ; https://add-mcp.com/registry/api/v1/servers",
+      "confidence": "verified"
+     },
+     {
+      "name": "Claude Code: claude mcp",
+      "kind": "install-command",
+      "what": "Native Claude Code subcommands for MCP servers: add, add-json, add-from-claude-desktop, list, get, remove, reset-project-choices, login, logout.",
+      "access": "`claude mcp add --transport http <name> <url> [--header 'K: V'] [-s local|project|user]`. `claude mcp add [--env K=V] --transport stdio <name> -- <cmd> [args...]`. Everything after `--` goes to the server. Do not put the server name right after `--env`. `claude mcp add-json <name> '<json>'`. `claude mcp remove <name>`. `claude mcp list`. `claude mcp get <name>`. `claude mcp login <name> [--no-browser]`. Short flags: -t, -e, -H, -s. OAuth flags: --callback-port, --client-id, --client-secret.",
+      "signals": "Official Anthropic docs, read today.",
+      "terms": "Claude Code is proprietary under Anthropic terms (reported; terms page not read).",
+      "install": "Scopes and storage: local (default) in ~/.claude.json under the project path; project in .mcp.json at the project root; user in ~/.claude.json. Precedence: local, then project, then user, then plugin, then claude.ai connectors. In interactive sessions, project .mcp.json servers need user approval. In `claude -p` or SDK runs they load without asking.",
+      "notes": "No `mcp update` command and no documented --json flag for mcp add, list or remove were found. Updating means remove plus add, or rewriting the file. Exit codes for `claude mcp` were not found. The docs no longer mention the old `cmd /c npx` Windows note (not found on page). On Windows, Claude Code ships as a native claude.exe (install.ps1, install.cmd, or winget Anthropic.ClaudeCode), so spawn('claude', args) works without a shell. If it was installed through npm, it is a .cmd shim (reported).",
+      "source": "https://code.claude.com/docs/en/mcp ; https://code.claude.com/docs/en/cli-reference ; https://code.claude.com/docs/en/setup",
+      "confidence": "verified"
+     },
+     {
+      "name": "Codex CLI: codex mcp",
+      "kind": "install-command",
+      "what": "Codex subcommands that manage [mcp_servers.<name>] tables in config.toml: list, get, add, remove, login, logout. Codex CLI, the IDE extension and the ChatGPT desktop app share this config.",
+      "access": "`codex mcp add <name> [--env K=V]... -- <cmd> [args]` for stdio. `codex mcp add <name> --url https://… [--bearer-token-env-var ENV] [--oauth-client-id ID] [--oauth-resource R]` for streamable HTTP. `codex mcp list [--json]`. `codex mcp remove <name>`. `codex mcp login <name> [--no-browser] [--scopes a,b] [--oauth-client-registration auto|cimd|dcr]`.",
+      "signals": "Official OpenAI docs, read today.",
+      "terms": "Codex CLI is Apache-2.0 (reported; licence file not read today).",
+      "install": "The CLI writes ~/.codex/config.toml ($CODEX_HOME). Project scope means editing .codex/config.toml by hand, and Codex loads it only for trusted projects. Plugin MCP config lives under `plugins.\"name@mkt\".mcp_servers.<server>`.",
+      "notes": "No CLI flag for project scope was found. No update command: edit the file or remove plus add. Exit codes not found (only `codex login status` documents exit 0). Tool approvals go in config: default_tools_approval_mode and tools.<t>.approval_mode (per add-mcp). On Windows the npm package installs a codex.cmd shim (reported), so spawn needs cmd.exe. The vercel `plugins` CLI calls spawnSync('codex', …) without a shell (read in its bundle).",
+      "source": "https://developers.openai.com/codex/mcp ; https://developers.openai.com/codex/cli/reference",
+      "confidence": "verified"
+     },
+     {
+      "name": "Gemini CLI: gemini mcp",
+      "kind": "install-command",
+      "what": "Gemini CLI subcommands for mcpServers in settings.json: add, list, remove, enable, disable. Latest release v0.68.0, 2026-11-10.",
+      "access": "`gemini mcp add [-s user|project] [-t stdio|sse|http] [-e K=V] [-H 'K: V'] [--timeout ms] [--trust] [--description d] [--include-tools a,b] [--exclude-tools a,b] <name> <commandOrUrl> [args...]`. Put `--` before server args that look like flags. `gemini mcp remove [-s scope] <name>`. `gemini mcp list`. `gemini mcp enable|disable <name> [--session]`.",
+      "signals": "Official google-gemini/gemini-cli repo docs, read today.",
+      "terms": "Gemini CLI is Apache-2.0 (reported).",
+      "install": "The default scope is PROJECT (.gemini/settings.json). User scope is ~/.gemini/settings.json. The enable/disable state is stored in ~/.gemini/mcp-server-enablement.json. `--trust` skips all tool-call confirmations, so do not set it by default.",
+      "notes": "No --json output and no exit codes were found in the docs. No update command: remove plus add. The npm install gives a gemini.cmd shim on Windows (reported).",
+      "source": "https://github.com/google-gemini/gemini-cli/blob/main/docs/tools/mcp-server.md",
+      "confidence": "verified"
+     },
+     {
+      "name": "VS Code: code --add-mcp",
+      "kind": "install-command",
+      "what": "VS Code command-line flag that adds one MCP server to the user-profile MCP configuration.",
+      "access": "`code --add-mcp '{\"name\":\"playwright\",\"type\":\"stdio\",\"command\":\"npx\",\"args\":[\"-y\",\"@playwright/mcp@latest\"]}'` (JSON object with a unique name plus the server config).",
+      "signals": "Official VS Code docs, page dated 11/11/2026.",
+      "terms": "VS Code is under the Microsoft product licence (reported).",
+      "install": "Writes the user-profile mcp.json. Path per add-mcp: macOS ~/Library/Application Support/Code/User/mcp.json, Windows %APPDATA%\\Code\\User\\mcp.json, Linux ~/.config/Code/User/mcp.json. The workspace file is .vscode/mcp.json, in the `servers` format, and supports ${input:id} variables.",
+      "notes": "No workspace variant of --add-mcp and no CLI remove command were found on the page. Removal is through the UI (Uninstall/Disable) or by editing mcp.json. `code` is a .cmd shim on Windows (bin\\code.cmd, reported), so writing the JSON file directly, or through add-mcp, is simpler than spawning it. The docs also mention Copilot portable files $COPILOT_HOME/mcp-config.json and a workspace .mcp.json behind a setting.",
+      "source": "https://code.visualstudio.com/docs/agents/reference/mcp-configuration ; https://code.visualstudio.com/docs/copilot/customization/mcp-servers",
+      "confidence": "verified"
+     },
+     {
+      "name": "GitHub Copilot CLI: copilot mcp",
+      "kind": "install-command",
+      "what": "Copilot CLI subcommands that manage MCP servers without starting a session: list, get, add, enable, disable, remove.",
+      "access": "`copilot mcp add <name> -- <cmd> [args]`. `copilot mcp add --transport http|sse <name> <url> [--header 'H: V'] [--env K=V] [--tools '*'|a,b|''] [--timeout ms] [--json]`. `copilot mcp list [--json]`. `copilot mcp get <name> [--json]`. `copilot mcp enable|disable <name>`. `copilot mcp remove <name>`.",
+      "signals": "Official GitHub Docs, read today.",
+      "terms": "Copilot CLI is proprietary, under GitHub Copilot terms (reported).",
+      "install": "add and remove act on the USER config only: ~/.copilot/mcp-config.json ($COPILOT_HOME). Workspace servers in .mcp.json or .github/mcp.json must be edited in the files. The CLI loads the project file only after the folder is trusted.",
+      "notes": "Exit codes not documented. `--show-secrets` prints secrets, so never log it. No update command. Install forms: npm @github/copilot gives a copilot.cmd shim on Windows; winget is also offered (reported).",
+      "source": "https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-command-reference",
+      "confidence": "verified"
+     },
+     {
+      "name": "Cursor MCP (no add command)",
+      "kind": "install-command",
+      "what": "Cursor reads MCP servers from .cursor/mcp.json (project) and ~/.cursor/mcp.json (global). The CLI can list, inspect, log in to, enable and disable servers, but has no add command.",
+      "access": "`agent mcp list`, `agent mcp list-tools <id>`, `agent mcp login <id>`, `agent mcp enable <id>`, `agent mcp disable <id>`. For headless runs, `agent -p \"…\" --approve-mcps` auto-approves servers. Deeplink: `cursor://anysphere.cursor-deeplink/mcp/install?name=$NAME&config=$BASE64_ENCODED_CONFIG`, which opens the editor and asks for confirmation.",
+      "signals": "Official Cursor docs, read today. Official plugins are on the Cursor Marketplace. cursor.directory lists community servers.",
+      "terms": "Cursor is proprietary (reported).",
+      "install": "For a non-interactive install, write `mcpServers` into the JSON file directly, or use add-mcp with `-a cursor`. Per add-mcp, Cursor may need the user to toggle the new server on in settings.",
+      "notes": "No CLI add or remove was found on the docs page (summarised by the page reader, so 'not found on page' rather than verified absent). The CLI binary is `agent`. Some guides call it cursor-agent.",
+      "source": "https://cursor.com/docs/context/mcp ; https://cursor.com/docs/cli/mcp ; https://cursor.com/docs/plugins",
+      "confidence": "verified"
+     },
+     {
+      "name": "Antigravity MCP (file only)",
+      "kind": "install-command",
+      "what": "Antigravity IDE and the agy CLI share one global MCP file.",
+      "access": "File: ~/.gemini/config/mcp_config.json, global only, per the add-mcp agent table.",
+      "signals": "Path comes from the add-mcp README only.",
+      "terms": "n/a",
+      "install": "Use `npx add-mcp <src> -a antigravity -g -y`, or upsertServer('antigravity', …).",
+      "notes": "No `agy mcp add` command was found on the Antigravity marketplace page. Plugins that bundle MCP servers expose them as `<plugin>_<server>`.",
+      "source": "https://github.com/neon-solutions/add-mcp ; https://antigravity.google/docs/marketplace",
+      "confidence": "reported"
+     },
+     {
+      "name": "How MCP server updates work (npx, pinned, remote)",
+      "kind": "other",
+      "what": "Update semantics for configured MCP servers. No agent has an 'mcp update' command, so an update is either a config rewrite or a re-resolve at the next launch.",
+      "access": "npm docs (CLI v11): `-y/--yes` suppresses the install prompt. Names without a specifier match whatever version is in the local project. Packages not installed locally go into the npm cache. A specifier matches only with the exact same name and version.",
+      "signals": "npm docs v11 (11.21.2 shown, page edited 2025-10-05).",
+      "terms": "n/a",
+      "install": "Stdio from npm: `npx -y pkg` (what add-mcp writes) floats. Whether a re-run picks up a newer release or reuses the npx cache is NOT stated in the docs (unknown). `pkg@latest` (VS Code's example uses @playwright/mcp@latest) asks for the dist-tag on each launch, but cache reuse is again not documented. `pkg@1.2.3` is fully pinned, and updating it means rewriting args through upsertServer or remove plus add. Remote (http/sse) servers are updated server-side, with nothing to do locally. Plugin-bundled servers update with the plugin.",
+      "notes": "For Skill Advisor's update and security model: store the pinned version from registry `packages[].version` and write `pkg@version` yourself, because add-mcp drops the version. An update then becomes a visible, diffable config change. The exact npx caching behaviour with @latest is unknown.",
+      "source": "https://docs.npmjs.com/cli/v11/commands/npx ; https://github.com/neon-solutions/add-mcp/blob/main/src/installer.ts",
+      "confidence": "reported"
+     },
+     {
+      "name": "Claude Code: claude plugin and claude plugin marketplace",
+      "kind": "plugin-marketplace",
+      "what": "Shell commands to install and manage Claude Code plugins from marketplaces: install(i), uninstall, enable, disable, update, list, details, configure, prune, init, validate, eval, plus marketplace add, list, remove(rm) and update.",
+      "access": "`claude plugin marketplace add <owner/repo[#ref|@ref]|git-url|https-url-to-marketplace.json|./path> [--scope user|project|local] [--sparse paths...] [--json]`. `claude plugin install <name@marketplace> [-s user|project|local] [-y] [--accept-command <sha256>] [--json]`. In one step: `claude plugin install <name> --marketplace <source>`, which needs v2.1.292 or later. `claude plugin uninstall <id> [-s] [--keep-data] [--json]`. `claude plugin enable|disable <id> [-s] [--json]`. `claude plugin disable -a`. `claude plugin update <id> [-s user|project|local|managed] [-y] [--json]`. `claude plugin list --json [--available]`. `claude plugin marketplace update [name] [--json]`. `claude plugin marketplace remove <name> [--scope] [--json]`.",
+      "signals": "Official docs, read today. The official marketplace is anthropics/claude-plugins-official. Auto-update is on by default for official marketplace names and off for third-party ones.",
+      "terms": "Claude Code is proprietary (reported). Each marketplace has its own licence.",
+      "install": "Exit codes: 0 on success, 1 on failure (validate adds 2). --json prints ONE JSON object on the LAST stdout line, always with {command, outcome: ok|failed, message}, plus pluginId, scope, failureCode, alreadyInGoalState and similar. Where results are recorded: enabledPlugins in the scope's settings file (~/.claude/settings.json, .claude/settings.json or .claude/settings.local.json). Marketplaces go to extraKnownMarketplaces in user settings. The plugins root ~/.claude/plugins/ ($CLAUDE_CODE_PLUGIN_CACHE_DIR) holds known_marketplaces.json, installed_plugins.json (scope, installPath, version), marketplaces/<name>/ and the cache.",
+      "notes": "Gotchas: (1) For a command-source or headersHelper plugin without a TTY, install is refused with exit 1 unless you pass -y (v2.1.229+) or --accept-command. -y is IGNORED when run from inside a Claude session (Bash tool or hook). (2) enable or disable on a plugin already in that state exits 1, so treat `alreadyInGoalState: true` as success. (3) `marketplace remove` from the last scope uninstalls all of that marketplace's plugins and deletes their data. Use `marketplace update` instead to refresh. (4) `marketplace update` with no name refreshes listings but does not upgrade installed plugins. (5) Minimum versions: --json 2.1.268+ (marketplace --json 2.1.287+). (6) On a fresh machine, add anthropics/claude-plugins-official before installing. The Windows binary is native claude.exe (reported for the npm variant).",
+      "source": "https://code.claude.com/docs/en/plugins/cli-reference ; https://code.claude.com/docs/en/discover-plugins ; https://code.claude.com/docs/en/plugins/loading",
+      "confidence": "verified"
+     },
+     {
+      "name": "Gemini CLI: gemini extensions",
+      "kind": "plugin-marketplace",
+      "what": "Extension manager for Gemini CLI: install, uninstall, enable, disable, update, new, link, config. The public gallery is at geminicli.com/extensions/browse.",
+      "access": "`gemini extensions install <github-url|local-path> [--ref <ref>] [--auto-update] [--pre-release] [--consent] [--skip-settings]`. `gemini extensions uninstall <name...>`. `gemini extensions update <name>`. `gemini extensions update --all`. `gemini extensions enable|disable <name> [--scope user|workspace]`. `gemini extensions config <name> [setting] [--scope]`.",
+      "signals": "Official repo docs and source, read today. v0.68.0 released 2026-11-10.",
+      "terms": "Gemini CLI is Apache-2.0 (reported). Licences of gallery extensions vary.",
+      "install": "Non-interactive use needs `--consent` (auto-accepts the security consent) and `--skip-settings` (skips the settings prompts). Installs are copied to ~/.gemini/extensions/<name>. Changes take effect after a CLI restart. These commands do not work in interactive mode. Git must be installed for GitHub sources.",
+      "notes": "From source (packages/cli/src/commands/extensions/install.ts): installing from an UNTRUSTED LOCAL FOLDER still prompts 'Do you trust this folder… [y/N]' even with --consent. Pre-trust the folder or install from a git URL. Any error leads to process.exit(1). Without --consent, the code prompts '[Y/n]' on stdin. Updates pull from the source to the version in gemini-extension.json, and --auto-update turns on automatic updates. The npm install gives gemini.cmd on Windows (reported).",
+      "source": "https://github.com/google-gemini/gemini-cli/blob/main/docs/extensions/reference.md ; https://github.com/google-gemini/gemini-cli/blob/main/packages/cli/src/commands/extensions/install.ts",
+      "confidence": "verified"
+     },
+     {
+      "name": "GitHub Copilot CLI: copilot plugin",
+      "kind": "plugin-marketplace",
+      "what": "Copilot CLI plugin manager: install(add), uninstall(remove, rm), list, update, enable, disable, plus marketplace add, list, browse, update(refresh) and remove. The default marketplace is awesome-copilot, built in and not removable. github/copilot-plugins is no longer a default and must be added.",
+      "access": "`copilot plugin install <plugin@marketplace|OWNER/REPO|OWNER/REPO:PATH|git-url|./path>`. `copilot plugin uninstall <name>`. `copilot plugin list [--json]` returns a flat array of {name, marketplace?, version?, enabled, source, installedFrom?}. `copilot plugin update <name>`. `copilot plugin update --all`. `copilot plugin enable|disable <name>`. `copilot plugin marketplace add <owner/repo[#ref]|url|path>`. `copilot plugin marketplace browse <name> [--json]`. `copilot plugin marketplace update [name]`. `copilot plugin marketplace remove <name> [--force]`.",
+      "signals": "Official GitHub Docs reference, read today.",
+      "terms": "Copilot CLI is proprietary (reported).",
+      "install": "Storage: ~/.copilot/installed-plugins/<marketplace>/<plugin>, or _direct/<source-id> for direct installs. Marketplace cache: ~/.cache/copilot/marketplaces (Linux) or ~/Library/Caches/copilot/marketplaces (macOS), overridable with COPILOT_CACHE_HOME. Manifests: plugin.json at the root (Agent Plugins schema) wins over .plugin/, .github/plugin/ and .claude-plugin/plugin.json. marketplace.json is searched in this order: root, .plugin/, .github/plugin/, .claude-plugin/.",
+      "notes": "No --yes flag and no exit codes were documented. Whether install prompts without a TTY is unknown. `marketplace remove` is refused while plugins from it are installed, unless you pass --force (which uninstalls them). VS Code auto-discovers plugins from ~/.copilot/installed-plugins. The vercel `plugins` CLI notes that direct local-path installs are deprecated and registers a marketplace first. --config-dir is deprecated, so use COPILOT_HOME.",
+      "source": "https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-plugin-reference ; https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/plugins-finding-installing",
+      "confidence": "verified"
+     },
+     {
+      "name": "Antigravity CLI: agy plugin",
+      "kind": "plugin-marketplace",
+      "what": "Plugin manager of the Antigravity CLI. The official marketplace is antigravity-plugins-official. Plugins bundle skills, MCP servers, agents, rules and hooks.",
+      "access": "`agy plugin install firebase@antigravity-plugins-official`. `agy plugin install <name>` (a bare name means the official marketplace). `agy plugin install https://github.com/<owner>/<repo>`. `agy plugin install </path/to/local/plugin>`. `agy plugin list [--json]`. `agy plugin enable|disable|uninstall <name>`. `agy plugin validate --strict`.",
+      "signals": "Official antigravity.google docs page (no date or version shown). Vendors such as Sonar and Endor Labs publish agy install lines.",
+      "terms": "Proprietary Google product (reported).",
+      "install": "Local folders are 'staged into your profile'. The exact path was not found on the page. `agy plugin import gemini` converts Gemini CLI extensions (reported, from community and vendor sources).",
+      "notes": "update, import and link subcommands, the --yes, --consent and --scope flags, and exit codes were not found on the official page. Some installs expose the binary as `antigravity` instead of `agy` (reported, Endor Labs). Windows binary form unknown.",
+      "source": "https://antigravity.google/docs/marketplace ; https://docs.sonarsource.com/agent-centric-development-cycle/developer-tools/agent-plugins/antigravity",
+      "confidence": "verified"
+     },
+     {
+      "name": "Codex CLI: codex plugin",
+      "kind": "plugin-marketplace",
+      "what": "Codex plugin commands: add, list, remove, plus marketplace add, list, upgrade and remove. Plugins bundle skills, mcp.json, assets and hooks. The manifest is a root plugin.json (Agent Plugins schema), with .codex-plugin/plugin.json as a fallback.",
+      "access": "`codex plugin marketplace add <owner/repo[@ref]|git-url|ssh-url|./root> [--ref REF] [--sparse PATH]... [--json]` (JSON: marketplaceName, installedRoot, alreadyAdded). `codex plugin add <plugin[@marketplace]> [-m NAME] [--json]` (JSON: pluginId, name, marketplaceName, version, installedPath, authPolicy). `codex plugin list [-m NAME] [--json] [--available --json]` (installed and available arrays). `codex plugin remove <plugin[@marketplace]> [-m] [--json]`. `codex plugin marketplace upgrade [name] [--json]`. `codex plugin marketplace remove <name> [--json]`.",
+      "signals": "Official OpenAI docs, read today.",
+      "terms": "Codex CLI is Apache-2.0 (reported).",
+      "install": "Cache: ~/.codex/plugins/cache/<marketplace>/<plugin>/<version>/. Enabling is in config.toml: `[plugins.\"name@marketplace\"] enabled = true|false`, in the user file or the project .codex/config.toml (trusted projects only). Marketplace files: $REPO_ROOT/.agents/plugins/marketplace.json or ~/.agents/plugins/marketplace.json.",
+      "notes": "No `codex plugin update` and no enable/disable command were found. Update by running `marketplace upgrade` (during refresh Codex can install or refresh files for configured plugins) or by re-running add. Disable by editing config.toml. Exit codes not documented. The plugin's authPolicy may need a sign-in at install time. Hooks only work for manually installed desktop plugins. In the TUI, /plugins browses plugins. codex.cmd shim on Windows (reported).",
+      "source": "https://developers.openai.com/codex/cli/reference ; https://developers.openai.com/plugins/build/plugins ; https://developers.openai.com/codex/plugins",
+      "confidence": "verified"
+     },
+     {
+      "name": "Cursor plugins (no shell install)",
+      "kind": "plugin-marketplace",
+      "what": "Cursor Marketplace and team marketplaces for plugins. Manifests: .cursor-plugin/plugin.json, or a root plugin.json (Agent Plugins standard, agent-plugins.org). Multi-plugin repos use .cursor-plugin/marketplace.json.",
+      "access": "Install through Customize or the Marketplace (Install, then choose project or user scope). The in-chat `/add-plugin <name>` or `/add-plugin <github-url>` is reported by vendor docs (Svelte, Railway) and the Cursor forum, not by the official docs page. The only deeplink documented is for MCP, not for plugins.",
+      "signals": "Official docs read today. Teams plans get one team marketplace, Enterprise unlimited. Install modes: Default Off, Default On, Required. Auto Refresh re-indexes at most every 10 minutes.",
+      "terms": "Proprietary (reported).",
+      "install": "No non-interactive shell command was found. A Cursor forum thread reports that no `cursor-agent plugin install` exists. Local development folder: ~/.cursor/plugins/local/<plugin>. The vercel `plugins` CLI targets Cursor (detects `cursor` or `cursor-agent`); its install path for Cursor was not checked.",
+      "notes": "Uninstall and disable were not described on the docs page. Required plugins cannot be uninstalled. A forum bug reports that URL installs through /add-plugin stay pinned to stale commits. For Skill Advisor: offer a guided UI step, or write the local plugin folder plus config (path unverified), rather than a CLI call.",
+      "source": "https://cursor.com/docs/plugins ; https://forum.cursor.com/t/unable-to-find-a-cli-command-to-install-a-cursor-plugin-after-adding-its-marketplace-repository/166016 ; https://svelte.dev/docs/ai/cursor-plugin",
+      "confidence": "reported"
+     },
+     {
+      "name": "VS Code agent plugins (Preview)",
+      "kind": "plugin-marketplace",
+      "what": "VS Code agent plugins are bundles of skills, agents, MCP servers and hooks, gated by the `chat.plugins.enabled` setting. Marketplaces are configured in `chat.plugins.marketplaces` (experimental).",
+      "access": "UI: Agent Customizations editor, or Chat: Install Plugin from Source. Deeplinks: `vscode://chat-plugin/install?source=<url-encoded owner/repo>&plugin=<name>` and `vscode://chat-plugin/add-marketplace?ref=<source>`. Both ALWAYS ask for confirmation.",
+      "signals": "Official VS Code docs, dated 11/11/2026, Preview.",
+      "terms": "Microsoft (reported).",
+      "install": "No shell install command was found. VS Code auto-discovers plugins installed by Copilot CLI in ~/.copilot/installed-plugins/. The vercel `plugins` CLI writes a staged local copy into the user settings key `chat.pluginLocations` (read in its bundle).",
+      "notes": "The simplest non-interactive route is `copilot plugin install`, which VS Code then picks up, or a `chat.pluginLocations` entry. The first install from a new marketplace shows a trust prompt.",
+      "source": "https://code.visualstudio.com/docs/agent-customization/agent-plugins",
+      "confidence": "verified"
+     },
+     {
+      "name": "npx plugins (vercel-labs/plugins)",
+      "kind": "install-command",
+      "what": "CLI that installs open-plugin or Agent Plugins format repos into Claude Code, Cursor, Codex, Grok Build, Kimi Code, Copilot CLI and VS Code. It translates the plugin to each tool and calls the tool's native system. npm version 1.3.6 (npm modified 2026-10-30).",
+      "access": "`npx plugins add <owner/repo|https|ssh|./path> [-t target] [-s user|project|local] [-y]`. `npx plugins discover <source>` is a dry run. `npx plugins targets` lists detected tools. Repos are shallow-cloned to ~/.cache/plugins/<slug>. Discovery order: marketplace.json, then the root plugin, then a recursive scan 2 levels deep.",
+      "signals": "Vercel Labs project. Zero runtime dependencies, Node 18+. Star count not retrieved (GitHub API rate-limited).",
+      "terms": "The README says Apache 2.0, but package.json has NO license field and the LICENSE file was not read, so treat it as unverified.",
+      "install": "From the bundle (dist/index.js, read today): Codex uses spawnSync('codex', ['plugin','add',ref]). Copilot uses `copilot plugin marketplace add`, then `install plugin@mkt`. Claude Code uses execSync of a string `${claude} plugin install \"ref\" --scope` only for the vercel plugin. Otherwise it writes ~/.claude/plugins/installed_plugins.json itself. VS Code gets a chat.pluginLocations entry. Grok uses `grok plugin install … --trust`. It also uses `which claude`, which is not Windows-friendly.",
+      "notes": "Install only: there is NO remove, update or list command. Telemetry is ON by default and goes to telemetry.labs.vercel.dev; set DISABLE_TELEMETRY=1 or DO_NOT_TRACK=1. Scopes other than user only work for vercel/vercel-plugin on Claude. Not suitable as Skill Advisor's backend. Use it as a reference for the per-agent translation only.",
+      "source": "https://www.npmjs.com/package/plugins ; https://github.com/vercel-labs/plugins",
+      "confidence": "verified"
+     },
+     {
+      "name": "Spawning agent CLIs from Node without a shell (macOS, Linux, Windows)",
+      "kind": "other",
+      "what": "Constraints for calling `claude`, `codex`, `gemini`, `copilot`, `agy`, `code` and `npx` from Skill Advisor with spawn(cmd, argsArray).",
+      "access": "Node docs (v26.13.1): on Windows, .bat and .cmd files cannot run through execFile. Call them with spawn plus `shell` (not recommended, DEP0190), with exec, or with `spawn('cmd.exe', ['/c', 'x.cmd', ...])`. Node security release (April 2024, CVE-2024-27980): spawn and spawnSync now throw EINVAL for .bat or .cmd without `shell`. The fix was applied to the 18.x, 20.x and 21.x lines.",
+      "signals": "Official nodejs.org pages, read today.",
+      "terms": "n/a",
+      "install": "macOS and Linux: spawn('claude', [...]) with an argument array works directly. Windows: resolve the full path first (`where.exe <name>`). For a .exe (native Claude Code, claude.exe), spawn it directly. For an npm shim (npx.cmd, codex.cmd, gemini.cmd, copilot.cmd, code.cmd), use spawn('cmd.exe', ['/d','/s','/c', fullPath, ...args]) with strictly validated arguments, or avoid the spawn entirely. Spawning a bare 'codex' without an extension on Windows is not resolved to codex.cmd (reported; libuv only tries .com and .exe, PATHEXT not mentioned in the Node docs).",
+      "notes": "Best practice for Skill Advisor: (1) For MCP, use the add-mcp library in-process, with no spawn. (2) For plugins, run native CLIs with argument arrays and their --json flags (Claude, Codex, Copilot list) and parse only the last stdout line for Claude. (3) Never interpolate user strings into a shell command line. The vercel `plugins` CLI uses execSync with string templates, which is the anti-pattern.",
+      "source": "https://nodejs.org/api/child_process.html ; https://nodejs.org/en/blog/vulnerability/april-2024-security-releases-2",
+      "confidence": "verified"
+     }
+    ],
+    "recommendation": "MCP: use the add-mcp library (Apache-2.0, v2.6.1) in-process. upsertServer, removeServer and listInstalledServers cover 25 agents with the correct per-OS paths and no child process, so the Windows .cmd and EINVAL problem does not arise. Do not use its `-y` or `find` behaviour as is. Build the config yourself from server.json, because add-mcp drops the version, keeps only npm packages, writes placeholder secrets and picks the first search hit. Pin `pkg@version` so that an update is an explicit, scored config rewrite. Remote servers need no local update.\nCatalogue backbone for MCP: the official MCP Registry (/v0.1/servers, gives status, publishedAt, updatedAt, isLatest) plus the curated add-mcp registry for canonical vendor entries. Neither gives popularity, so add GitHub and npm signals as you do for skills.\nPlugins: call each native CLI with an argument array, never a shell string. Claude: `plugin marketplace add` then `plugin install name@mkt -s <scope> --json`, plus enable, disable, update and uninstall with --json. Treat alreadyInGoalState as success. Codex: `plugin marketplace add`, `plugin add|remove --json`, `marketplace upgrade`; enable means editing config.toml. Copilot: `plugin install`, `update` and `uninstall`; VS Code picks those installs up automatically. Gemini: `extensions install <git-url> --consent --skip-settings`. Antigravity: `agy plugin install`.\nCursor and VS Code have no shell install for plugins: offer a deeplink or UI step, or the Copilot route for VS Code. Avoid `npx plugins` as a backend: it can only install, has telemetry on by default and its licence is unverified."
+   },
+   "check": {
+    "checked": [
+     {
+      "name": "Antigravity MCP (file only)",
+      "claim": "Antigravity IDE and agy CLI share one global MCP file, ~/.gemini/config/mcp_config.json, and nothing else (global only, per add-mcp). There is no `agy mcp add` command. Plugin-bundled MCP servers are exposed as `<plugin>_<server>`. Install with `npx add-mcp <src> -a antigravity -g -y`.",
+      "verdict": "corrected",
+      "correction": "The global path is right and is now verified on the official Antigravity docs. It is ~/.gemini/config/mcp_config.json (Windows: %USERPROFILE%\\.gemini\\config\\mcp_config.json), and the IDE and CLI docs both name it. 'Global only' is wrong for Antigravity itself. The official docs also define a workspace file, <workspace>/.agents/mcp_config.json, which 'applies only to that workspace'. Only add-mcp's agent table is global-only (Project path '-'), so add-mcp cannot write the workspace file and Skill Advisor would have to write it itself. The App surface names no path: the docs say to use 'Copy Config File Path'. File format: root `mcpServers`; stdio uses `command` and `args`; remote uses `serverUrl` (`url` is also accepted). No `agy mcp add` command is documented; the CLI way is the interactive `/mcp` manager, or editing the JSON by hand. The `<plugin-name>_<server-name>` namespacing is verified on the marketplace page. Older third-party guides still cite ~/.gemini/antigravity/mcp_config.json, which may be a legacy path (reported). The add-mcp flags -a/--agent, -g/--global and -y/--yes are verified in the README. The `upsertServer` function is exported by the add-mcp package (README `import { upsertServer } from \"add-mcp\"`). add-mcp latest on npm is 2.6.1 (registry GET today).",
+      "source": "https://antigravity.google/docs/mcp ; https://antigravity.google/docs/marketplace ; https://github.com/neon-solutions/add-mcp (README) ; https://registry.npmjs.org/add-mcp/latest",
+      "verdict_confidence_note": "verified"
+     },
+     {
+      "name": "How MCP server updates work (npx, pinned, remote)",
+      "claim": "npm docs (CLI v11): -y suppresses the prompt; unspecified names match the local project version; non-local packages go into the npm cache; a specifier matches only on exact name+version. Whether re-runs pick up newer releases or @latest reuses the cache is undocumented. No agent has an 'mcp update' command. add-mcp drops the version (source: installer.ts).",
+      "verdict": "corrected",
+      "correction": "The quoted npx semantics are verified, but cite the current docs. npm latest is 12.2.2 (registry dist-tags, GET today). v11 (11.21.2) is now labelled 'Legacy' on docs.npmjs.com. The v12 npx page (12.2.2, last edited 2025-10-05) has the same text on -y/--yes, specifier matching, and the npm-cache folder added to PATH. It is equally silent on @latest resolution and cache reuse, so 'unknown' stays correct. The VS Code example `npx -y @playwright/mcp@latest` is verified on the VS Code MCP servers page, which describes no update procedure (only disable, uninstall and stop). The 'add-mcp drops the version' claim is mis-attributed and too broad. installer.ts writes `args: [\"-y\", parsed.value, ...]`, and source-parser.ts keeps the raw input in `value`; it strips @version only for the inferred server name. So a direct `npx add-mcp pkg@1.2.3` keeps the pin. The version is dropped only on the `find`/`search` path: src/find.ts `formatPackageTarget` returns `pkg.identifier` and ignores the registry `version`. Change the source to src/find.ts and narrow the claim to installs from the registry. 'No agent has an mcp update command' was not checked across the 78 agents: unverifiable as a universal statement. The recommendation to write `pkg@version` yourself from registry `packages[].version` stays sound.",
+      "source": "https://docs.npmjs.com/cli/v12/commands/npx ; https://docs.npmjs.com/cli/v11/commands/npx ; https://registry.npmjs.org/npm (dist-tags) ; https://code.visualstudio.com/docs/copilot/customization/mcp-servers ; https://raw.githubusercontent.com/neon-solutions/add-mcp/main/src/installer.ts ; https://raw.githubusercontent.com/neon-solutions/add-mcp/main/src/source-parser.ts ; https://raw.githubusercontent.com/neon-solutions/add-mcp/main/src/find.ts"
+     },
+     {
+      "name": "Cursor plugins (no shell install)",
+      "claim": "Manifests .cursor-plugin/plugin.json or root plugin.json (agent-plugins.org); marketplace.json for multi-plugin repos; install via Customize/Marketplace with project or user scope; /add-plugin is reported only by vendors and the forum; only MCP deeplinks; Teams 1 marketplace, Enterprise unlimited; modes Default Off/On/Required; Auto Refresh at most every 10 min; local folder ~/.cursor/plugins/local/<plugin>; no non-interactive shell command; stale-commit bug on URL installs.",
+      "verdict": "corrected",
+      "correction": "Most facts are verified on cursor.com/docs/plugins today (the page shows no date). Manifest paths, Customize > Install > project/user scope, and the MCP-only deeplink `cursor://anysphere.cursor-deeplink/mcp/install?name=$NAME&config=$BASE64_ENCODED_CONFIG` are all confirmed. Teams get 1 team marketplace (Default not counted); Enterprise is unlimited, admin-only. The three install modes are confirmed, and Required plugins cannot be uninstalled. Auto Refresh re-indexes at most every 10 minutes, needs the Cursor GitHub App, and running Cloud Agents keep their starting versions. Local folder ~/.cursor/plugins/local is verified: restart, or run Developer: Reload Window. On Enterprise, 'Allow Local Plugin Imports' is off by default, which Skill Advisor must warn about. The docs page gives no uninstall or disable steps for plugins. /add-plugin: the Svelte docs show `/add-plugin svelte` (vendor, reported). The forum thread does NOT mention /add-plugin, so drop it as a source for that claim. Add the CLI detail from that thread. `cursor-agent plugin marketplace add` exists. Inside `cursor-agent`, typing `/plugin` opens an interactive Marketplace tab with user/project scope. A responder who appears to be Cursor staff (deanrie, 2026-07-19) said there is no non-interactive `cursor-agent plugin install <plugin-id>` yet. User-scope plugins installed in the IDE or Dashboard sync to the CLI. The stale-commit bug is reported in separate forum threads, with staff acknowledgment and no ETA. It also hits CLI `plugin marketplace update`, which reports 0 plugins indexed (reported). The vercel `plugins` CLI claim was not checked: unknown. Licence 'proprietary' was not checked: unknown.",
+      "source": "https://cursor.com/docs/plugins ; https://forum.cursor.com/t/unable-to-find-a-cli-command-to-install-a-cursor-plugin-after-adding-its-marketplace-repository/166016 ; https://svelte.dev/docs/ai/cursor-plugin ; https://forum.cursor.com/t/add-plugin-github-imports-can-get-stuck-on-stale-plugin-versions/163895 ; https://forum.cursor.com/t/plugin-marketplace-sync-is-stale-causing-update-reinstall-in-settings-to-have-no-effect/165660"
+     }
+    ]
+   }
+  }
+ ]
+}

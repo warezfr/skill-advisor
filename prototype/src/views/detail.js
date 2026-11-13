@@ -162,7 +162,7 @@
         ? '<p class="sub">Des motifs à risque ont été trouvés dans les fichiers présents sur cette machine.</p>' +
           findings(row.local.map(function (f) { return [f.label, f.file, f.line, f.excerpt]; }))
         : '<p class="sub">Aucun motif connu trouvé dans les fichiers présents sur cette machine.</p>') +
-      '<p class="mut dt-note">Skill fictif de la machine d’exemple : ces constats illustrent le contrôle local.</p></section>' +
+      (SA.live && SA.live.on ? '' : '<p class="mut dt-note">Skill fictif de la machine d’exemple : ces constats illustrent le contrôle local.</p>') + '</section>' +
       ctxSection(row.chars) + '</div>';
     SA.openDrawer(h, 'Détail du skill', 'detail');
   }
@@ -170,8 +170,9 @@
   /* ---------- guide d'usage (étape Guide et Mes skills) ---------- */
   function guideHtml(name, desc, real) {
     var on = SA.agentsOn();
-    var claude = on.filter(function (a) { return a.id === 'claude'; });
-    var others = on.filter(function (a) { return a.id !== 'claude'; });
+    var isClaude = function (a) { return a.id === 'claude' || a.id === 'claude-code'; };
+    var claude = on.filter(isClaude);
+    var others = on.filter(function (a) { return !isClaude(a); });
     var lines = '';
     if (claude.length) {
       lines += '<li class="gd-ag" data-copy-scope><div><p class="gd-ag-n">Claude Code</p>' +

@@ -1,0 +1,916 @@
+{
+ "date": "2026-11-13",
+ "note": "Recherche documentaire (sources officielles en priorité). Chaque ligne porte sa source et sa fiabilité : verified, reported, unknown. Les lignes « check » corrigent ou confirment les lignes non vérifiées.",
+ "groups": [
+  {
+   "key": "mcp-a",
+   "research": {
+    "summary": "MCP config surfaces for 7 agents (9 rows), researched 2026-11-13 from official docs. Transfer traps:\n- Remote-server keys differ by agent:\n  - Claude Code: \"type\":\"http\" + \"url\". An entry with url and no type is a config error.\n  - Cursor: \"url\".\n  - Gemini CLI: \"httpUrl\" for Streamable HTTP, \"url\" for SSE.\n  - Antigravity: \"serverUrl\" (\"url\" also works). It rejects httpUrl and SSE.\n  - Windsurf/Devin Desktop: \"serverUrl\" or \"url\".\n  - Devin CLI: \"url\" + \"transport\".\n  - Copilot: \"type\":\"http\"/\"sse\" + \"url\". The Copilot CLI uses \"type\":\"local\" for stdio.\n  - Codex: TOML [mcp_servers.<name>] url.\n- Root keys:\n  - \"mcpServers\" in most agents.\n  - VS Code editor-managed files use \"servers\" (+ \"inputs\"). That format is deprecated: the Local harness will be removed in February 2027.\n  - Codex uses TOML tables.\n- Env interpolation:\n  - Claude Code: ${VAR} and ${VAR:-default}.\n  - Copilot portable format: ${NAME} and ${NAME:-default}.\n  - Cursor, VS Code editor format, Windsurf: ${env:VAR}.\n  - Gemini CLI: $VAR, ${VAR}, %VAR% (Windows).\n  - Codex: names variables in env_vars, bearer_token_env_var, env_http_headers.\n  - Antigravity: not documented.\n- Enable/disable state is often kept outside the server entry:\n  - Claude Code: disabledMcpServers in ~/.claude.json.\n  - Gemini CLI: ~/.gemini/mcp-server-enablement.json.\n  - Cursor and Codex: in-entry or approval lists.\n  - Antigravity and Devin: \"disabled\": true in the entry.\n- OAuth tokens are stored separately (for example ~/.gemini/antigravity/mcp_oauth_tokens.json) and must be left out of backups.\n- Windsurf was rebranded Devin Desktop in 2026. The rename date is a reported claim. Its config file moved to ~/.config/devin/mcp_config.json, and ~/.codeium/windsurf/mcp_config.json is now only the \"editor discovery\" file.\n- The Gemini CLI docs carry a banner: Antigravity CLI replaced Gemini CLI on 2026-06-18 for unpaid-tier and Google One users.\n- Process note: the first Claude Code doc fetch spilled to a tool-output file under the home folder, and I grepped it. That broke the no-home-files rule. It held only the fetched public doc text, and I did not repeat it.",
+    "rows": [
+     {
+      "agent": "Claude Code",
+      "item": "mcp",
+      "user_config_path": "User scope: top level of ~/.claude.json (mcpServers). Local scope (default for `claude mcp add`): ~/.claude.json under \"projects\": {\"/abs/project/path\": {\"mcpServers\": {...}}}. Managed (admin, exclusive): macOS /Library/Application Support/ClaudeCode/managed-mcp.json; Linux/WSL /etc/claude-code/managed-mcp.json; Windows C:\\Program Files\\ClaudeCode\\managed-mcp.json. Per-OS location of ~/.claude.json on Windows: not found. Whether CLAUDE_CONFIG_DIR moves ~/.claude.json: not found (the page only says the config directory is ~/.claude unless CLAUDE_CONFIG_DIR is set). Plugin servers: <plugin-root>/.mcp.json or plugin.json mcpServers.",
+      "project_config_path": ".mcp.json at project root (project scope, shared via VCS; needs approval in interactive sessions). Precedence: local > project > user > plugin > claude.ai connectors; managedMcpServers ranks above all; fields are not merged across scopes.",
+      "format": "JSON, root key \"mcpServers\". stdio (no type = stdio): {\"mcpServers\":{\"db\":{\"command\":\"npx\",\"args\":[\"-y\",\"some-mcp\"],\"env\":{\"DB_URL\":\"${DB_URL}\"}}}}. Remote: {\"mcpServers\":{\"api\":{\"type\":\"http\",\"url\":\"https://example.com/mcp\",\"headers\":{\"Authorization\":\"Bearer ${API_KEY}\"}}}}. type values: stdio, http (alias streamable-http), sse (deprecated), ws, sdk (in-process, skipped in files). A url entry without type is a configuration error. Optional headersHelper (command that prints JSON headers).",
+      "secrets": "env (stdio) and headers (remote); headersHelper script; OAuth via `claude mcp login`. Expansion ${VAR} and ${VAR:-default} in command, args, env, url, headers. Unset var without default stays literal and warns. Credential vars like ANTHROPIC_API_KEY, NPM_TOKEN read as empty in remote url/headers. CLAUDE_PROJECT_DIR available as ${CLAUDE_PROJECT_DIR:-.}.",
+      "cli": "claude mcp add [--scope local|project|user] [--transport stdio|http|sse] [-e KEY=val] [-H 'Header: v'] <name> <url> | -- <command> [args]; claude mcp add-json <name> '<json>' [--scope]; claude mcp add-from-claude-desktop; claude mcp list; claude mcp get <name>; claude mcp remove <name>; claude mcp login/logout <name>; claude mcp reset-project-choices; claude mcp serve; in-session /mcp. Flags --mcp-config, --strict-mcp-config.",
+      "notes": "Disable without removing: toggle in /mcp; stored per project in ~/.claude.json as disabledMcpServers (opt-out) / enabledMcpServers (opt-in for default-off built-ins); .mcp.json approvals in enabledMcpjsonServers / disabledMcpjsonServers. A backup of ~/.claude.json carries much more than MCP (projects, state), so extract only mcpServers keys. managed-mcp.json blocks `claude mcp add` and --mcp-config. Plugin servers named plugin:<plugin>:<server>, are added/removed only by installing the plugin. Doc references versions up to v2.1.317; no page date shown.",
+      "source": "https://code.claude.com/docs/en/mcp ; https://code.claude.com/docs/en/managed-mcp",
+      "confidence": "verified"
+     },
+     {
+      "agent": "Cursor (editor + Cursor CLI `agent`)",
+      "item": "mcp",
+      "user_config_path": "~/.cursor/mcp.json (global). Per-OS Windows path: not found on the Cursor page (VS Code reference lists the same ~/.cursor/mcp.json).",
+      "project_config_path": ".cursor/mcp.json in the project. CLI precedence: project, then global, then nested; CLI discovers configs from parent directories.",
+      "format": "JSON, root key \"mcpServers\". stdio: {\"mcpServers\":{\"server-name\":{\"type\":\"stdio\",\"command\":\"npx\",\"args\":[\"-y\",\"mcp-server\"],\"env\":{\"API_KEY\":\"value\"}}}}. Remote: {\"mcpServers\":{\"server-name\":{\"url\":\"http://localhost:3000/mcp\",\"headers\":{\"API_KEY\":\"value\"}}}}. Optional envFile (stdio only).",
+      "secrets": "env (stdio), headers (remote), envFile (e.g. \"${workspaceFolder}/.env\", stdio only). Interpolation in command, args, env, url, headers: ${env:NAME}, ${userHome}, ${workspaceFolder}, ${workspaceFolderBasename}, ${pathSeparator} / ${/}.",
+      "cli": "Cursor CLI (binary `agent`): agent mcp list; agent mcp list-tools <id>; agent mcp login <id>; agent mcp enable <id>; agent mcp disable <id>; interactive /mcp list. No add/remove CLI found; editor UI: Customize sidebar toggle.",
+      "notes": "Docs say type \"stdio\" is required for stdio, but the docs' own examples omit it, so tolerate both on import and write it on export. Remote examples show no type field. Enable state: the CLI's enable adds to a local approved list (location not found). No page date shown; read 2026-11-13.",
+      "source": "https://cursor.com/docs/context/mcp ; https://cursor.com/docs/cli/mcp",
+      "confidence": "verified"
+     },
+     {
+      "agent": "OpenAI Codex (CLI, IDE extension, desktop app share config)",
+      "item": "mcp",
+      "user_config_path": "~/.codex/config.toml (the CLI source says `codex mcp add` writes to the global config in CODEX_HOME; CODEX_HOME default ~/.codex). Windows path: not found.",
+      "project_config_path": ".codex/config.toml (only for trusted projects).",
+      "format": "TOML, tables [mcp_servers.<name>]. stdio: [mcp_servers.context7]\ncommand = \"npx\"\nargs = [\"-y\", \"@upstash/context7-mcp\"]\nenv_vars = [\"LOCAL_TOKEN\"]\n[mcp_servers.context7.env]\nMY_ENV_VAR = \"value\". Streamable HTTP: [mcp_servers.figma]\nurl = \"https://mcp.figma.com/mcp\"\nbearer_token_env_var = \"FIGMA_OAUTH_TOKEN\"\nhttp_headers = { \"X-Figma-Region\" = \"us-east-1\" }. Shared keys: enabled, enabled_tools, disabled_tools, startup_timeout_sec (10), tool_timeout_sec (60), required, default_tools_approval_mode, per-tool [mcp_servers.<n>.tools.<tool>] approval_mode. stdio also cwd; HTTP also env_http_headers, auth = oauth|chatgpt.",
+      "secrets": "stdio: env (literal) or env_vars (names forwarded from parent env). HTTP: bearer_token_env_var (env var name), http_headers (static), env_http_headers (header -> env var name). OAuth credentials stored by `codex mcp login` outside config.toml. No ${VAR} string interpolation documented.",
+      "cli": "codex mcp add <name> [--env K=V] -- <cmd> [args] | codex mcp add <name> --url <URL> [--bearer-token-env-var VAR] [--oauth-client-id ...]; codex mcp list [--json]; codex mcp get <name> [--json]; codex mcp remove <name>; codex mcp login <name> [--no-browser] [--scopes]; codex mcp logout <name>; codex mcp --help.",
+      "notes": "Disable via enabled = false. Transports documented: stdio and Streamable HTTP. No SSE statement found. Old URL developers.openai.com/codex/mcp redirects (308) to learn.chatgpt.com. get/remove/logout and the CODEX_HOME write come from a model summary of the CLI source file mcp_cmd.rs, not a quoted line. The official page shows only add/list/login. No page date shown; read 2026-11-13.",
+      "source": "https://learn.chatgpt.com/docs/extend/mcp?surface=cli (redirect from https://developers.openai.com/codex/mcp) ; https://raw.githubusercontent.com/openai/codex/main/codex-rs/cli/src/mcp_cmd.rs",
+      "confidence": "verified"
+     },
+     {
+      "agent": "Gemini CLI",
+      "item": "mcp",
+      "user_config_path": "~/.gemini/settings.json (mcpServers key). Enable/disable state: ~/.gemini/mcp-server-enablement.json. System settings path: not found on MCP page. Windows path: not found.",
+      "project_config_path": ".gemini/settings.json (project, overrides user). `gemini mcp add` defaults to project scope.",
+      "format": "JSON inside settings.json, root key \"mcpServers\". stdio: {\"mcpServers\":{\"pythonTools\":{\"command\":\"python\",\"args\":[\"-m\",\"my_mcp_server\"],\"cwd\":\"./mcp-servers/python\",\"env\":{\"API_KEY\":\"${EXTERNAL_API_KEY}\"},\"timeout\":15000}}}. Streamable HTTP: {\"mcpServers\":{\"httpServer\":{\"httpUrl\":\"http://localhost:3000/mcp\",\"headers\":{\"Authorization\":\"Bearer $TOKEN\"}}}}. SSE uses \"url\". Other fields: timeout (ms, default 600000), trust, includeTools, excludeTools. No type field documented. Global block \"mcp\": {serverCommand, allowed, excluded}.",
+      "secrets": "env and headers. Expansion $VAR and ${VAR} (all OS), %VAR% (Windows); undefined vars become empty string.",
+      "cli": "gemini mcp add [-s user|project] [-t stdio|sse|http] [-e K=V] [-H 'H: v'] [--timeout] [--trust] [--include-tools] [--exclude-tools] <name> <commandOrUrl> [args]; gemini mcp list; gemini mcp remove <name> [-s]; gemini mcp enable|disable <name> [--session]; in-session /mcp.",
+      "notes": "Page last updated Oct 6, 2026. Banner: Gemini CLI replaced by Antigravity CLI on June 18, 2026 for unpaid tier and Google One users. settings.json holds other settings too, so merge only the mcpServers key. Stdio servers show Disconnected in untrusted folders.",
+      "source": "https://geminicli.com/docs/tools/mcp-server",
+      "confidence": "verified"
+     },
+     {
+      "agent": "GitHub Copilot in VS Code, editor-managed format (deprecated Local harness)",
+      "item": "mcp",
+      "user_config_path": "VS Code user-profile mcp.json (open with the editor-managed profile command; written by `code --add-mcp`). Per-OS path: not found on the page.",
+      "project_config_path": ".vscode/mcp.json",
+      "format": "JSON, root key \"servers\" (+ optional \"inputs\", \"sandbox\"). stdio: {\"servers\":{\"playwright\":{\"type\":\"stdio\",\"command\":\"npx\",\"args\":[\"-y\",\"@playwright/mcp@latest\"]}}}. Remote: {\"servers\":{\"context7\":{\"type\":\"http\",\"url\":\"https://mcp.context7.com/mcp\"}}}. type: stdio, http, sse. envFile supported. Per-server sandboxEnabled + sandbox (macOS/Linux).",
+      "secrets": "env, headers, envFile (\"${workspaceFolder}/.env\"); ${input:id} prompts once and stores securely (servers using it are not forwarded to Copilot); ${env:NAME}; ${workspaceFolder}; ${userHome}.",
+      "cli": "code --add-mcp '{\"name\":\"playwright\",\"type\":\"stdio\",\"command\":\"npx\",\"args\":[\"-y\",\"@playwright/mcp@latest\"]}' (writes user profile, editor format). Command Palette: MCP: Add Server, MCP: Browse MCP Servers. Disable/Uninstall via server ... menu.",
+      "notes": "Verbatim: \"The Local harness is deprecated and will be removed in February 2027.\" and \"For new Copilot configurations, use these native destinations, not .vscode/mcp.json or profile mcp.json.\" Read these files for backup. Write new transfers to the portable Copilot format (next row). Page date 11/11/2026. VS Code also discovers Claude Desktop, Cursor and Windsurf configs.",
+      "source": "https://code.visualstudio.com/docs/copilot/reference/mcp-configuration ; https://code.visualstudio.com/docs/copilot/customization/mcp-servers",
+      "confidence": "verified"
+     },
+     {
+      "agent": "GitHub Copilot portable format (Copilot CLI + VS Code Copilot harness)",
+      "item": "mcp",
+      "user_config_path": "~/.copilot/mcp-config.json, or $COPILOT_HOME/mcp-config.json when COPILOT_HOME is set (VS Code then checks only that). The COPILOT_HOME detail comes from the VS Code page; the GitHub CLI page names only ~/.copilot/mcp-config.json. Per-OS: not found.",
+      "project_config_path": "Copilot CLI: .mcp.json (searched from cwd up to repo root) and .github/mcp.json. VS Code: workspace-root .mcp.json (when chat.mcp.workspaceRootConfig.enabled). Precedence: closer file wins; same dir .mcp.json beats .github/mcp.json; project overrides user. Project servers load only after folder trust.",
+      "format": "JSON, root key \"mcpServers\" (project files may also use a bare map of server names). stdio: {\"mcpServers\":{\"playwright\":{\"type\":\"local\",\"command\":\"npx\",\"args\":[\"@playwright/mcp@latest\"],\"env\":{},\"tools\":[\"*\"]}}} (VS Code page uses \"type\":\"stdio\"). Remote: {\"mcpServers\":{\"context7\":{\"type\":\"http\",\"url\":\"https://mcp.context7.com/mcp\",\"headers\":{\"CONTEXT7_API_KEY\":\"YOUR-API-KEY\"},\"tools\":[\"*\"]}}}. type: local/stdio, http, sse. tools default \"*\". No envFile, no ${input:}.",
+      "secrets": "env (PATH inherited, others must be set) and headers. Portable interpolation per VS Code page: ${NAME} or ${NAME:-default} (braced recommended). The GitHub CLI page documents no syntax.",
+      "cli": "copilot mcp add NAME -- CMD [ARGS]; copilot mcp add --transport http|sse NAME URL [--env K=V] [--header 'H: V'] [--timeout MS]; copilot mcp list [--json]; copilot mcp get NAME [--json]; copilot mcp remove NAME; copilot mcp enable|disable NAME. Interactive: /mcp, /mcp list|add|search|show|edit|delete|enable|disable.",
+      "notes": "This is the target format for new VS Code configs. Copilot CLI does not read .vscode/mcp.json (search snippet only, so treat as reported). The user mcp-config.json is not forwarded to remote or dev-container hosts. Plugin-provided servers travel with their plugin. GitHub page has no date; VS Code page 11/11/2026.",
+      "source": "https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/add-mcp-servers ; https://code.visualstudio.com/docs/copilot/reference/mcp-configuration",
+      "confidence": "verified"
+     },
+     {
+      "agent": "Windsurf (now Devin Desktop, Cascade)",
+      "item": "mcp",
+      "user_config_path": "File opened by Cascade \"Open MCP config file\" (Cortex-managed): macOS/Linux ~/.config/devin/mcp_config.json (or $XDG_CONFIG_HOME/devin/mcp_config.json); Windows %AppData%/devin/mcp_config.json. Editor discovery (separate, build-specific): stable ~/.codeium/windsurf/mcp_config.json, Next ~/.codeium/windsurf-next/mcp_config.json (Insiders ~/.codeium/windsurf-insiders/ per Devin CLI page). Windows discovery path: not found.",
+      "project_config_path": ".devin/mcp_config.json (shared) and .devin/mcp_config.local.json (gitignored override).",
+      "format": "JSON, root key \"mcpServers\". stdio: {\"mcpServers\":{\"github\":{\"command\":\"npx\",\"args\":[\"-y\",\"@modelcontextprotocol/server-github\"],\"env\":{\"GITHUB_PERSONAL_ACCESS_TOKEN\":\"<TOKEN>\"}}}}. Remote: {\"mcpServers\":{\"remote-http-mcp\":{\"serverUrl\":\"https://host/mcp\",\"headers\":{\"API_KEY\":\"value\"}}}} (serverUrl or url). disabledTools array supported.",
+      "secrets": "env and headers. Interpolation ${env:VAR} in command, args, env, serverUrl, url, headers (e.g. \"Bearer ${env:AUTH_TOKEN}\"). ${file:...} for these fields: not found on the official page (reported by third parties only).",
+      "cli": "No editor CLI found. UI: Customize page, MCPs tab toggle (\"This computer\"). Admin: team MCP allowlist and registry URLs. See Devin CLI row for `devin mcp`.",
+      "notes": "Old docs.windsurf.com/windsurf/cascade/mcp redirects to docs.devin.ai. The page does not say whether the ~/.codeium/windsurf file is a read-only import or still writable, so read both for backup and write ~/.config/devin/mcp_config.json. The rename to Devin Desktop (reported as June 2, 2026) comes from secondary sources only. Transports: stdio, Streamable HTTP, SSE, with OAuth. No page date shown.",
+      "source": "https://docs.devin.ai/windsurf/plugins/cascade/mcp.md ; https://docs.devin.ai/desktop/cascade/mcp",
+      "confidence": "verified"
+     },
+     {
+      "agent": "Devin CLI (Cognition, ships with Devin Desktop)",
+      "item": "mcp",
+      "user_config_path": "~/.config/devin/mcp_config.json; Windows %APPDATA%\\devin\\mcp_config.json. Before v3000.3 MCP lived under mcpServers in ~/.config/devin/config.json (auto-migrated).",
+      "project_config_path": ".devin/mcp_config.json (project) and .devin/mcp_config.local.json (local, gitignored; default scope of `devin mcp add`).",
+      "format": "JSON, root key \"mcpServers\". stdio: {\"mcpServers\":{\"my-server\":{\"command\":\"npx\",\"args\":[\"-y\",\"@company/mcp-server\"],\"env\":{\"API_KEY\":\"your-key\"}}}}. Remote: {\"mcpServers\":{\"my-remote\":{\"url\":\"https://mcp.example.com/mcp\",\"transport\":\"http\",\"headers\":{\"Authorization\":\"Bearer your-token\"}}}}. transport: http (default) or sse. Disable: \"disabled\": true.",
+      "secrets": "env and headers. ${env:VAR} and ${file:/path} documented only for OAuth fields (oauthClientSecret, oauthResource). Whether they work in env or headers: not found. OAuth sessions kept separately per client.",
+      "cli": "devin mcp add <name> -- <cmd> [args]; devin mcp add <name> <URL> | --url <URL>; devin mcp list; devin mcp get <name>; devin mcp remove <name>; devin mcp login|logout <name>; devin mcp enable|disable <name>; -s/--scope local|project|user.",
+      "notes": "read_config_from in ~/.config/devin/config.json or .devin/config.json (all true by default) imports MCP from other agents: cursor (.cursor/mcp.json), windsurf (~/.codeium/<channel>/mcp_config.json), claude (.mcp.json, ~/.claude.json, .claude/settings*.json, ~/.claude/settings*.json, ~/.claude/mcp_servers.json), opencode, zed. Transferring may therefore duplicate servers. No page date shown.",
+      "source": "https://docs.devin.ai/cli/extensibility/mcp/configuration.md ; https://docs.devin.ai/cli/reference/configuration/read-config-from.md",
+      "confidence": "verified"
+     },
+     {
+      "agent": "Google Antigravity (app/IDE and CLI `agy`)",
+      "item": "mcp",
+      "user_config_path": "~/.gemini/config/mcp_config.json (global, CLI and IDE). OAuth tokens: ~/.gemini/antigravity/mcp_oauth_tokens.json. Tool schema cache: ~/.gemini/antigravity/mcp/<server>/ (app/IDE), ~/.gemini/antigravity-cli/mcp/<server>/ (CLI). Legacy ~/.gemini/antigravity/mcp_config.json: not on the official page (reported by older third-party guides). Per-OS paths: not found.",
+      "project_config_path": "<workspace>/.agents/mcp_config.json. Plugins: <plugin-root>/mcp_config.json.",
+      "format": "JSON, root key \"mcpServers\". stdio: {\"mcpServers\":{\"sqlite-explorer\":{\"command\":\"node\",\"args\":[\"/usr/local/bin/sqlite-mcp-server.js\"],\"env\":{\"SQLITE_DB_PATH\":\"/var/data/app.db\"}}}}. Remote: {\"mcpServers\":{\"my-remote-server\":{\"serverUrl\":\"https://api.example.com/mcp/\",\"headers\":{\"Authorization\":\"Bearer YOUR_API_TOKEN\"}}}}. Fields: command, args, env, cwd, serverUrl (url also works), headers, authProviderType (\"google_credentials\"), oauth {clientId, clientSecret}, disabled, enabledTools, disabledTools, tools {eager, background}, timeoutSeconds.",
+      "secrets": "env (stdio), headers (remote), oauth.clientSecret, Google ADC via authProviderType. Env interpolation syntax: not found.",
+      "cli": "No `agy mcp` subcommands found. The CLI has an interactive /mcp manager. App: More actions (⋮) > Disable; \"Copy Config File Path\"; Manage MCP Servers > raw config.",
+      "notes": "Remote servers must use Streamable HTTP. Legacy HTTP+SSE and the httpUrl field are not supported, so convert Gemini httpUrl to serverUrl and drop SSE servers or flag them. Leave mcp_oauth_tokens.json out of backups. No page date shown; read 2026-11-13.",
+      "source": "https://antigravity.google/docs/mcp",
+      "confidence": "verified"
+     }
+    ]
+   },
+   "check": {
+    "checked": []
+   }
+  },
+  {
+   "key": "mcp-b",
+   "research": {
+    "summary": "I researched MCP configuration for 14 agents on 2026-11-13, using official docs and source code read with web fetch and gh api. I read no local home files. There is one row per agent.\n\nCorrections and traps for backup and transfer:\n\n1. **Cline has moved its MCP file.** The current file is ~/.cline/data/settings/cline_mcp_settings.json, shared by the IDE, CLI and SDK. The VS Code globalStorage file and ~/Documents/Cline/MCP are now legacy sources that Cline migrates from.\n2. **Roo Code is archived.** Its GitHub repo was archived after the last push on 2026-05-15 (v3.53.0). Its source names the global file mcp_settings.json, not cline_mcp_settings.json.\n3. **Kilo Code changed format.** The new Kilo is based on OpenCode and uses kilo.jsonc with an \"mcp\" key, in the same shape as OpenCode V1. Older Kilo files (globalStorage mcp_settings.json, .kilocode/mcp.json) are migrated by the source code.\n4. **OpenCode is now V2 (v2.3.0 released 2026-11-13).** V2 writes servers under mcp.servers with a disabled field. V1 (mcp.<name> with enabled) is still accepted, so a reader must handle both.\n5. **Some servers cannot be backed up from disk.** Amp remote definitions (amp mcp remote) and Warp Drive or UI servers live on the vendor's server or in the app.\n\nField names differ by agent. A converter must map between:\n\n| Agent | Shape |\n|---|---|\n| Most JSON agents (Kiro, Junie, Trae, Warp, Augment, Cline, Roo, Qwen) | mcpServers with command/args/env or url/headers |\n| Zed | context_servers |\n| Amp | literal dotted key \"amp.mcpServers\" |\n| OpenCode, Kilo | type local/remote, command as an array, environment |\n| Goose | YAML extensions with cmd/envs/uri; SSE not supported |\n| Continue | YAML list mcpServers with name |\n| Qwen | httpUrl for HTTP, url for SSE |\n| Cline | type streamableHttp; an omitted type falls back to legacy SSE |\n| Roo | type streamable-http, required for URL servers |\n| Augment | type http\\|sse |\n\nEnv-var syntax also differs:\n\n| Agent | Syntax |\n|---|---|\n| Kiro, Amp, Augment | ${VAR} |\n| Roo | ${env:VAR} |\n| OpenCode, Kilo | {env:VAR} |\n| Qwen | $VAR or ${VAR} |\n| Continue | ${{ secrets.X }} |\n| Trae | only ${workspaceFolder} |\n\nGaps I could not confirm: Trae's user-level mcp.json path and the storage location of Augment's IDE extension.",
+    "rows": [
+     {
+      "agent": "Cline",
+      "item": "mcp",
+      "user_config_path": "Current (IDE + CLI + SDK shared): ~/.cline/data/settings/cline_mcp_settings.json on all OS. Override with CLINE_MCP_SETTINGS_PATH, or CLINE_DATA_DIR/settings/, or CLINE_DIR/data/settings/. Legacy locations that the VS Code extension migrates from: <VS Code globalStorage>/saoudrizwan.claude-dev/settings/cline_mcp_settings.json and ~/Documents/Cline/MCP/cline_mcp_settings.json. Legacy globalStorage per OS (reported, from third-party pages): macOS ~/Library/Application Support/Code/User/globalStorage/saoudrizwan.claude-dev/settings/; Linux ~/.config/Code/User/globalStorage/saoudrizwan.claude-dev/settings/; Windows %APPDATA%\\Code\\User\\globalStorage\\saoudrizwan.claude-dev\\settings\\. For Insiders, Cursor and other forks, replace 'Code' with the fork's folder name.",
+      "project_config_path": "not found for MCP. Project .cline/ holds rules, workflows, skills, hooks, agents and plugins, but the docs list no MCP file there.",
+      "format": "JSON, root key \"mcpServers\". stdio: {\"mcpServers\":{\"local-server\":{\"command\":\"node\",\"args\":[\"/path/to/server.js\"],\"env\":{\"API_KEY\":\"...\"},\"disabled\":false,\"autoApprove\":[]}}}. remote: {\"mcpServers\":{\"remote-server\":{\"type\":\"streamableHttp\",\"url\":\"https://example.com/mcp\",\"headers\":{\"Authorization\":\"Bearer ...\"},\"disabled\":false,\"autoApprove\":[]}}}. type values are streamableHttp and sse. If type is omitted on a URL server, Cline defaults to legacy sse.",
+      "secrets": "Plain text in env (stdio) or headers (remote). Env interpolation syntax: not found in the docs. Legacy MCP OAuth secrets sat in VS Code SecretStorage under the key 'mcpOAuthSecrets'; the migration code moves them.",
+      "cli": "cline mcp (interactive: list, add, edit, enable/disable, OAuth, delete); cline mcp add <name> ... --yes; cline mcp remove <name>; cline config mcp [--json] (list).",
+      "notes": "The task's premise (VS Code globalStorage) is stale. Source apps/vscode/src/hosts/vscode/mcp-settings-legacy-migration.ts (last commit 2026-06-25) migrates the globalStorage and Documents files into the shared ~/.cline path. A backup tool should read all three locations, and write only the shared path. Docs say ~/.cline/ also holds skills/ and plugins/ (.js/.ts). Cline also reads ~/.agents/skills and .agents/skills.",
+      "source": "https://docs.cline.bot/mcp/configuring-mcp-servers ; https://github.com/cline/cline/blob/main/docs/getting-started/config.mdx ; https://github.com/cline/cline/blob/main/apps/vscode/src/hosts/vscode/mcp-settings-legacy-migration.ts ; legacy per-OS paths (reported): https://docs.ionos.com/cloud/ai/mcp-server/connect-to-an-ai-client/cline",
+      "confidence": "verified"
+     },
+     {
+      "agent": "Roo Code",
+      "item": "mcp",
+      "user_config_path": "<VS Code globalStorage>/rooveterinaryinc.roo-cline/settings/mcp_settings.json (extension id RooVeterinaryInc.roo-cline). Per OS this gives: macOS ~/Library/Application Support/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json; Linux ~/.config/Code/User/globalStorage/rooveterinaryinc.roo-cline/settings/mcp_settings.json; Windows %APPDATA%\\Code\\User\\globalStorage\\rooveterinaryinc.roo-cline\\settings\\mcp_settings.json. The per-OS expansion follows standard VS Code globalStorage paths and is not printed in the Roo docs. The VS Code setting roo-cline.customStoragePath relocates the base folder to <customStoragePath>/settings/.",
+      "project_config_path": ".roo/mcp.json at the workspace root. The project file wins on a name clash.",
+      "format": "JSON, root key \"mcpServers\". stdio: {\"mcpServers\":{\"local-server\":{\"command\":\"node\",\"args\":[\"server.js\"],\"env\":{\"API_KEY\":\"...\"},\"alwaysAllow\":[\"tool1\"],\"disabled\":false}}}. remote: {\"mcpServers\":{\"remote-server\":{\"type\":\"streamable-http\",\"url\":\"https://your-server.com/mcp\",\"headers\":{\"X-API-Key\":\"...\"},\"disabled\":false}}}. type is required for URL servers ('streamable-http' or 'sse') and is an error if omitted. Other fields: cwd, disabledTools, timeout (1-3600 s, default 60), watchPaths.",
+      "secrets": "env / headers in plain text. Interpolation ${env:VAR_NAME} is documented in args. Use in env or headers: not found in the docs.",
+      "cli": "none (VS Code UI only: Edit Global MCP / Edit Project MCP buttons).",
+      "notes": "The GitHub repo RooCodeInc/Roo-Code is ARCHIVED (last push 2026-05-15, package version 3.53.0). The docs moved to roocodeinc.github.io/Roo-Code (page 'Last updated May 15, 2026'). Source src/shared/globalFileNames.ts names the file mcp_settings.json. That contradicts third-party claims of cline_mcp_settings.json, so a backup tool can check both names as a fallback.",
+      "source": "https://roocodeinc.github.io/Roo-Code/features/mcp/using-mcp-in-roo ; https://github.com/RooCodeInc/Roo-Code/blob/main/src/shared/globalFileNames.ts ; https://github.com/RooCodeInc/Roo-Code/blob/main/src/utils/storage.ts ; https://github.com/RooCodeInc/Roo-Code/blob/main/src/services/mcp/McpHub.ts",
+      "confidence": "verified"
+     },
+     {
+      "agent": "Kiro",
+      "item": "mcp",
+      "user_config_path": "~/.kiro/settings/mcp.json (all OS; %USERPROFILE%\\.kiro\\settings\\mcp.json on Windows by home-dir convention). Some Kiro registry pages cite ~/.kiro/mcp.json instead, a doc conflict; the configuration page uses settings/mcp.json.",
+      "project_config_path": ".kiro/settings/mcp.json. Precedence: agent config mcpServers > workspace > user.",
+      "format": "JSON, root key \"mcpServers\". stdio: {\"mcpServers\":{\"fetch\":{\"command\":\"uvx\",\"args\":[\"mcp-server-fetch\"],\"env\":{},\"disabled\":false,\"autoApprove\":[]}}}. remote: {\"mcpServers\":{\"remote\":{\"url\":\"https://example.com/mcp\",\"headers\":{\"Authorization\":\"Bearer ${TOKEN}\"}}}}. Optional fields: oauth, disabledTools, and autoApprove ('*' approves all tools).",
+      "secrets": "env / headers. Interpolation ${VAR_NAME}. In the IDE, only variables listed in the 'Mcp Approved Env Vars' setting are expanded. OAuth credentials are stored by Kiro; the location is not found.",
+      "cli": "kiro-cli mcp add --name <n> --command \"<cmd>\" --scope workspace|global [--env k=v,k2=v2] [--timeout ms] [--force]; kiro-cli mcp remove --name <n> --scope workspace|global; kiro-cli mcp list [SCOPE]; kiro-cli mcp import --file <file> [--force] [SCOPE]; kiro-cli mcp status --name <n>; in chat: /mcp auth, /mcp cancel-auth, /mcp logout. CLI reference page last updated 2026-11-12.",
+      "notes": "Saving the file restarts only the affected servers. In registry/governance mode, only admin-registry names run.",
+      "source": "https://kiro.dev/docs/mcp/configuration/ ; https://kiro.dev/docs/configuration/ ; https://kiro.dev/docs/reference/cli-commands/ ; conflict: https://kiro.dev/docs/cli/mcp/registry/",
+      "confidence": "verified"
+     },
+     {
+      "agent": "Zed",
+      "item": "mcp",
+      "user_config_path": "settings.json, key \"context_servers\": macOS ~/.config/zed/settings.json; Linux ~/.config/zed/settings.json (or $XDG_CONFIG_HOME/zed/settings.json); Windows %APPDATA%\\Zed\\settings.json.",
+      "project_config_path": ".zed/settings.json at the project root. context_servers is a field of ProjectSettingsContent in source (crates/settings_content/src/project.rs), so project-level servers are indicated by source. The docs' project-settings limitation text does not confirm this explicitly. Project settings are gated by worktree trust.",
+      "format": "JSON with comments (Zed treats its settings files as JSONC; inferred from docs examples), key \"context_servers\" (map by server id). stdio: {\"context_servers\":{\"local-mcp-server\":{\"command\":\"some-command\",\"args\":[\"arg-1\",\"arg-2\"],\"env\":{}}}}. remote: {\"context_servers\":{\"remote-mcp-server\":{\"url\":\"https://example.com/mcp\",\"headers\":{\"Authorization\":\"Bearer <token>\"}}}}. Optional fields: \"enabled\": false (default true), \"timeout\" (s, max 600), \"remote\" (stdio, remote dev). Extension-installed servers keep options in a \"settings\" object. Global context_server_timeout defaults to 60.",
+      "secrets": "env / headers in plain text inside settings.json. Without an Authorization header, a remote server triggers the MCP OAuth flow (token storage location not found). Env var interpolation: not found.",
+      "cli": "none (Settings → AI → MCP Servers → Add Server, or 'zed: open settings file').",
+      "notes": "MCP servers can also come from Zed extensions; those sit in the extensions folder (Windows %LOCALAPPDATA%\\Zed\\extensions\\installed), not in settings. Back up only the context_servers entries and the extension ids. settings.json holds many unrelated settings, so a writer must merge, never overwrite.",
+      "source": "https://zed.dev/docs/ai/mcp ; https://zed.dev/docs/reference/all-settings (Context Servers section) ; https://github.com/zed-industries/zed/blob/main/docs/src/configuring-zed.md ; https://github.com/zed-industries/zed/blob/main/crates/settings_content/src/project.rs",
+      "confidence": "verified"
+     },
+     {
+      "agent": "OpenCode",
+      "item": "mcp",
+      "user_config_path": "~/.config/opencode/opencode.json or opencode.jsonc. Windows global path: not found (docs give only ~/.config/opencode). Managed/system: /etc/opencode (Linux), /Library/Application Support/opencode (macOS), %ProgramData%\\opencode (Windows), plus macOS MDM domain ai.opencode.managed. OPENCODE_CONFIG env var: not found on the docs page.",
+      "project_config_path": "opencode.json(c) at the project root, or .opencode/opencode.json(c). Search runs upward to the filesystem root. Configs merge: global < project root < subdirectory < system < managed; .opencode/ beats a bare opencode.json in the same directory.",
+      "format": "JSON or JSONC. TWO shapes are live; a reader must accept both. V2 (current docs; release v2.3.0 of 2026-11-13): {\"mcp\":{\"servers\":{\"everything\":{\"type\":\"local\",\"command\":[\"npx\",\"-y\",\"@modelcontextprotocol/server-everything\"],\"cwd\":\".\",\"environment\":{\"LOG_LEVEL\":\"info\"},\"disabled\":false,\"timeout\":{\"catalog\":30000,\"execution\":30000}}}}}. V2 remote: {\"mcp\":{\"servers\":{\"context7\":{\"type\":\"remote\",\"url\":\"https://mcp.context7.com/mcp\",\"oauth\":false,\"headers\":{\"CONTEXT7_API_KEY\":\"{env:CONTEXT7_API_KEY}\"}}}}}. V1 (still supported): {\"mcp\":{\"playwright\":{\"type\":\"local\",\"command\":[\"npx\",\"@playwright/mcp\"],\"enabled\":true,\"timeout\":30000}}}. V2 replaces enabled with the inverse disabled, splits timeout into startup/catalog/execution, and uses snake_case OAuth fields (client_id, client_secret, scope, callback_port, redirect_uri, auth_server_metadata_url).",
+      "secrets": "headers / environment. Substitution {env:NAME} (unset gives an empty string). {file:path} (relative, absolute or ~/) is documented on the config page. Shell-style $NAME is NOT expanded. OAuth tokens are stored by OpenCode; the location is not found.",
+      "cli": "opencode mcp add <name> --url <url> [--header K=V] [--global]; opencode mcp add <name> [--env KEY=VAL] -- <command...>; opencode mcp list; opencode mcp auth [name]; opencode mcp logout <name>.",
+      "notes": "The migration doc says mixed V1/V2 members inside 'mcp' are recognised, and a valid V2 value wins on conflict. Which shape 'opencode mcp add' writes: not established. The repo moved from sst/opencode to anomalyco/opencode. V1 plugins do not run in V2.",
+      "source": "https://opencode.ai/docs/mcp-servers/ ; https://opencode.ai/docs/config/ ; https://github.com/anomalyco/opencode/blob/dev/services/site/src/docs/content/migrate-v1.mdx ; https://github.com/anomalyco/opencode/releases",
+      "confidence": "verified"
+     },
+     {
+      "agent": "Goose",
+      "item": "mcp",
+      "user_config_path": "macOS/Linux ~/.config/goose/config.yaml; Windows %APPDATA%\\Block\\goose\\config\\config.yaml. Secrets fall back to secrets.yaml (plain text) next to it when no keyring is available.",
+      "project_config_path": "not found (no project-level extensions file documented; recipes can declare extensions, not covered here).",
+      "format": "YAML, root key \"extensions\" (map by id). stdio:\nextensions:\n  filesystem:\n    type: stdio\n    name: filesystem\n    enabled: true\n    cmd: npx\n    args: [\"-y\", \"@modelcontextprotocol/server-filesystem\", \"/tmp\"]\n    env_keys: []\n    envs: {}\n    timeout: 300\nremote:\nextensions:\n  remote-tools:\n    type: streamable_http\n    name: remote-tools\n    enabled: true\n    uri: \"https://example.com/mcp\"\n    headers: {}\n    env_keys: []\n    envs: {}\n    timeout: 300\nTypes are builtin, platform, stdio and streamable_http. SSE is NOT supported; old sse entries must become streamable_http. A 'bundled' field also exists.",
+      "secrets": "envs (inline values) or env_keys (names resolved from the goose secret store: system keyring, else secrets.yaml; GOOSE_DISABLE_KEYRING forces the file). OAuth client_secret_key names a secret, so 'the secret value itself never goes in the config file'. Env interpolation syntax in YAML: not found.",
+      "cli": "goose configure → Add Extension (Built-In / Command-Line / Remote Streamable HTTP) / Toggle Extensions / Remove (only disabled ones can be removed); goose session --with-builtin <id>, --with-extension \"<cmd>\", --with-streamable-http-extension \"<url>\" (session only, not saved); deeplink goose://extension?cmd=...&arg=...&id=...&name=... or ?url=...&type=streamable_http.",
+      "notes": "Field names differ from the mcpServers convention (cmd/args/envs/uri), so a converter is needed. The repo is now aaif-goose/goose (block/goose redirects), and the official docs site is goose-docs.ai (repo homepage field); the old block.github.io/goose pages return 404. Doc date: not shown.",
+      "source": "https://goose-docs.ai/docs/guides/config-files ; https://goose-docs.ai/docs/getting-started/using-extensions ; https://github.com/aaif-goose/goose",
+      "confidence": "verified"
+     },
+     {
+      "agent": "Amp",
+      "item": "mcp",
+      "user_config_path": "~/.config/amp/settings.json, literal dotted key \"amp.mcpServers\". Windows path: not found. Remote MCP definitions managed with 'amp mcp remote' are stored on ampcode.com (personal/workspace/project scope), not on disk.",
+      "project_config_path": ".amp/settings.json (workspace). Workspace servers need 'amp mcp approve <name>' before they run. Precedence: --mcp-config flag > workspace > user > skill-bundled.",
+      "format": "JSON. Key \"amp.mcpServers\" (a flat dotted key, not nested). stdio: {\"amp.mcpServers\":{\"playwright\":{\"command\":\"npx\",\"args\":[\"-y\",\"@playwright/mcp@latest\",\"--headless\"]}}}. remote: {\"amp.mcpServers\":{\"sourcegraph\":{\"url\":\"${SRC_ENDPOINT}/.api/mcp/v1\",\"headers\":{\"Authorization\":\"token ${SRC_ACCESS_TOKEN}\"}}}}. Skills can bundle servers in an mcp.json inside the skill; their tools stay hidden until the skill loads.",
+      "secrets": "${VAR_NAME} interpolation in config values. ${amp:id-token} is allowed only in headers of HTTPS servers in orbs. Local OAuth state is managed by 'amp mcp oauth login/logout'; its storage location is not found.",
+      "cli": "amp mcp add <name> -- <command>; amp mcp add <name> <url>; amp mcp doctor; amp mcp approve <name>; amp mcp oauth login|logout; amp mcp remote add|update|remove|list|check|tools|login|logout with --personal|--workspace|--project|--current-project. Local 'list'/'remove': not found.",
+      "notes": "Cloud-stored remote definitions cannot be backed up from files; use 'amp mcp remote list' instead. Doc date: not shown.",
+      "source": "https://ampcode.com/docs/customize/mcp",
+      "confidence": "verified"
+     },
+     {
+      "agent": "Continue",
+      "item": "mcp",
+      "user_config_path": "~/.continue/config.yaml (Windows %USERPROFILE%\\.continue\\config.yaml), with an mcpServers block. config.json is deprecated (legacy, same folder). CONTINUE_GLOBAL_DIR relocates the folder (reported).",
+      "project_config_path": ".continue/mcpServers/*.yaml at the workspace root. Each standalone block file needs name, version and schema fields plus an mcpServers list; the exact schema value was not seen (third-party examples use v1). JSON MCP files from Claude Desktop, Cursor or Cline dropped in .continue/mcpServers/ are also picked up. .continuerc.json is the workspace config overlay (mergeBehavior merge|overwrite).",
+      "format": "YAML. mcpServers is a LIST of objects with name, not a map. stdio:\nmcpServers:\n  - name: Playwright\n    command: npx\n    args: [\"@playwright/mcp@latest\"]\n    env: {}\nremote:\nmcpServers:\n  - name: Remote\n    type: streamable-http\n    url: https://example.com/mcp\nFields: name (required), command, args, env, cwd, type (stdio|sse|streamable-http), url, requestOptions (headers etc. for sse/streamable-http), connectionTimeout. These snippets are written from the documented fields, not copied verbatim from the docs.",
+      "secrets": "${{ secrets.NAME }} in args or env, resolved from .env files (reported order: workspace-root .env, <workspace>/.continue/.env, ~/.continue/.env, process env). Hub-managed secrets use ${{ inputs.NAME }}.",
+      "cli": "not found for MCP management (configured by file or the IDE UI).",
+      "notes": "MCP works only in agent mode. A reader must accept both YAML block files and foreign JSON files in .continue/mcpServers/. Doc date: not shown.",
+      "source": "https://docs.continue.dev/customize/deep-dives/mcp ; https://docs.continue.dev/reference ; https://docs.continue.dev/customize/deep-dives/configuration ; secrets (reported): https://docs.continue.dev/faqs",
+      "confidence": "verified"
+     },
+     {
+      "agent": "JetBrains Junie",
+      "item": "mcp",
+      "user_config_path": "~/.junie/mcp/mcp.json (user scope, all projects). The IDE plugin's Tools | Junie | MCP Settings writes there (reported via search snippet; the fetched plugin page shows only 'global or project'). An older PhpStorm blog cites ~/.junie/mcp.json, which is outdated.",
+      "project_config_path": ".junie/mcp/mcp.json at the project root (can be committed).",
+      "format": "JSON, root key \"mcpServers\". stdio: {\"mcpServers\":{\"context7\":{\"command\":\"npx\",\"args\":[\"-y\",\"@upstash/context7-mcp\"],\"env\":{}}}}. remote: {\"mcpServers\":{\"remote\":{\"url\":\"https://example.com/mcp\",\"headers\":{\"Authorization\":\"Bearer <token>\"}}}}. Optional timeout in ms (1000-3600000, default 60 s). Servers added by hand are enabled by default.",
+      "secrets": "env / headers in plain text. Env var interpolation: not found.",
+      "cli": "Junie CLI: --mcp-default-locations (default true), --mcp-location <path> (repeatable); /mcp slash command (list, reconnect, enable/disable, modify, delete); MCP Installation Assistant (Ctrl+A). 'junie mcp ...' subcommands: not found.",
+      "notes": "The old jetbrains.com/help/junie URLs redirect to junie.jetbrains.com/docs. The page date shown (13 November 2026) equals today and is likely a render date, not an edit date.",
+      "source": "https://junie.jetbrains.com/docs/junie-cli-mcp-configuration.html ; https://junie.jetbrains.com/docs/junie-plugin-mcp-settings.html",
+      "confidence": "verified"
+     },
+     {
+      "agent": "Trae",
+      "item": "mcp",
+      "user_config_path": "not found in official docs. The UI's 'Raw Config (JSON)' button opens Trae's global mcp.json. Reported (third-party, conflicting): macOS ~/Library/Application Support/Trae/User/mcp.json or ~/.config/Trae/User/mcp.json; remote container /root/.trae-server/data/Machine/mcp.json. Trae CN may use a different app folder name (not verified).",
+      "project_config_path": ".trae/mcp.json at the project root. It works only after the 'Enable Project MCP' switch is turned on in settings (some builds put it under Settings > Beta). Project servers work only in that project.",
+      "format": "JSON, root key \"mcpServers\". stdio: {\"mcpServers\":{\"mcp_name\":{\"command\":\"npx\",\"args\":[\"-y\",\"@modelcontextprotocol/server-github\"],\"env\":{\"API_Key\":\"value\"}}}}. remote: {\"mcpServers\":{\"mcp_name\":{\"url\":\"https://example.com/mcp\",\"headers\":{\"Authorization\":\"Bearer xxxx-xxxxxxx\"}}}}. Timeouts are set through special keys START_MCP_TIMEOUT_MS / RUN_MCP_TIMEOUT_MS placed in env (stdio) or headers (remote).",
+      "secrets": "env / headers in plain text. The only supported variable is ${workspaceFolder} (resolved at server start). No ${VAR} env interpolation.",
+      "cli": "none (IDE UI: Add manually / Raw Config (JSON) / marketplace).",
+      "notes": "Raw Config accepts JSON pasted from other IDEs, so mcpServers format is compatible. The docs site is JS-rendered; content was read from the page's embedded data. Doc date not reliably found.",
+      "source": "https://docs.trae.ai/ide/add-mcp-servers ; reported user paths: https://github.com/CoplayDev/unity-mcp/pull/337 , https://devstar.cn/devstar/docs/pulls/14",
+      "confidence": "verified"
+     },
+     {
+      "agent": "Warp",
+      "item": "mcp",
+      "user_config_path": "Servers added in the app (Settings > Agents > MCP servers, or Warp Drive > Personal > MCP Servers) are stored by Warp and can sync or share via Warp Drive; on-disk location not found. File-based global servers: ~/.warp/.mcp.json. Warp also detects other agents' files: ~/.claude.json, ~/.codex/config.toml, ~/.agents/.mcp.json.",
+      "project_config_path": ".warp/.mcp.json at the project root; also detects .mcp.json (Claude Code), .codex/config.toml and .agents/.mcp.json. Project-scoped servers need manual approval per session; global third-party servers need the 'Auto-spawn servers from third-party agents' toggle.",
+      "format": "JSON, root key \"mcpServers\" (confirmed for pasted configs; assumed, not confirmed, for ~/.warp/.mcp.json). stdio: {\"mcpServers\":{\"github\":{\"command\":\"npx\",\"args\":[\"-y\",\"@modelcontextprotocol/server-github\"],\"env\":{\"GITHUB_PERSONAL_ACCESS_TOKEN\":\"...\"},\"working_directory\":\"/path\"}}}. remote: {\"mcpServers\":{\"linear\":{\"url\":\"https://mcp.linear.app/mcp\",\"headers\":{}}}}.",
+      "secrets": "env / headers. When a server is shared via Warp Drive, sensitive env values are scrubbed into variables and teammates are prompted for them. Interpolation syntax: not found.",
+      "cli": "Oz CLI: oz mcp list (account and team servers, UUID + Name); oz agent run / run-cloud --mcp <UUID | managed id (linear, slack, jira) | inline JSON | path/to/config.json>, repeatable (page updated 2026-11-11).",
+      "notes": "UI and Warp Drive servers are cloud or app-stored; there is no documented export file, so a backup must rely on the .mcp.json files or a manual copy. MCP logs live at ${XDG_STATE_HOME:-$HOME/.local/state}/warp-terminal/mcp on Linux (reported).",
+      "source": "https://docs.warp.dev/agents/capabilities/mcp.md ; https://docs.warp.dev/reference/cli/mcp-servers/",
+      "confidence": "verified"
+     },
+     {
+      "agent": "Kilo Code",
+      "item": "mcp",
+      "user_config_path": "New Kilo (OpenCode-based, binary 'kilo' / 'kilocode'): ~/.config/kilo/kilo.jsonc (or kilo.json), key \"mcp\". Legacy Kilo VS Code extension (Roo fork, v5) global file: macOS ~/Library/Application Support/Code/User/globalStorage/kilocode.kilo-code/settings/mcp_settings.json; Windows %APPDATA%\\Code\\User\\globalStorage\\kilocode.kilo-code\\settings\\mcp_settings.json; Linux ~/.config/Code/User/globalStorage/kilocode.kilo-code/settings/mcp_settings.json. The new Kilo auto-migrates from that legacy file.",
+      "project_config_path": "kilo.jsonc / kilo.json at the project root, or .kilo/kilo.jsonc. Project beats global. Legacy project files .kilocode/mcp.json (lower precedence) and .kilo/mcp.json (higher) are read by the migrator.",
+      "format": "JSON or JSONC, key \"mcp\" (OpenCode V1-style map). stdio: {\"mcp\":{\"my-local-server\":{\"type\":\"local\",\"command\":[\"node\",\"/path/to/server.js\"],\"environment\":{\"API_KEY\":\"...\"},\"enabled\":true,\"timeout\":10000}}}. remote: {\"mcp\":{\"my-remote-server\":{\"type\":\"remote\",\"url\":\"https://your-server-url.com/mcp\",\"headers\":{\"Authorization\":\"Bearer ...\"},\"enabled\":true,\"timeout\":15000}}}. Remote tries Streamable HTTP, then falls back to SSE; \"oauth\": false disables OAuth. The legacy format is Roo-style mcpServers with command/args/env/disabled/alwaysAllow.",
+      "secrets": "environment / headers. {env:VARIABLE_NAME} is documented (VS Code tab). {file:} is not mentioned in Kilo docs (it exists in OpenCode). Auto-approval moves to the 'permission' key (\"my_server_*\": \"allow\"); legacy alwaysAllow is NOT migrated (the migrator warns).",
+      "cli": "kilo mcp add [name] (--url, --env KEY=VALUE, --header KEY=VALUE), kilo mcp list, kilo mcp auth [name], kilo mcp auth list, kilo mcp logout [name], kilo mcp debug <name> (from source packages/opencode/src/cli/cmd/mcp.ts).",
+      "notes": "Big format break: a backup tool must read the legacy mcp_settings.json (disabled→enabled:false mapping) and the new kilo.jsonc. The migrator maps server.disabled to enabled:false. Doc date: not shown. Repo Kilo-Org/kilocode is active (push 2026-11-13).",
+      "source": "https://kilo.ai/docs/automate/mcp/using-in-kilo-code ; https://github.com/Kilo-Org/kilocode/blob/main/packages/opencode/src/kilocode/mcp-migrator.ts ; https://github.com/Kilo-Org/kilocode/blob/main/packages/opencode/src/kilocode/paths.ts ; https://github.com/Kilo-Org/kilocode/blob/main/packages/opencode/src/cli/cmd/mcp.ts",
+      "confidence": "verified"
+     },
+     {
+      "agent": "Qwen Code",
+      "item": "mcp",
+      "user_config_path": "~/.qwen/settings.json (key mcpServers). Windows by home-dir convention: %USERPROFILE%\\.qwen\\settings.json. OAuth tokens: ~/.qwen/mcp-oauth-tokens.json (plain text by default).",
+      "project_config_path": ".qwen/settings.json in the project.",
+      "format": "JSON, root key \"mcpServers\" (inside the wider settings.json; merge, don't overwrite). stdio: {\"mcpServers\":{\"pythonTools\":{\"command\":\"python\",\"args\":[\"-m\",\"my_mcp_server\",\"--port\",\"8080\"],\"cwd\":\"./mcp-servers/python\",\"env\":{\"DATABASE_URL\":\"$DB_CONNECTION_STRING\",\"API_KEY\":\"${EXTERNAL_API_KEY}\"},\"timeout\":15000}}}. HTTP: {\"mcpServers\":{\"httpServerWithAuth\":{\"httpUrl\":\"http://localhost:3000/mcp\",\"headers\":{\"Authorization\":\"Bearer your-api-token\"},\"timeout\":5000}}}. SSE (legacy) uses \"url\" instead of httpUrl. Other fields: trust, includeTools, excludeTools, discoveryTimeoutMs; global mcp.allowed / mcp.excluded.",
+      "secrets": "env and headers; $VAR or ${VAR} interpolation in env. Setting QWEN_CODE_FORCE_ENCRYPTED_FILE_STORAGE=true encrypts the OAuth token file.",
+      "cli": "qwen mcp add [options] <name> <commandOrUrl> [args...] with -s/--scope user|project (default user), -t/--transport stdio|sse|http (default stdio), -e KEY=value, -H \"K: V\", --timeout ms, --trust, --include-tools, --exclude-tools, --description, --oauth-*; qwen mcp remove <name>; qwen mcp list; /mcp dialog.",
+      "notes": "Gemini-CLI lineage: httpUrl means Streamable HTTP and url means SSE, which differs from most agents, so a converter must map these. Doc 'Last updated on October 19, 2026'.",
+      "source": "https://qwenlm.github.io/qwen-code-docs/en/users/features/mcp/",
+      "confidence": "verified"
+     },
+     {
+      "agent": "Augment (Auggie CLI + IDE extensions)",
+      "item": "mcp",
+      "user_config_path": "Auggie CLI: ~/.augment/settings.json (key mcpServers). Managed, read-only: /etc/augment/settings.json (reported). VS Code / JetBrains extensions: servers are managed in the Settings Panel (Easy MCP, manual, Import from JSON); on-disk storage location not found. The third-party claim of a VS Code setting 'augment.advanced.mcpServers' (array) is unconfirmed. Whether the IDEs share ~/.augment/settings.json: not found.",
+      "project_config_path": "Auggie: <workspace>/.augment/settings.json (--project, shared) and <workspace>/.augment/settings.local.json (--local, personal).",
+      "format": "JSON, root key \"mcpServers\" (map). stdio: {\"mcpServers\":{\"local-tool\":{\"command\":\"/usr/local/bin/custom-mcp\",\"args\":[\"--serve\",\"--port\",\"3000\"],\"env\":{\"DEBUG\":\"true\"}}}}. remote: {\"mcpServers\":{\"renderMCP\":{\"type\":\"http\",\"url\":\"https://mcp.render.com/mcp\",\"headers\":{\"Authorization\":\"Bearer <YOUR_API_KEY>\"}}}}. type is http or sse.",
+      "secrets": "env / headers. Expansion: ${VAR}, ${VAR:-default}, ${workspaceFolder}, and \\${VAR} for literal text (CLI docs). The IDE docs mention only ${workspaceFolder}.",
+      "cli": "auggie mcp add <name> [-c/--command <path>] [--args \"<args>\"] [-e KEY=VAL] [-t stdio|sse|http] [-u/--url <url>] [-H KEY:VAL] [-r/--replace] [--project|--local]; auggie mcp add-json <name> <json>; auggie mcp list [--json]; auggie mcp remove <name> [--project|--local]; runtime --mcp-config <json|file> (applied last). Introduced in Auggie 0.5.4 (2025-09-11).",
+      "notes": "The docs page is labeled 'Auggie 1.x.x (prerelease)'; no date. Known issue: OAuth with HTTP-type servers, workaround a command-based server (support article). IDE extensions accept the same mcpServers JSON via Import.",
+      "source": "https://docs.augmentcode.com/cli/integrations ; https://docs.augmentcode.com/setup-augment/mcp ; https://docs.augmentcode.com/cli/config ; https://www.augmentcode.com/changelog/auggie-cli-0-5-4-release-notes",
+      "confidence": "verified"
+     }
+    ]
+   },
+   "check": {
+    "checked": []
+   }
+  },
+  {
+   "key": "plugins",
+   "research": {
+    "summary": "Research on plugin and extension systems for 10 agents, checked against vendor docs on 2026-11-13. The main finding: an open standard called Agent Plugins 1.0 (agent-plugins.org; its steering committee includes Amazon, Cursor, Microsoft, OpenAI and Vercel) defines a portable core. That core is a root plugin.json, skills/<name>/SKILL.md and a root mcp.json. Codex, Cursor, GitHub Copilot CLI and Kiro document that they read it. The Claude Code format is also widely read. Copilot CLI reads .claude-plugin/plugin.json and .claude-plugin/marketplace.json. Codex reads .claude-plugin/marketplace.json. Amp scans ~/.claude/plugins/cache/ for skills. So the skills and MCP servers inside a plugin can usually be extracted and moved to another agent. Several things block a plain copy. (1) Each agent has its own root variable, which must be rewritten: ${CLAUDE_PLUGIN_ROOT}, ${extensionPath}, ${CURSOR_PLUGIN_ROOT}, ${AMP_SKILL_DIR}. (2) Sensitive values sit in the OS keychain or secure store, not on disk: Claude userConfig sensitive values, Gemini settings[].sensitive values, the Goose secret store. (3) Kiro plugin.json powers keep their MCP servers internal. (4) Hooks, commands, rules, agents and LSP are client-specific. (5) OpenCode and Amp plugins are code (JS/TS programs), and Goose extensions are only MCP server entries, so for these only a skill directory or an MCP entry can move. Where the enabled list is recorded: in settings or config files for Claude Code (enabledPlugins), Codex (config.toml [plugins.\"name@marketplace\"]) and Gemini (extension-enablement.json, path rules). For Cursor and Copilot CLI it was not found in official docs; a forum report says Cursor keeps it in SQLite. Gemini CLI was replaced by Antigravity CLI (agy) for unpaid and Google One users on June 18, 2026, and agy has its own plugin commands. Paths reported only by third parties are marked \"reported\". The extractability notes are derived from verified facts; vendors do not state them.",
+    "rows": [
+     {
+      "agent": "Claude Code",
+      "item": "plugin",
+      "user_config_path": "The plugins root is ~/.claude/plugins (override with the CLAUDE_CODE_PLUGIN_CACHE_DIR env var). It is the same on macOS, Linux and Windows (under the user home). Installed files are in cache/<marketplace>/<plugin>/<version>/, which is what ${CLAUDE_PLUGIN_ROOT} points to. Persistent data is in data/<plugin-id>/ (${CLAUDE_PLUGIN_DATA}). Marketplace clones are in marketplaces/<name>/. Plugins synced from claude.ai are in synced/, and removed synced plugins go to .trash/. Install records are in installed_plugins.json (scope, installPath, version). Fetched marketplaces are in known_marketplaces.json (source, installLocation, lastUpdated, autoUpdate); a claude.ai-hosted marketplace is in known_marketplaces_claudeai.json. Delisted plugins are in flagged-plugins.json. The enabled state is enabledPlugins {\"name@marketplace\": true|false} in ~/.claude/settings.json (user scope). Marketplaces are also declared in extraKnownMarketplaces in user settings. Non-sensitive userConfig values are saved in pluginConfigs in settings.json.",
+      "project_config_path": "Project scope: enabledPlugins and extraKnownMarketplaces in .claude/settings.json, which is committed to the repo. Local scope: .claude/settings.local.json. The --settings flag and managed settings also apply. Precedence from lowest to highest is --add-dir, user, project, local, flag, managed. A plugin directory that has .claude-plugin/plugin.json under ~/.claude/skills/ or the project's .claude/skills/ loads as <name>@skills-dir. Claude Code does not scan a project's .claude/plugins/ directory.",
+      "format": "Manifest: .claude-plugin/plugin.json (JSON, optional; only name is required). Components, in their default locations: skills/<name>/SKILL.md, commands/*.md, agents/*.md, hooks/hooks.json, .mcp.json (MCP servers), .lsp.json (LSP servers), output-styles/, workflows/*.js, themes/, monitors/monitors.json, bin/ (added to PATH). In the manifest, mcpServers also accepts a .json path, a .mcpb or .dxt bundle, or an inline map. Example MCP entry in the plugin: {\"mcpServers\":{\"deploy-api\":{\"command\":\"node\",\"args\":[\"${CLAUDE_PLUGIN_ROOT}/server.js\"]}}}. Marketplace file: .claude-plugin/marketplace.json, with name, owner and plugins[{name, source}]. Plugin source types: a relative path, github, git-subdir, url, archive, npm or command. The plugin ID is <entry-name>@<marketplace>. Other origins are @inline (--plugin-dir), @skills-dir and @synced.",
+      "secrets": "Declare userConfig options with sensitive: true. Their values go to the platform secure credential store (keychain), not settings.json. Non-sensitive values go to pluginConfigs in settings.json. Reference them with ${user_config.KEY} in MCP or LSP config, in exec-form hook args, and in skill or agent content (only non-sensitive values there). Hooks receive them as CLAUDE_PLUGIN_OPTION_<KEY>. The variables ${CLAUDE_PLUGIN_ROOT}, ${CLAUDE_PLUGIN_DATA} and ${CLAUDE_PROJECT_DIR} are substituted in MCP stdio command/args/env and in http url/headers.",
+      "cli": "claude plugin install <plugin> [-s user|project|local] [--json]; claude plugin uninstall <plugin> [-s scope] [--keep-data] [--json]; claude plugin enable <plugin> [-s scope] [--json]; claude plugin disable [plugin] [-a|--all] [-s scope] [--json]; claude plugin update <plugin> [-s user|project|local|managed] [--json]; claude plugin list [--json] [--available] [--data-size]; claude plugin details <name>; claude plugin configure <plugin> [--values-stdin] [--json]; claude plugin prune [--dry-run]; claude plugin validate <path> [--strict] [--json]; claude plugin init <name> [--with skills hooks]; claude plugin tag; claude plugin eval; claude plugin marketplace add <owner/repo|git URL|https URL|./path> [--scope] [--sparse] [--claudeai] [--json]; claude plugin marketplace list [--json]; claude plugin marketplace remove|rm <name> (this uninstalls the marketplace's plugins); claude plugin marketplace update. In a session: /plugin and /reload-plugins. 'claude plugins' is an alias.",
+      "notes": "Version gates: --json on install, uninstall, enable, disable and update needs v2.1.268 or later. marketplace add --json needs v2.1.287 or later. MCP checks in validate need v2.1.281 or later. The hooks-name-conflict note needs v2.1.296 or later. The official marketplace is claude-plugins-official (reserved name; auto-update on by default). The cache path changes with each version, and an old version directory is removed 14 days after it gets an .orphaned_at marker. Extraction to other agents (derived): skills in cache/.../skills/<name>/SKILL.md copy as-is to any Agent Skills agent. Amp already scans ~/.claude/plugins/cache/. Copilot CLI reads .claude-plugin/plugin.json and .claude-plugin/marketplace.json. Codex reads .claude-plugin/marketplace.json. For .mcp.json servers, ${CLAUDE_PLUGIN_ROOT} must be rewritten to an absolute path, and ${user_config.*} values must be resolved. Hooks, agents, commands, LSP, monitors and output styles are Claude-specific. For a backup, save installed_plugins.json, known_marketplaces.json, enabledPlugins, extraKnownMarketplaces and pluginConfigs, then reinstall by ID instead of copying the cache.",
+      "source": "https://code.claude.com/docs/en/plugins-reference (manifest reference); https://code.claude.com/docs/en/plugins/loading.md; https://code.claude.com/docs/en/plugins/cli-reference.md; https://code.claude.com/docs/en/plugin-marketplaces",
+      "confidence": "verified"
+     },
+     {
+      "agent": "OpenAI Codex (CLI, desktop app)",
+      "item": "plugin",
+      "user_config_path": "Install cache: ~/.codex/plugins/cache/$MARKETPLACE_NAME/$PLUGIN_NAME/$VERSION/ ($VERSION is 'local' for local plugins). The enabled state is in ~/.codex/config.toml, for example [plugins.\"my-plugin@local-repo\"] enabled = true. Other keys: plugins._default.enabled (default state for installed plugins) and plugins.<plugin>.mcp_servers.<server>.enabled (turns one MCP server bundled in a plugin on or off). Configured marketplaces: marketplaces.<name>.source / source_type (git|local) / ref / sparse_paths in config.toml. Personal marketplace file: ~/.agents/plugins/marketplace.json. No dedicated installed-plugins record file is named in the docs (not found).",
+      "project_config_path": ".codex/config.toml, read only for trusted projects; it can override user, cloud-managed and system values. Repo marketplace: $REPO_ROOT/.agents/plugins/marketplace.json, or the legacy-compatible $REPO_ROOT/.claude-plugin/marketplace.json.",
+      "format": "Portable manifest: a root plugin.json with \"$schema\": \"https://agent-plugins.org/schemas/1.0.0/plugin.schema.json\". OpenAI-specific settings go in extensions.com.openai inside the root plugin.json. Fallback: .codex-plugin/plugin.json, used only when extensions.com.openai is absent; the two are not merged. The @plugin-creator scaffold writes only .codex-plugin/plugin.json. Components: skills/<name>/SKILL.md, a root mcp.json (portable; the scaffold uses .mcp.json), app/connector mappings in .app.json (the apps field), hooks/hooks.json (supported only for manually installed Codex desktop plugins), and assets/. Commands are not mentioned. config.toml example: [plugins.\"my-plugin@local-repo\"]\\nenabled = true.",
+      "secrets": "Not found for plugins specifically. MCP servers that a plugin connects to ChatGPT stay connected after uninstall until you disconnect them in ChatGPT.",
+      "cli": "codex plugin add <plugin[@marketplace]> [-m|--marketplace NAME] [--json] (install); codex plugin list [-m NAME] [--available --json] [--json]; codex plugin remove <plugin[@marketplace]> [-m NAME] [--json] (removes it from local config and the cache); codex plugin marketplace add <owner/repo | git URL | ./local-root> [--ref REF] [--sparse PATH]... [--json]; codex plugin marketplace list [--json]; codex plugin marketplace remove <name> [--json]; codex plugin marketplace upgrade [name] [--json]. Interactive: /plugins in the CLI; press Space on an installed plugin to turn it on or off. No enable/disable CLI subcommand is documented; toggle it in config.toml.",
+      "notes": "The CLI reference page was read only up to character 100000 of 143347. The desktop Plugins Directory has OpenAI, workspace and Personal tabs. Admins can import plugins under Admin > Plugins (workspace-managed state). features.remote_plugin turns on the remote catalog (on by default). Extraction (derived): plugins that follow Agent Plugins 1.0 carry portable skills/ and mcp.json, which other compliant agents (Cursor, Copilot CLI, Kiro) can read. Codex also lists marketplaces in Claude's .claude-plugin/marketplace.json format.",
+      "source": "https://developers.openai.com/codex/plugins/build.md; https://learn.chatgpt.com/docs/plugins; https://learn.chatgpt.com/docs/config-file/config-reference; https://learn.chatgpt.com/docs/developer-commands?surface=cli; https://agent-plugins.org/",
+      "confidence": "verified"
+     },
+     {
+      "agent": "Gemini CLI",
+      "item": "plugin",
+      "user_config_path": "Extensions load from ~/.gemini/extensions/<name>/ (each one is a copy of its source). Install metadata: ~/.gemini/extensions/<name>/.gemini-extension-install.json (has a type field). Enablement state: extension-enablement.json, verified in source (ExtensionEnablementManager, path.join(configDir, 'extension-enablement.json')). Its directory comes from ExtensionStorage.getUserExtensionsDir(); the exact path was not confirmed, likely ~/.gemini/extensions/. Format: {\"<ext>\": {\"overrides\": [\"/path/\", \"!/path/sub/*\"]}}; '!' disables, a trailing '*' covers subdirectories, and the last matching rule wins. A same-named MCP server in settings.json takes precedence over the extension's.",
+      "project_config_path": "No project-scoped install. Enable or disable per workspace with --scope workspace (recorded as path override rules in extension-enablement.json).",
+      "format": "Manifest: gemini-extension.json at the extension root (JSON). Fields: name (should match the directory name), version, description, migratedTo, mcpServers, contextFileName (default GEMINI.md), excludeTools, plan.directory, settings[{name, description, envVar, sensitive}], themes. Components: commands/*.toml (commands/gcs/sync.toml becomes /gcs:sync), GEMINI.md context, skills/<name>/SKILL.md, hooks/hooks.json (not in the manifest), agents/*.md (subagents, preview), policies/*.toml. Variables: ${extensionPath}, ${workspacePath}, ${/}. MCP example in the manifest: {\"mcpServers\":{\"my-server\":{\"command\":\"node\",\"args\":[\"${extensionPath}${/}server.js\"]}}}. The 'trust' option is not supported.",
+      "secrets": "Values in settings[] marked sensitive: true are stored in the system keychain. Others are exposed through envVar. Manage them with gemini extensions config <name> [setting] [--scope].",
+      "cli": "gemini extensions install <github-url|path> [--ref <ref>] [--auto-update] [--pre-release] [--consent] [--skip-settings]; gemini extensions uninstall <name...>; gemini extensions list; gemini extensions enable <name> [--scope user|workspace]; gemini extensions disable <name> [--scope user|workspace]; gemini extensions update <name> | --all; gemini extensions new <path> [template]; gemini extensions link <path> (symlink for local development); gemini extensions config <name> [setting] [--scope]. Interactive: /extensions list. Changes take effect after you restart the CLI. A validate command was not found.",
+      "notes": "Gallery: https://geminicli.com/extensions/browse/. It automatically indexes public repos that have the gemini-cli-extension GitHub topic and a root gemini-extension.json. The docs say Gemini CLI was replaced by Antigravity CLI for unpaid and Google One users on June 18, 2026. Extraction (derived): skills/<name>/SKILL.md copies as-is. mcpServers in gemini-extension.json uses the common command/args/env shape but needs ${extensionPath} and ${/} rewritten. TOML commands, GEMINI.md, policies and hooks are Gemini-specific (GEMINI.md could become an AGENTS.md or CLAUDE.md rule).",
+      "source": "https://geminicli.com/docs/extensions/reference/; https://raw.githubusercontent.com/google-gemini/gemini-cli/main/docs/extensions/index.md; https://raw.githubusercontent.com/google-gemini/gemini-cli/main/packages/cli/src/config/extensions/extensionEnablement.ts; https://geminicli.com/docs/extensions/releasing/",
+      "confidence": "verified"
+     },
+     {
+      "agent": "Antigravity CLI (agy)",
+      "item": "plugin",
+      "user_config_path": "Not found on the official page. The CLI details view shows a 'Local installation path' for each installed plugin, but the page does not give the directory. Where the enabled state is stored: not found.",
+      "project_config_path": "Not found.",
+      "format": "Manifest: plugin.json (the page mentions authoring plugin.json manifests; format details are on the Build plugins page, not fetched). Components: skills, MCP servers, rules, subagents/custom agents, hooks and starter prompts. Slash commands are not listed as a component.",
+      "secrets": "Not found.",
+      "cli": "agy plugin install <name>@antigravity-plugins-official | <name> | https://github.com/<owner>/<repo> | </path/to/local/plugin>; agy plugin list [--json]; agy plugin enable <name>; agy plugin disable <name>; agy plugin uninstall <name>; agy plugin validate --strict. In the prompt: /plugin install|uninstall|enable|disable|list (/plugins is an alias). Reported by third parties only: agy plugin import gemini (converts installed Gemini CLI extensions), agy plugin link.",
+      "notes": "The official page names only one marketplace, antigravity-plugins-official, and says <marketplace-name> supports only the official marketplace. Third parties report that Gemini CLI extensions are migrated to plugins automatically when agy first runs. Third parties also report that the binary may be installed as ~/.local/bin/agy or named 'antigravity'. Extraction: not documented. Plugins carry skills and MCP servers, so extraction is probably possible, but the format is unverified.",
+      "source": "https://antigravity.google/docs/marketplace; https://geminicli.com/docs/extensions/reference/ (replacement notice); https://inventivehq.com/blog/antigravity-cli-install-migrate-config (reported)",
+      "confidence": "reported"
+     },
+     {
+      "agent": "GitHub Copilot CLI",
+      "item": "plugin",
+      "user_config_path": "Marketplace installs: ~/.copilot/installed-plugins/MARKETPLACE/PLUGIN-NAME. Direct installs: ~/.copilot/installed-plugins/_direct/SOURCE-ID/. Marketplace cache: ~/Library/Caches/copilot/marketplaces/ (macOS) or ~/.cache/copilot/marketplaces/ (Linux); COPILOT_CACHE_HOME overrides it; Windows not found. The docs say enable/disable 'persists to configuration' but do not name the file (not found). User MCP config: ~/.copilot/mcp-config.json.",
+      "project_config_path": "The docs mention an enabledPlugins key in repository and managed settings; the exact file is not named (not found). Project-level and personal agents and skills take precedence over plugin ones.",
+      "format": "Agent Plugins 1.0 (preferred): a root plugin.json with $schema, name, version, description, author, homepage, repository, license, keywords and extensions (component path fields are not allowed). Portable parts: skills/ and a root mcp.json. Copilot-specific parts go under com.github.copilot/: agents/, commands/, rules/, hooks/hooks.json, lsp.json. Legacy manifests are checked in this order: .plugin/plugin.json, plugin.json, .github/plugin/plugin.json, .claude-plugin/plugin.json. Legacy component defaults: agents/, skills/, hooks.json or hooks/hooks.json, .mcp.json or .github/mcp.json, lsp.json or .github/lsp.json. Marketplace file, checked in this order: marketplace.json, .plugin/marketplace.json, .github/plugin/marketplace.json, .claude-plugin/marketplace.json.",
+      "secrets": "Not found for plugins.",
+      "cli": "copilot plugin install <SPEC> (alias add; SPEC can be PLUGIN@MARKETPLACE, OWNER/REPO, OWNER/REPO:PATH, a Git URL or a local path); copilot plugin uninstall <NAME> (aliases remove, rm); copilot plugin list [--json]; copilot plugin update <NAME> | --all; copilot plugin enable <NAME>; copilot plugin disable <NAME>; copilot plugin marketplace add <SPEC>; copilot plugin marketplace list; copilot plugin marketplace browse <NAME>; copilot plugin marketplace update [NAME] (alias refresh); copilot plugin marketplace remove <NAME> [--force] (--force also uninstalls its plugins). /plugin install works in a session. 'copilot plugins' is a legacy alias.",
+      "notes": "awesome-copilot is the built-in default marketplace and cannot be removed. github/copilot-plugins is no longer a default; add it with copilot plugin marketplace add github/copilot-plugins. Precedence: agents and skills are first-found-wins (skills are deduplicated by the SKILL.md name). MCP servers are last-wins: ~/.copilot/mcp-config.json, then plugin MCP configs, then --additional-mcp-config. Extraction (derived): Copilot CLI reads Claude Code plugin manifests and marketplaces (.claude-plugin/*) directly, so many Claude plugins install as-is. Skills and mcp.json are portable.",
+      "source": "https://docs.github.com/en/copilot/reference/copilot-cli-reference/cli-plugin-reference; https://docs.github.com/en/copilot/how-tos/copilot-cli/customize-copilot/plugins-finding-installing",
+      "confidence": "verified"
+     },
+     {
+      "agent": "Cursor (IDE and Cursor CLI)",
+      "item": "plugin",
+      "user_config_path": "Verified: local development plugins go in ~/.cursor/plugins/local/<plugin> (a symlink loads only if its target is inside that folder). Personal skills: ~/.cursor/skills/. Reported in the forum, not in the docs: installed plugins in ~/.cursor/plugins/cache/<marketplace>/<plugin>/<git-sha>/ (e.g. cursor-public), marketplace checkouts in ~/.cursor/plugins/marketplaces/, and the enabled list in the SQLite globalStorage DB under the key cursor.plugins.installedIds.*. The official docs do not say where installed plugins or the enabled state are stored (not found).",
+      "project_config_path": "Install asks for project or user scope (Customize > Install). The project-scope storage location was not found.",
+      "format": "Cursor Plugin: .cursor-plugin/plugin.json (only name is required). Optional fields: description, version, author, homepage, repository, license, keywords, logo, rules, agents, skills, commands, hooks, mcpServers, variables. Setting a path field replaces folder discovery for that component. Default discovery: skills/<name>/SKILL.md, rules/ (.md, .mdc, .markdown), agents/, commands/ (.md, .mdc, .markdown, .txt), hooks/hooks.json, a root mcp.json. A root SKILL.md alone makes a single-skill plugin. Agent Plugin: a root plugin.json with $schema; only skills and MCP are supported in that format (rules, agents, commands and hooks are Cursor Plugin only). Marketplace: .cursor-plugin/marketplace.json with name, owner, plugins[{name, source}] and metadata.pluginRoot; maximum size 10 MB. Variable: ${CURSOR_PLUGIN_ROOT}.",
+      "secrets": "Not found.",
+      "cli": "No official CLI commands for installing or managing plugins were found in the docs. Install in the IDE: Customize > find the plugin > Install (project or user scope). MCP servers in a plugin are toggled in Customize. Forum reports mention /plugins and 'plugin marketplace update' in Cursor CLI (reported, not verified).",
+      "notes": "Official marketplace: https://cursor.com/marketplace (Git repos, each plugin manually reviewed; submit at cursor.com/marketplace/publish). Community site: cursor.directory. Team marketplaces live in Dashboard > Plugins & MCPs: Teams plans get one plus Default, Enterprise plans get unlimited; install modes are Default Off, Default On and Required. On Enterprise, 'Allow Local Plugin Imports' is off by default. Forum threads report stale pinned commits in the cache and that Cursor CLI does not load some IDE plugins. Extraction (derived): skills and the root mcp.json are portable (Agent Plugins core). Rules (.mdc) are Cursor-specific but are Markdown that could be converted. ${CURSOR_PLUGIN_ROOT} must be rewritten.",
+      "source": "https://cursor.com/docs/plugins; https://cursor.com/docs/reference/plugins; https://forum.cursor.com/t/plugin-update-version-management-how-are-installed-plugins-updated/166454 (reported); https://forum.cursor.com/t/add-plugin-github-imports-can-get-stuck-on-stale-plugin-versions/163895 (reported)",
+      "confidence": "reported"
+     },
+     {
+      "agent": "OpenCode",
+      "item": "plugin",
+      "user_config_path": "Global: ~/.config/opencode/plugins/ (direct .ts/.js files and plugin package directories, loaded automatically). npm plugins are declared in the 'plugins' array of the global opencode.json(c). Where the npm package cache lives was not found (the docs say cached package plugins load at once and missing ones install in the background). TUI-only packages go in cli.json.",
+      "project_config_path": "Project: .opencode/plugins/ (loaded automatically). Others go in the 'plugins' array of the project opencode.json(c). A plugins/ directory next to a root opencode.json is not discovered automatically; list it, e.g. \"plugins\": [\"./plugins/local\"].",
+      "format": "opencode.json(c), JSON with \"$schema\": \"https://opencode.ai/config.json\". Entries in the 'plugins' array: \"opencode-acme-plugin\", \"opencode-acme-plugin@1.2.0\", \"@acme/opencode-plugin\", \"./plugins/local\", file:// paths, or {\"package\": \"@acme/opencode-plugin\", \"options\": {...}}. A plugin is an npm-style package: package.json with \"type\": \"module\", an exports map (\".\" or \"./server\" for the server part, \"./tui\", \"./gui-experimental\", \"./rpc\"), and a dependency on @opencode/plugin. Code entry: export default Plugin.define({ id, async setup(ctx) {...} }). The server part adds tools, hooks, integrations, commands and agents.",
+      "secrets": "Not found for plugins (plugin options are passed through the 'options' object in opencode.json).",
+      "cli": "opencode plugin add <package> (global install; e.g. @acme/opencode-plugin@latest); opencode plugin list [--builtin]; opencode plugin check (looks for updates); opencode plugin update; opencode plugin remove <package>. No enable/disable command was found; remove the entry from the 'plugins' array instead.",
+      "notes": "The current docs use the key 'plugins' (plural). Older third-party guides show 'plugin'; check against the installed version. Exact npm versions and full Git commit hashes stay pinned. Extraction (derived): OpenCode plugins are executable JS/TS code, not file bundles of skills or MCP. The docs do not say plugins bundle skills or MCP servers. So a plugin cannot move to another agent; only OpenCode's own skills and MCP config (configured separately) can.",
+      "source": "https://opencode.ai/docs/plugins/; https://opencode.ai/docs/build/plugins/",
+      "confidence": "verified"
+     },
+     {
+      "agent": "Goose",
+      "item": "plugin",
+      "user_config_path": "Extensions are MCP server entries under the 'extensions:' key of ~/.config/goose/config.yaml (macOS path verified on the official page; Linux is the same per Block's config-file guide). Windows: %APPDATA%\\Block\\goose\\config\\config.yaml (reported). Each entry has enabled: true|false. Built-in and platform extensions ship with goose. There are no plugin file bundles on disk.",
+      "project_config_path": "Not found (session-only extensions come from CLI flags and recipes).",
+      "format": "YAML. stdio example: extensions:\\n  github:\\n    name: GitHub\\n    cmd: npx\\n    args: [-y @modelcontextprotocol/server-github]\\n    enabled: true\\n    envs: { \"GITHUB_PERSONAL_ACCESS_TOKEN\": \"<YOUR_TOKEN>\" }\\n    type: stdio\\n    timeout: 300. Remote example: extensions:\\n  remote-example:\\n    name: Remote Example\\n    type: streamable_http\\n    uri: https://example.com/mcp\\n    client_id: <ID>\\n    client_secret_key: REMOTE_EXAMPLE_OAUTH_SECRET\\n    scopes: [example.readonly]\\n    enabled: true\\n    timeout: 300. Types: built-in, platform, stdio, streamable_http.",
+      "secrets": "envs (inline values), env_keys, or goose's secret store (goose configure > extension secrets). client_id supports $VAR and ${VAR} substitution. client_secret_key names a key in envs, env_keys or the secret store. Do not put keys in config.yaml.",
+      "cli": "goose configure (Add Extension, Toggle Extensions, Remove); goose mcp <name> (built-in); goose session --with-builtin \"<id>\" | --with-extension \"<command>\" | --with-streamable-http-extension \"<url>\" (session only, not installed). In a session: /extension <cmd>, /builtin <name>. Deeplinks: goose://extension?cmd=<npx|uvx|jbang|goosed|docker>&arg=...&id=...&name=...&description=... and goose://extension?url=<url>&type=streamable_http&id=...",
+      "notes": "The docs moved to goose-docs.ai (footer: '© 2026 AAIF (Agentic AI Foundation)'); the block.github.io URL returned 404. No goose version is given. An extensions directory exists at goose-docs.ai/extensions. External extensions are checked for known malware before activation. Extraction (derived): each extension is an MCP server entry. Map cmd/args/envs/type/uri to the common command/args/env/url shape. There is no skills or plugin bundle to extract (a Skills platform extension exists).",
+      "source": "https://goose-docs.ai/docs/getting-started/using-extensions; https://block.github.io/goose/docs/guides/config-file (Windows path, reported via search)",
+      "confidence": "verified"
+     },
+     {
+      "agent": "Amp",
+      "item": "plugin",
+      "user_config_path": "System plugins: $XDG_CONFIG_HOME/amp/plugins/ when XDG_CONFIG_HOME is set, otherwise ~/.config/amp/plugins/ on macOS and Linux and %USERPROFILE%\\.config\\amp\\plugins\\ on Windows. Personal plugins are managed in Personal Settings (/settings/plugins) and workspace plugins in Workspace Settings (/workspace/plugins); both are server-side. Where activation settings are stored on disk: not found.",
+      "project_config_path": ".amp/plugins/ at the project root (a single file such as kitchen-sink.ts, or a directory with index.ts). On a name collision, precedence is project, system, personal, then workspace.",
+      "format": "JavaScript/TypeScript programs run with Bun. Each has a default export taking a PluginAPI object and registers tools (registerTool), commands (registerCommand), skills (registerSkill({path:'skills/deploy-guide'}), directory plugins only; skills/ is not scanned automatically), event handlers (on: tool.call, agent.start, agent.end), agent modes, link patterns and webhooks. Plugins do not bundle MCP servers; they call the user's MCP tools through ctx.tools.call. MCP servers can instead be bundled in a skill through a sibling mcp.json or the mcpServers field in SKILL.md frontmatter: {\"chrome-devtools\":{\"command\":\"npx\",\"args\":[\"-y\",\"chrome-devtools-mcp@latest\"],\"includeTools\":[\"navigate_*\"]}}. Local servers take command/args/env; remote servers take url/headers.",
+      "secrets": "Plugins never receive OAuth credentials for MCP servers. A skill's mcp.json can use ${AMP_SKILL_DIR}. Plugin secret storage: not found.",
+      "cli": "amp plugins add <url> [--target workspace] (single-file plugin; workspace target means the project's .amp/plugins/); amp plugins import; amp plugins update; amp clone user-plugins | workspace-plugins; amp plugins show-agent-options [--json]. Command palette: 'plugins: reload'. Related skill commands: amp skill add <source> [--global]; amp skills list [--json]; amp skill import | update.",
+      "notes": "There is no plugin marketplace. 'Plugins run code in your environment, so only load plugins you trust.' Activation settings apply to interactive amp and amp --execute. The PLUGINS=all env var and the 'experimental' label come only from a search summary and are not on the current official pages (reported). Only the PluginAPI 'experimental' namespace is marked unstable. Cross-agent: Amp's skill search path includes ~/.claude/skills/, .claude/skills/, ~/.claude/plugins/cache/, ~/.agents/skills/ and ~/.config/agents/skills/, so it reads Claude Code plugin skills directly. Extraction (derived): plugins are code and do not move; skills a plugin registers can be copied as SKILL.md folders.",
+      "source": "https://ampcode.com/docs/customize/plugins; https://ampcode.com/manual/plugin-api; https://ampcode.com/docs/customize/skills",
+      "confidence": "verified"
+     },
+     {
+      "agent": "Kiro (IDE and kiro-cli)",
+      "item": "plugin",
+      "user_config_path": "The official docs give no install directory (not found). Reported by third parties (Classmethod, JFrog): ~/.kiro/powers/installed/<power-name>/; a local folder import is referenced in place. Legacy POWER.md powers register their MCP servers in ~/.kiro/settings/mcp.json under the Powers section (verified). plugin.json powers keep their MCP servers internal; these are not added to ~/.kiro/settings/mcp.json (verified). Where the enabled/installed list is stored: not found ('the installed Powers list' is shown in the IDE; cloud-synced powers need IDE 1.0.437 or later).",
+      "project_config_path": "Project MCP servers stay in .kiro/settings/mcp.json as project configuration. Project-scoped powers: not found.",
+      "format": "A power is a directory with a required manifest, plugin.json (Agent Plugins format), or the legacy POWER.md (still supported). Optional components: skills/ (Agent Skills) and mcp.json. Server names are namespaced to avoid conflicts. In IDE 1.4.26 or later, plugin.json is read first, then the POWER.md front matter.",
+      "secrets": "Not found.",
+      "cli": "IDE: Powers panel > + Install; Add Custom Power > Import power from GitHub (public repo URL) or Import power from a folder; Check for updates > Install updates; Uninstall. kiro.dev/powers > Add to Kiro. CLI: /powers uninstall <name> and kiro-cli powers uninstall <name> (verified). The CLI capability table says 'v3' for installing, using and creating powers. CLI install syntax and enable/disable: not found.",
+      "notes": "Page dates: docs/powers updated November 12, 2026; docs/powers/installation updated October 23, 2026. A JFrog doc reports that kiro-cli does not read ~/.kiro/powers/. That conflicts with the official page, which shows kiro-cli powers commands and CLI v3 support; treat the JFrog claim as possibly outdated. Extraction (derived): plugin.json powers follow the portable Agent Plugins core (skills/ and mcp.json), so they can move. Legacy POWER.md powers expose their MCP servers in ~/.kiro/settings/mcp.json, where a backup tool can read them.",
+      "source": "https://kiro.dev/docs/powers/; https://kiro.dev/docs/powers/installation/; https://docs.jfrog.com/ai-ml/docs/kiro (reported); https://dev.classmethod.jp/articles/kiro-powers-introduction/ (reported)",
+      "confidence": "reported"
+     }
+    ]
+   },
+   "check": {
+    "checked": [
+     {
+      "agent": "Antigravity CLI (agy)",
+      "item": "plugin user_config_path",
+      "claim": "Install directory not found; enabled-state store not found.",
+      "verdict": "corrected",
+      "correction": "Installed plugins are unpacked to ~/.gemini/config/plugins/<plugin-name>/, which the Build plugins page says 'is replaced when the plugin updates' (verified). The plugins page gives the same global path for CLI, IDE and app. Where the enabled state is stored: still not documented (not found). A third-party search summary named ~/.gemini/antigravity-cli/plugins/. I did not see that path on any official page, so do not use it. Global MCP config: ~/.gemini/config/mcp_config.json (verified, gcli-migration page).",
+      "source": "https://antigravity.google/docs/build-plugins/; https://antigravity.google/docs/plugins.md; https://antigravity.google/docs/cli/gcli-migration/ (no page dates shown, fetched 2026-11-13)"
+     },
+     {
+      "agent": "Antigravity CLI (agy)",
+      "item": "plugin project_config_path",
+      "claim": "Not found.",
+      "verdict": "corrected",
+      "correction": "Workspace plugins: .agents/plugins/ in the project root (verified; the page lists it for the IDE and the app). Workspace MCP config: .agents/mcp_config.json (verified). The page does not say whether the CLI itself installs to workspace scope (unknown).",
+      "source": "https://antigravity.google/docs/plugins.md; https://antigravity.google/docs/cli/gcli-migration/"
+     },
+     {
+      "agent": "Antigravity CLI (agy)",
+      "item": "plugin format",
+      "claim": "Manifest plugin.json; format details not fetched; components skills, MCP, rules, subagents, hooks, starter prompts.",
+      "verdict": "corrected",
+      "correction": "Verified on the Build plugins page. Manifest: <plugin-root>/plugin.json, or <plugin-root>/.antigravity-plugin/plugin.json, which 'takes precedence over root plugin.json'. $schema: https://antigravity.google/schemas/v1/plugin.json. name: pattern ^[a-z0-9]+(-[a-z0-9]+)*$, required for CLI and Marketplace, optional for local folders. Required for Marketplace: displayName, description, version, logo, author. Recommended: suggestedPrompts (max 3), homepage, license, keywords. Optional: skills, disabled, repository. Components: skills/<name>/SKILL.md (with optional scripts/, references/), mcp_config.json (NOT mcp.json), agents/<name>.md, rules/AGENTS.md (always on) or rules/<name>.md, hooks.json at the root. Variables: ${PLUGIN_ROOT} (read-only), ${PLUGIN_DATA} (writable, outside the workspace), ${NAME}. A Google codelab reportedly shows mcp.json; the official docs say mcp_config.json. Slash commands are not a component.",
+      "source": "https://antigravity.google/docs/build-plugins/"
+     },
+     {
+      "agent": "Antigravity CLI (agy)",
+      "item": "plugin secrets",
+      "claim": "Not found.",
+      "verdict": "corrected",
+      "correction": "Verified. Secrets are declared under mcpServers.<server>.variables[] with name, title, description and an optional link. They are referenced as ${NAME} in headers, env and similar fields. The user is prompted in a setup dialog before the plugin is enabled. A plugin with MCP variables installs disabled until configured. An oauth-only plugin installs enabled and prompts for browser sign-in. Implication for backups: values are user-supplied, and where they are stored is not documented (not found).",
+      "source": "https://antigravity.google/docs/build-plugins/"
+     },
+     {
+      "agent": "Antigravity CLI (agy)",
+      "item": "plugin cli",
+      "claim": "install/list/enable/disable/uninstall/validate verified; agy plugin import gemini and agy plugin link reported by third parties only.",
+      "verdict": "corrected",
+      "correction": "Now verified on the official plugins page: agy plugin import, agy plugin import gemini (migrates from ~/.gemini/extensions/; a directory path can also be passed) and agy plugin import claude. Also verified: install <name>@antigravity-plugins-official | <name> | GitHub URL | local path; list [--json]; enable; disable; uninstall; validate [--strict] <dir>. In the CLI: /plugin (alias /plugins) with install, uninstall, enable, disable and list; /agents; agy --agent <name>; agy agents. agy plugin link and agy plugin update: not found in the official docs.",
+      "source": "https://antigravity.google/docs/plugins.md; https://antigravity.google/docs/marketplace; https://antigravity.google/docs/build-plugins/"
+     },
+     {
+      "agent": "Antigravity CLI (agy)",
+      "item": "plugin notes (Gemini migration)",
+      "claim": "Gemini CLI extensions migrated automatically on first run (reported).",
+      "verdict": "corrected",
+      "correction": "Verified. Migration is not fully automatic. On first launch the CLI detects legacy profiles and shows a checklist: 'Select the extensions and global configurations you want to convert.' Manual path: agy plugin import gemini. Legacy Gemini MCP servers were inline in ~/.gemini/settings.json; agy uses a standalone mcp_config.json. Global skills: ~/.gemini/skills/ or ~/.gemini/antigravity-cli/skills/. Binary name: agy. Binary install path: not stated (the ~/.local/bin/agy claim is unverified). Marketplace: antigravity-plugins-official is the only one named. Plugin MCP tool names are <plugin-name>_<server-name>.",
+      "source": "https://antigravity.google/docs/cli/gcli-migration/; https://antigravity.google/docs/plugins.md"
+     },
+     {
+      "agent": "Cursor (IDE and Cursor CLI)",
+      "item": "plugin user_config_path",
+      "claim": "~/.cursor/plugins/local/<plugin> verified, symlink rule; cache/marketplaces/SQLite key reported.",
+      "verdict": "corrected",
+      "correction": "Verified: ~/.cursor/plugins/local (restart or run Developer: Reload Window). Symlinks load only if the target resolves inside that folder. Local discovery needs local imports allowed; a same-name marketplace install wins over the local copy. Cursor staff (forum, July 25-27, 2026) confirm ~/.cursor/plugins/cache/<marketplace>/<plugin>/<git-sha>/. This is reported, not in the docs. ~/.cursor/plugins/marketplaces/ and the SQLite key cursor.plugins.installedIds.*: not found in the cited forum thread; treat both as unverified. Enabled-state store: not found in the official docs.",
+      "source": "https://cursor.com/docs/plugins; https://forum.cursor.com/t/plugin-update-version-management-how-are-installed-plugins-updated/166454 (reported)"
+     },
+     {
+      "agent": "Cursor (IDE and Cursor CLI)",
+      "item": "plugin project_config_path",
+      "claim": "Install asks project or user scope; project storage location not found.",
+      "verdict": "confirmed",
+      "correction": "Confirmed: Install offers project or user scope, and Customize filters by user, workspace or team. The on-disk path for project scope is not documented (not found).",
+      "source": "https://cursor.com/docs/plugins"
+     },
+     {
+      "agent": "Cursor (IDE and Cursor CLI)",
+      "item": "plugin format",
+      "claim": "Agent Plugin: root plugin.json with $schema; .cursor-plugin/plugin.json fields; discovery; marketplace.json 10 MB.",
+      "verdict": "corrected",
+      "correction": "Most of the claim is verified, with one fix. The reference page does not show $schema in the Agent Plugin plugin.json. $schema appears in the example mcp.json (https://agent-plugins.org/schemas/1.0.0/mcp.schema.json). Agent Plugin = root plugin.json, skills and MCP only. Cursor does not expand ${PLUGIN_ROOT} or ${PLUGIN_DATA}; use ${CURSOR_PLUGIN_ROOT}. name: lowercase kebab-case, periods allowed. A root SKILL.md counts as a single-skill plugin only if there is no skills/ directory and no skills field. marketplace.json required fields: name, owner.name, plugins[].name. metadata holds description, version and pluginRoot. Size limit: 10 MB or smaller.",
+      "source": "https://cursor.com/docs/reference/plugins"
+     },
+     {
+      "agent": "Cursor (IDE and Cursor CLI)",
+      "item": "plugin secrets",
+      "claim": "Not found.",
+      "verdict": "corrected",
+      "correction": "Verified. variables is a JSON Schema (type object with properties) that declares names only. ${API_TOKEN}-style placeholders go in mcp.json. Team admins set the values in Dashboard > Plugins > Configure. The plugin 'does not store secret values', and the repo should not contain them.",
+      "source": "https://cursor.com/docs/reference/plugins"
+     },
+     {
+      "agent": "Cursor (IDE and Cursor CLI)",
+      "item": "plugin cli",
+      "claim": "No official CLI commands; forum reports /plugins and 'plugin marketplace update'.",
+      "verdict": "corrected",
+      "correction": "There is still no official plugin CLI page. The 2.5 changelog (Feb 17, 2026) documents /add-plugin in the editor (verified). The forum (June 2026, reported) says Cursor CLI /plugins lists plugins but has no enable or disable toggle. GitHub plugins added with /add-plugin <github-url> stay pinned to their commit; staff call this a known bug. 'plugin marketplace update': not found.",
+      "source": "https://cursor.com/changelog/2-5; https://forum.cursor.com/t/disabled-plugin-slash-commands-still-appear-in-cursor-cli-menu-plugins-shows-no-enabled-disabled-state/163847 (reported); https://forum.cursor.com/t/plugin-update-version-management-how-are-installed-plugins-updated/166454 (reported)"
+     },
+     {
+      "agent": "Cursor (IDE and Cursor CLI)",
+      "item": "plugin notes (marketplace/teams)",
+      "claim": "Teams one team marketplace plus Default, Enterprise unlimited; Allow Local Plugin Imports off by default on Enterprise.",
+      "verdict": "confirmed",
+      "correction": "Confirmed. Teams: up to 1 team marketplace; Default does not count. Enterprise: unlimited. Managed in Dashboard > Plugins & MCPs. Allow Local Plugin Imports is an Enterprise admin setting under Dashboard > Settings > Security & Identity > Marketplace and Plugins. It is off by default and also controls Import from Disk. Install modes Default Off / Default On / Required were not re-checked (not seen on the fetched page).",
+      "source": "https://cursor.com/docs/plugins"
+     },
+     {
+      "agent": "Kiro (IDE and kiro-cli)",
+      "item": "plugin user_config_path",
+      "claim": "Official docs give no install dir; ~/.kiro/powers/installed/<name>/ reported; legacy POWER.md MCP in ~/.kiro/settings/mcp.json under Powers; plugin.json MCP internal.",
+      "verdict": "confirmed",
+      "correction": "Confirmed. The official pages (powers, updated Nov 12, 2026; installation, updated Oct 23, 2026) give no install directory. JFrog docs (updated Sep 14, 2026) report ~/.kiro/powers/installed/<power-name>/ (reported). JFrog also says a local folder import 'is referenced in place and might not populate installed/'. The official page does not say this; it advises cloning private repos and installing from the local path. Legacy POWER.md: MCP servers go in ~/.kiro/settings/mcp.json under the Powers section (verified). plugin.json powers: servers are managed internally and not added to that file (verified). Enabled-state store: not found.",
+      "source": "https://kiro.dev/docs/powers/installation/; https://kiro.dev/docs/powers/; https://docs.jfrog.com/ai-ml/docs/kiro (reported)"
+     },
+     {
+      "agent": "Kiro (IDE and kiro-cli)",
+      "item": "plugin format",
+      "claim": "plugin.json or legacy POWER.md; skills/ and mcp.json optional; namespaced servers; in IDE 1.4.26+ plugin.json read first.",
+      "verdict": "corrected",
+      "correction": "Partly right, with one fix. Verified: a power is a directory with a required manifest (plugin.json, or legacy POWER.md) and optional skills/ and mcp.json. 'Kiro automatically namespaces server names to avoid conflicts.' 'Kiro reads plugin.json when it is present; otherwise, it reads POWER.md front matter.' The fix: 1.4.26 is the version from which the Installed list and details view show manifest metadata. It is not stated as the version that introduced the read order.",
+      "source": "https://kiro.dev/docs/powers/installation/; https://kiro.dev/docs/powers/"
+     },
+     {
+      "agent": "Kiro (IDE and kiro-cli)",
+      "item": "plugin cli",
+      "claim": "/powers uninstall <name> and kiro-cli powers uninstall <name>; CLI table 'v3'; install syntax not found.",
+      "verdict": "confirmed",
+      "correction": "Confirmed. IDE: Powers panel > + Install; Add Custom Power > 'Import power from GitHub' / 'Import power from a folder'; Check for updates > Install updates; Uninstall. CLI: /powers uninstall <name> and kiro-cli powers uninstall <name>. The capability table marks 'Install and use powers' and 'Create powers' as v3 in the CLI. The CLI install command and enable/disable: not found. Cloud-synced powers (Agent Config > Powers & MCP) appear in IDE 1.0.437 or later (verified). JFrog (Sep 2026) says kiro-cli 'doesn't read ~/.kiro/powers/'. That predates the Nov 12 docs that show CLI v3 support, so it is possibly outdated.",
+      "source": "https://kiro.dev/docs/powers/installation/; https://kiro.dev/docs/powers/; https://docs.jfrog.com/ai-ml/docs/kiro (reported)"
+     },
+     {
+      "agent": "Kiro (IDE and kiro-cli)",
+      "item": "plugin secrets",
+      "claim": "Not found.",
+      "verdict": "unverifiable",
+      "correction": "Not found on the official powers pages that were fetched.",
+      "source": "https://kiro.dev/docs/powers/; https://kiro.dev/docs/powers/installation/"
+     }
+    ]
+   }
+  },
+  {
+   "key": "prior-art",
+   "research": {
+    "summary": "Recherche faite le 13/11/2026, en lecture seule. Sources : README GitHub, registres npm et PyPI, API GitHub jusqu'à épuisement du quota. Aucun fichier du dossier personnel n'a été lu. Seuls le package.json et le moteur Node du projet ont été lus.\n\nConstat principal : aucun outil ne couvre à lui seul les skills, les MCP et les plugins avec une API JS documentée.\n\nBibliothèques réutilisables pour Skill Advisor (Node ESM, engines >=22.20, dépend déjà de `skills`) :\n1) `skills` (vercel-labs, MIT, 1.8.1 du 11/11/2026) pour les skills. API semver : getSupportedAgents, detectAgents, installSkills, listSkills, removeSkills. Table de 79 agents, verrou `skills-lock.json` avec hash. Ne gère ni les MCP ni les plugins. `experimental_install` restaure depuis le verrou, ce qui sert déjà de sauvegarde des skills.\n2) `add-mcp` (neon-solutions, Apache-2.0, 2.6.1 du 01/11/2026) pour les MCP. Exporte upsertServer, removeServer, listInstalledServers, detectProjectAgents et detectGlobalAgents. C'est le seul outil vérifié qui écrit les chemins globaux de 25 agents (chemins vus pour macOS seulement) en JSON, JSONC, TOML et YAML.\n3) `rulesync` (MIT, 43.8.2 du 12/11/2026), plus large. API generate, importFromTool, convertFromTool avec option global. Couvre règles, MCP, skills, commandes, sous-agents, hooks et paquets de plugins.\n4) `@sentry/dotagents-lib` (MIT, 3.4.0). Noyau pour résoudre les SKILL.md et les Agent Plugins, mais API non documentée.\n\nPour les plugins, le standard ouvert est Agent Plugins 1.0.0 (Vercel, AWS, Cursor, GitHub, Microsoft, OpenAI, 06/08/2026). Il contient `plugin.json` à la racine, `skills/` et `mcp.json` avec `mcpServers`, mais pas de commandes, hooks ni agents. Le CLI `npx plugins` (1.3.6) n'a pas d'API documentée et sa page dépôt renvoie 404. Les convertisseurs de plugins Claude vers Codex, OpenCode et Cursor (acplugin) sont seulement des CLI.\n\nÀ exclure comme bibliothèques :\n- Outils Python (mcpm, mcp-synchro, agentsync) : utiles seulement comme référence de correspondance.\n- Smithery (AGPL-3.0, mainteneur flou).\n- ai-sync (PolyForm Noncommercial).\n- mcp-get (archivé).\n\nNon trouvés : `mcp-sync` sur npm, `ejfn/mcp-sync` (404), `agent-sync` sur npm, et toute SEP officielle pour un mcp.json partagé. La forme de fait `mcpServers` vient de Claude et Cursor ; VS Code utilise `servers`.\n\nPièges de correspondance à gérer soi-même :\n- Interpolation d'environnement : `${VAR}` pour Claude, `${env:VAR}` pour Cursor, `{env:VAR}` pour OpenCode, rien pour Codex (relevé par vsync).\n- Codex est en TOML avec la table `mcp_servers`.\n- Clé d'URL distante : `serverUrl` pour Antigravity et Windsurf, `httpUrl` pour Gemini.\n- Les secrets restent en clair dans les fichiers écrits par add-mcp et mcp-synchro.",
+    "rows": [
+     {
+      "agent": "skills CLI (vercel-labs/skills, npm `skills`)",
+      "item": "tool",
+      "user_config_path": "Writes skills to per-agent global dirs with -g, e.g. ~/.claude/skills/, ~/.agents/skills/ (codex, cline, pi, zed...), ~/.config/agents/skills/ (amp, universal), ~/.cursor/skills/, ~/.gemini/skills/, ~/.copilot/skills/, ~/.config/opencode/skills/, ~/.codeium/windsurf/skills/ (79 agents in docs/agents.md). Only a home-relative path is given, with no per-OS variant",
+      "project_config_path": "Canonical .agents/skills/<name> plus links into agent dirs (e.g. .claude/skills/). Lockfile skills-lock.json (v2: computedHash per skill, git commit). package.json \"skills\" field for skill packs",
+      "format": "Skills: Agent Skills folders (SKILL.md). Lock: JSON skills-lock.json v2. package.json example: {\"skills\": [\"npm:agent-browser\", \"vercel-labs/agent-skills@web-design-guidelines\"]}. No stdio/remote MCP entries: n/a",
+      "secrets": "n/a (skills only; telemetry option in the API)",
+      "cli": "npx skills add|find|list|use|check|update|remove|init; -g global, -a <agent>, --copy (vs symlink). experimental_sync (links skills from npm deps, alias sync; --dry-run, --copy, --frozen-lockfile, --include/--exclude). experimental_install (alias install/i without source; restores from skills-lock.json, --force, --frozen-lockfile)",
+      "notes": "Supported agents: 79 ids, including claude-code, codex, cursor, gemini-cli, github-copilot, opencode, windsurf, cline, kiro-cli, antigravity, goose, roo, junie, qwen-code, trae and amp; 24 use .agents/skills/. MIT. 39.2k stars. npm 1.8.1 published 2026-11-11, last push 2026-11-12. ESM-only, Node >=22.20. Semver programmatic API (docs/api.md): getSupportedAgents, detectAgents, resolveSource, installSkills (options cwd, skills, agents, mode, lockfile, symlinks, rename...), listSkills, removeSkills, diagnostics. No MCP. Plugins are not handled. REUSE: yes for skills; Skill Advisor already depends on it, and skills-lock.json + experimental_install already act as a restore mechanism. No backup/export command is documented. Docs: https://raw.githubusercontent.com/vercel-labs/skills/main/docs/commands.md",
+      "source": "https://github.com/vercel-labs/skills",
+      "confidence": "verified"
+     },
+     {
+      "agent": "add-mcp (neon-solutions/add-mcp, npm `add-mcp`)",
+      "item": "tool",
+      "user_config_path": "Global paths (macOS shown in README; Linux/Windows not found):\n- Claude Code: ~/.claude.json\n- Claude Desktop: ~/Library/Application Support/Claude/claude_desktop_config.json\n- Codex: ~/.codex/config.toml\n- Cursor: ~/.cursor/mcp.json\n- Gemini CLI: ~/.gemini/settings.json\n- Antigravity: ~/.gemini/config/mcp_config.json\n- Goose: ~/.config/goose/config.yaml\n- Copilot CLI: $COPILOT_HOME/mcp-config.json (~/.copilot/)\n- VS Code: ~/Library/Application Support/Code/User/mcp.json\n- Windsurf: ~/.codeium/windsurf/mcp_config.json\n- Zed: ~/Library/Application Support/Zed/settings.json\n- OpenCode: ~/.config/opencode/opencode.jsonc\n- Kiro: ~/.kiro/settings/mcp.json\n- Cline: VS Code globalStorage path\n- Others: Junie, Kimi, Pi, Grok, Hermes, Factory, Mastra, MCPorter, fx\nSettings file: ~/.config/add-mcp/config.json (findRegistries)",
+      "project_config_path": ".mcp.json (Claude Code, Copilot CLI or .github/mcp.json), .codex/config.toml, .cursor/mcp.json, .gemini/settings.json, .vscode/mcp.json, .zed/settings.json, .goose/config.yaml, opencode.jsonc, .kiro/settings/mcp.json, .junie/mcp/mcp.json, .factory/mcp.json, .pi/mcp.json, .grok/config.toml, kilo.json, .kimi-code/mcp.json, .mastracode/mcp.json",
+      "format": "Per agent:\n- JSON for most agents. Claude and Copilot use the `mcpServers` key.\n- JSONC for OpenCode, keyed `mcp.<name>` or `mcp.servers.<name>`.\n- TOML for Codex and Grok.\n- YAML for Goose and Hermes. Hermes uses `mcp_servers`.\nAPI input: upsertServer(agent, name, {type:'http'|'sse', url, headers}) for a remote server, or {command, args, env} for stdio. Fields an agent does not support are dropped with a warning.",
+      "secrets": "--header 'Key: Value' for remote servers and --env KEY=VALUE for stdio. A ${VAR} placeholder triggers an interactive prompt. Values are then written into the agent config files, in plaintext as far as the README shows. --bearer-token-env exists for fx only.",
+      "cli": "npx add-mcp <url|package|command> [-g] [-a agent] [--all] [-t http|sse] [-h header] [--env] [-n name] [--auto-approve] [--gitignore]; add-mcp find [kw]; list [-g] [-a]; remove <name> [-g] [-a]; sync (alias unify) unifies the same server across agents and skips conflicts; list-agents",
+      "notes": "Supported agents (25): Claude Code, Claude Desktop, Codex, Cursor, Gemini CLI, Antigravity, VS Code, Copilot CLI, Windsurf, Zed, OpenCode, Goose, Cline (VS Code and CLI), Kiro CLI, Junie, Kilo Code, Kimi Code, Pi, Grok Build, Hermes, Factory Droid, Mastra Code, MCPorter, fx. Apache-2.0. 321 stars. npm 2.6.1 published 2026-11-01. The registry default is add-mcp.com, with the official MCP registry optional. Programmatic API: upsertServer, removeServer, listInstalledServers, detectProjectAgents, detectGlobalAgents; it returns {success, path, error?} instead of throwing. It also writes Claude allow rules mcp__<server>__<tool>. REUSE: best library candidate for writing and restoring MCP across agents in user scope. A read/import of an agent's servers is available via listInstalledServers, which is enough for a backup. Its description, \"The open MCP config tool - npx add-mcp\", mirrors the skills CLI.",
+      "source": "https://github.com/neon-solutions/add-mcp",
+      "confidence": "verified"
+     },
+     {
+      "agent": "rulesync (dyoshikawa/rulesync)",
+      "item": "tool",
+      "user_config_path": "--global mode exists, e.g. ~/.gemini/GEMINI.md, ~/.kiro/settings/mcp.json, ~/.trae/skills/<name>/SKILL.md. The full per-tool global matrix is in https://rulesync.dyoshikawa.com/reference/supported-tools and was not read in full",
+      "project_config_path": "Source: .rulesync/ (rules, skills/<name>/SKILL.md, mcp.jsonc, commands, subagents, hooks), rulesync.jsonc. Output: each tool's native files, e.g. .trae/mcp.json",
+      "format": "Source MCP is .rulesync/mcp.jsonc. Its exact root key and entry examples were not read (page truncated); the Trae output uses `mcpServers`. Skills use the Agent Skills format.",
+      "secrets": "${...} references in env/headers pass through to targets. Rulesync warns when a target cannot expand them, e.g. Trae expands only ${workspaceFolder}. There is no secret store.",
+      "cli": "rulesync init; rulesync import --targets claudecode|cursor|copilot...; rulesync generate --targets \"*\" --features \"*\" [--global]; rulesync convert --from cursor --to copilot,claudecode; rulesync fetch <repo>",
+      "notes": "Supported agents: 60+ targets with MCP and skills, including Claude Code (+ plugin), Codex CLI, Cursor, Copilot (+ CLI), OpenCode, Cline, Kilo, Roo, Goose, Kiro, Antigravity IDE/CLI/plugin, Junie, Zed, Warp, Qwen, Trae, Pi, Factory Droid, Devin and AugmentCode. MIT. 1.6k stars. npm 43.8.2 published 2026-11-12 (very active). Features: rules, ignore, MCP, commands, subagents, skills, hooks, permissions, plugin packaging. Programmatic API (docs/api/programmatic-api.md): generate(opts), importFromTool({target, features, global}) and convertFromTool({from, to[], features, global, dryRun}). generate() does not throw on unreadable sources; check sourceLoadFailed. Ships CJS (dist/index.cjs) with exports. REUSE: strong candidate for agent-to-agent conversion via convertFromTool. Its target ids differ from the skills CLI ids (claudecode vs claude-code). Its broad scope means a heavy dependency that changes fast.",
+      "source": "https://github.com/dyoshikawa/rulesync",
+      "confidence": "verified"
+     },
+     {
+      "agent": "Ruler (intellectronica/ruler, npm @intellectronica/ruler)",
+      "item": "tool",
+      "user_config_path": "Global config only for Ruler itself: $XDG_CONFIG_HOME/ruler (~/.config/ruler). It writes no MCP config outside the project root",
+      "project_config_path": ".ruler/ (AGENTS.md, ruler.toml, skills/<name>/SKILL.md, agents/*.md). It writes .mcp.json, .codex/config.toml, .cursor/mcp.json, .windsurf/mcp_config.json, .gemini/settings.json, .vscode? (not listed), .roo/mcp.json, .kiro/settings/mcp.json, .zed/settings.json, opencode.json, .qwen/settings.json, .junie/mcp/mcp.json, .kilocode/mcp.json, .amazonq/mcp.json, .factory/mcp.json and .crush.json. Skills are copied to .claude/skills, .github/skills, .agents/skills and .cursor/skills",
+      "format": "TOML ruler.toml. A stdio entry is [mcp_servers.fs] command=\"npx\" args=[...] env={...}. A remote entry is [mcp_servers.api] url=\"https://...\" headers={...}. Per-agent servers go under [agents.<agent>.mcp_servers.<name>]. [mcp] merge_strategy is \"merge\" or \"overwrite\". The legacy .ruler/mcp.json is deprecated",
+      "secrets": "A per-server env table and headers table in ruler.toml. No general interpolation is documented. Codex needs CODEX_HOME set to the project .codex",
+      "cli": "ruler init [--global]; ruler apply [--agents] [--no-mcp] [--mcp-overwrite] [--skills/--no-skills] [--subagents] [--backup/--no-backup] [--dry-run]; ruler revert [--keep-backups]",
+      "notes": "Supported agents (32): Copilot, Claude Code, Codex CLI, Pi, Jules, Cursor, Windsurf, Cline, Crush, Amp, Antigravity, Amazon Q, Aider, Firebase Studio, OpenHands, Gemini CLI, Junie, Augment, Kilo, OpenCode, Goose, Qwen, Roo, Zed, Trae, Warp, Kiro, Firebender, Factory Droid, Mistral Vibe, JetBrains AI. MIT. ~3.0k stars. npm 0.3.46 published 2026-10-22. Makes .bak backups on apply and restores them on revert. npm main=dist/lib.js but no documented API. REUSE: weak; it is project-scope only and CLI-only. It is a good reference for the per-agent project MCP file list.",
+      "source": "https://github.com/intellectronica/ruler",
+      "confidence": "verified"
+     },
+     {
+      "agent": "dotagents by Sentry (getsentry/dotagents, npm @sentry/dotagents + @sentry/dotagents-lib)",
+      "item": "tool",
+      "user_config_path": "Global scope (default): ~/.agents/agents.toml, ~/.agents/agents.lock, ~/.agents/skills/. Pi global MCP: ~/.pi/agent/mcp.json. Other agents' global MCP paths were not found",
+      "project_config_path": "agents.toml + agents.lock at the repo root (--project) and .agents/skills/ symlinked into .claude/skills, .cursor/skills etc. MCP goes to .mcp.json (claude, copilot), .cursor/mcp.json, .codex/config.toml, .vscode/mcp.json, .opencode/opencode.jsonc and .pi/mcp.json. Hooks go to .claude/settings.json or .cursor/hooks.json. Subagents go to .claude/agents, .cursor/agents, .codex/agents/*.toml and .opencode/agents",
+      "format": "TOML agents.toml. Stdio entry:\n[[mcp]] name=\"github\" command=\"npx\" args=[\"-y\",\"@modelcontextprotocol/server-github\"] env=[\"GITHUB_TOKEN\"]\nRemote entry:\n[[mcp]] name=\"remote-api\" url=\"https://mcp.example.com/sse\" headers={Authorization=\"Bearer tok\"}\nOther tables: [[skills]] name/source, [[hooks]] event/matcher/command, [[subagents]], [[plugins]] name/source/path/targets",
+      "secrets": "env lists variable NAMES that are passed through from the user's environment, so no values are stored. The headers example holds a literal token. Pi supports ${VAR} in headers and env",
+      "cli": "npx @sentry/dotagents init|add <source> [names]|remove|install|sync|list|mcp|trust|doctor [--fix]; --global (default) or --project",
+      "notes": "Supported agents: GitHub README lists claude, cursor, codex, copilot, grok, vscode, opencode, pi; Sentry docs list claude, cursor, codex, vscode, opencode (lists disagree). MIT. 263 stars. npm 3.4.0 published 2026-10-20 (beta per docs). It is the only tool found that declares skills, MCP, hooks, subagents and plugins (Agent Plugins resolution) in one manifest with a lockfile, which is close to a backup and restore model. @sentry/dotagents-lib is a 'reusable core for SKILL.md loading, Agent Plugin resolution, source resolution, and trust validation' with no documented function signatures. REUSE: possible for the agents.toml format and plugin resolution, but the API is undocumented. Docs: https://docs.sentry.io/ai/dotagents. Not the same project as iannuttall/dotagents or the unscoped npm 'dotagents' (beautyfree, 1 star).",
+      "source": "https://github.com/getsentry/dotagents",
+      "confidence": "verified"
+     },
+     {
+      "agent": "dotagents by iannuttall (npm @iannuttall/dotagents)",
+      "item": "tool",
+      "user_config_path": "Canonical ~/.agents/ (AGENTS.md, CLAUDE.md, GEMINI.md, commands/, hooks/, skills/, backup/<timestamp>/) symlinked into ~/.claude, ~/.codex, ~/.factory, ~/.cursor, ~/.config/opencode and ~/.gemini",
+      "project_config_path": "Project .agents/ links only commands, hooks and skills",
+      "format": "n/a (folder of Markdown files and symlinks, no MCP)",
+      "secrets": "n/a",
+      "cli": "npx @iannuttall/dotagents (guided TUI: choose global or project, then clients; 'Undo last change'). Requires Bun 1.3+",
+      "notes": "Supported agents: Claude, Codex, Factory, Cursor, OpenCode, Gemini. MIT. 708 stars. npm 0.1.3 published 2026-01-21, last push 2026-02-04 (stale). It always makes a timestamped backup before overwriting, which is a useful pattern. No MCP and no API. REUSE: no; use it as a design reference only.",
+      "source": "https://github.com/iannuttall/dotagents",
+      "confidence": "verified"
+     },
+     {
+      "agent": "vsync (nicepkg/vsync, npm @nicepkg/vsync)",
+      "item": "tool",
+      "user_config_path": "~/.vsync.json (user-level mode) syncs the user configs of the source and target tools",
+      "project_config_path": "<project>/.vsync.json with source_tool, target_tools, sync_config, use_symlinks_for_skills, language",
+      "format": "JSON config. MCP keys mapped per tool: mcpServers (Claude Code, Cursor), mcp (OpenCode, JSONC), mcp_servers (Codex, TOML). OpenCode and Codex need a `type` field. Entry examples not shown",
+      "secrets": "Converts env interpolation syntax: ${VAR} (Claude Code) <-> ${env:VAR} (Cursor) <-> {env:VAR} (OpenCode). Codex has no interpolation. Includes MCP 'security checks'",
+      "cli": "vsync init [--user]; sync [--user] [--dry-run] [--prune]; plan; status; list [skills|mcp]; clean [name] [--from-source]; import <path>",
+      "notes": "Supported agents: Claude Code, Cursor, OpenCode, Codex. MIT. 63 stars. npm 1.1.0 published 2026-01-27, last push 2026-01-27 (stale). Syncs one way from a chosen source tool. Syncs skills, MCP, agents and commands. Atomic writes and a hash manifest; no backup described. No API. REUSE: no as a library; its env-syntax mapping table is a good reference for converters.",
+      "source": "https://github.com/nicepkg/vsync",
+      "confidence": "verified"
+     },
+     {
+      "agent": "MCPM (pathintegral-institute/mcpm.sh, PyPI `mcpm`)",
+      "item": "tool",
+      "user_config_path": "A global MCPM workspace exists, but its storage path was not found (~/.config/mcpm not confirmed). Client config paths were not listed on the page",
+      "project_config_path": "n/a",
+      "format": "Not documented on the README (internal global config + profiles as tags)",
+      "secrets": "Not documented",
+      "cli": "mcpm search|info|install|uninstall|ls|edit|inspect|run [--http]|share|usage; mcpm profile ls|create|rm|edit|run|share|inspect; mcpm client ls|edit CLIENT [-e]|import CLIENT; mcpm update; doctor; config; migrate. Env MCPM_NON_INTERACTIVE, MCPM_FORCE, MCPM_JSON_OUTPUT",
+      "notes": "Supported clients: Claude Desktop, Cursor, Windsurf, VS Code, Cline, Continue, Goose, 5ire, Roo Code, OpenCode; the roadmap lists gemini-cli and codex as added. MIT. ~1.0k stars. PyPI 2.15.0 published 2026-05-22, last push 2026-11-04. Python 3.10+. `mcpm client import` pulls servers from a client, which works as a backup. The npm package 'mcpm' is an unrelated Minecraft tool. REUSE: no (Python CLI, no documented library API); reference only.",
+      "source": "https://github.com/pathintegral-institute/mcpm.sh",
+      "confidence": "verified"
+     },
+     {
+      "agent": "mcp-synchro (twardoch/mcp-synchro, PyPI)",
+      "item": "tool",
+      "user_config_path": "Master file: ~/.config/mcp-synchro/mcp.json (Linux/macOS), %APPDATA%\\mcp-synchro\\mcp.json (Windows). Writes the MCP section of 41 agents' configs (e.g. ~/.gemini/antigravity*/mcp_config.json). The full path table is in its docs, not read",
+      "project_config_path": "push --workspace PATH for project configs",
+      "format": "Master file in Claude Desktop JSON shape (mcpServers{name:{command,args,env}}); the README is ambiguous about the wrapper. Remote URL key mapping: serverUrl (Antigravity, Windsurf), url (Cursor, VS Code, Claude, Codex), httpUrl (Gemini CLI). Codex TOML uses snake_case conversion",
+      "secrets": "env values sit in the master file in plaintext; no encryption. Unrelated sections of agent configs (API keys elsewhere) are not read or written",
+      "cli": "mcp-synchro list | pull_all | pull_new | push [--dry-run] [--workspace] [--probe-tools] | migrate gemini --to antigravity-cli | doctor | agy-sync",
+      "notes": "Supported agents (41): Claude Desktop, Claude Code, Cursor, VS Code Copilot, Windsurf, Cline, Roo, Codex CLI, Antigravity Desktop/IDE/CLI, OpenCode, 5ire, Jan, Qwen Code, Crush and more. Its README calls Gemini CLI deprecated, 'retire June 18, 2026' (its claim, not checked). Apache-2.0. 0 stars. PyPI 1.0.5 published 2026-05-23. pull_all rebuilds the master from all agents, which is the backup model Skill Advisor wants. REUSE: no (Python, no API, tiny adoption); good mapping reference.",
+      "source": "https://github.com/twardoch/mcp-synchro",
+      "confidence": "verified"
+     },
+     {
+      "agent": "agentsync (spyrae/agentsync, PyPI agentsync-cli)",
+      "item": "tool",
+      "user_config_path": "Source: ~/.claude.json. Targets: ~/.cursor/mcp.json, ~/.codex/config.toml, ~/.gemini/antigravity/mcp_config.json",
+      "project_config_path": "Source .mcp.json + CLAUDE.md. Targets .cursor/rules/project.mdc, AGENTS.md. Config agentsync.yaml",
+      "format": "YAML agentsync.yaml (source / targets[type, paths, exclude_servers, protocols] / rules.exclude_sections). Converts MCP JSON<->TOML; Codex uses marker-based writes; Antigravity is stdio-only",
+      "secrets": "Not documented",
+      "cli": "agentsync init [--force]; sync [--dry-run] [--mcp-only] [--rules-only] [-t] [--no-backup]; validate; status",
+      "notes": "Supported agents: Claude Code (source only), Cursor, Codex, Antigravity (Gemini). MIT. Stars not found (GitHub API quota exhausted). PyPI 0.1.0 published 2026-02-20. Makes automatic backups before each write. REUSE: no (Python, one-way from Claude).",
+      "source": "https://github.com/spyrae/agentsync",
+      "confidence": "verified"
+     },
+     {
+      "agent": "Smithery CLI (smithery-ai/cli -> arcadeai-labs/smithery-cli; npm @smithery/cli and `smithery`)",
+      "item": "tool",
+      "user_config_path": "Not documented in current README (client config paths and credential store not stated)",
+      "project_config_path": "Not documented",
+      "format": "Not documented",
+      "secrets": "OAuth login (smithery auth login) and service tokens; storage location not stated",
+      "cli": "smithery mcp search|add|remove|publish|list; tool find|get|call|list; skill search|add; auth login|logout|whoami|token; namespace list|use",
+      "notes": "Supported agents: client list not documented (example --agent claude-code). License: GitHub says AGPL-3.0, npm shows none. 847 stars. Last push 2026-05-31. npm @smithery/cli 4.11.1 published 2026-04-30; npm 'smithery' 1.2.0 published 2026-05-31. The GitHub repo now resolves to the arcadeai-labs org, so the maintainer is unclear. Skills install via the upstream `npx skills add`. REUSE: no (AGPL, tied to the Smithery registry and account).",
+      "source": "https://github.com/arcadeai-labs/smithery-cli",
+      "confidence": "verified"
+     },
+     {
+      "agent": "mcp-get (michaellatman/mcp-get)",
+      "item": "tool",
+      "user_config_path": "n/a (archived)",
+      "project_config_path": "n/a",
+      "format": "n/a",
+      "secrets": "n/a",
+      "cli": "npx @michaellatman/mcp-get (deprecated)",
+      "notes": "Archived ('mcp-get is no longer maintained'). The npm description recommends Smithery. MIT. 500 stars. Last npm release 1.0.116 published 2025-11-09. REUSE: no.",
+      "source": "https://github.com/michaellatman/mcp-get",
+      "confidence": "verified"
+     },
+     {
+      "agent": "install-mcp (supermemoryai/install-mcp)",
+      "item": "tool",
+      "user_config_path": "Writes each client's config; paths not listed on the README",
+      "project_config_path": "Not documented",
+      "format": "Not documented per client. Package names become npx commands; URLs become remote entries named from the host (mcp.example.com -> mcp-example-com)",
+      "secrets": "--header 'Name: value' (repeatable); an OAuth flow runs before install with auth state shared across clients; env not mentioned",
+      "cli": "npx install-mcp <package|command|url> --client <name> [--header] [--oauth yes|no] [--project]",
+      "notes": "Supported clients: claude-desktop, claude-code, cursor, vscode, gemini-cli, codex, windsurf, cline, roo-cline, zed, goose, opencode, warp (copy-paste output only), droid, aider, aider-desk, witsy, enconvo. MIT. 197 stars. npm 1.10.2 published 2026-01-02, last push 2026-10-26. No library entry (main not set). REUSE: no; add-mcp covers the same need with an API.",
+      "source": "https://github.com/supermemoryai/install-mcp",
+      "confidence": "verified"
+     },
+     {
+      "agent": "plugins CLI (npm `plugins`, repo vercel-labs/plugins per npm metadata)",
+      "item": "tool",
+      "user_config_path": "Installs through each target's native plugin system at user scope (default). Remote sources are cached in ~/.cache/plugins/<slug>. VS Code: registers the staged directory in the user setting chat.pluginLocations. Exact Claude Code and Cursor paths are not documented",
+      "project_config_path": "--scope project|local is supported only for some targets (for Claude Code only for vercel/vercel-plugin). Kimi, Copilot CLI and VS Code are user scope only",
+      "format": "Input: the README describes a vendor-neutral `.plugin/` format and marketplace.json discovery. This conflicts with the Agent Plugins 1.0.0 spec, which puts plugin.json at the root. A plugin is any directory with skills, commands, agents, rules, hooks, MCP servers or LSP servers",
+      "secrets": "Not documented (env DISABLE_TELEMETRY / DO_NOT_TRACK only)",
+      "cli": "npx plugins add <source> | discover <source> | targets; --target/-t, --scope/-s user|project|local, -y. No list or remove command",
+      "notes": "Supported targets: Claude Code, Cursor, Codex, Grok Build, Kimi Code, GitHub Copilot CLI, VS Code. License: README says Apache-2.0, npm has none. npm 1.3.6 published 2026-10-30. The GitHub repo URL from npm returned 404 today; README read from unpkg (1.3.4 and 1.3.6). Zero deps, single ESM file, Node 18+. No API. REUSE: no as a library; shows how vendors translate Agent Plugins into Claude, Codex and Cursor native plugins.",
+      "source": "https://unpkg.com/plugins@1.3.6/README.md",
+      "confidence": "verified"
+     },
+     {
+      "agent": "acplugin (TokenRollAI/acplugin, npm @disdjj/acplugin)",
+      "item": "tool",
+      "user_config_path": "n/a (writes into an output directory)",
+      "project_config_path": "Codex: .agents/skills/, AGENTS.md, .codex/config.toml, .codex/agents/*.toml. OpenCode: .opencode/skills/, opencode.json, .opencode/agents, .opencode/commands. Cursor: .cursor/skills/, .cursor/rules/*.mdc, .cursor/mcp.json, .cursor/agents, .cursor/commands. Antigravity: .agents/skills/, GEMINI.md, .agents/mcp_config.json, .agents/agents/*.md",
+      "format": "Input: Claude Code plugin (skills, instructions, MCP, agents, commands, hooks). MCP output is TOML for Codex and JSON for the others. Commands become skills for Codex and Antigravity. Hooks are native only for Codex (hooks/hooks.json); other targets get a warning or AGENTS.md notes. Model mapping: sonnet/opus -> gpt-5.6-sol or gemini-3.1-pro-preview",
+      "secrets": "GITHUB_TOKEN for private source repos; MCP secret handling not documented",
+      "cli": "acplugin (wizard); acplugin scan [source]; acplugin convert [source] -t <targets> -o <dir> [-a] [--dry-run]",
+      "notes": "Supported targets: Codex CLI, OpenCode, Cursor, Antigravity, Pi. License: npm says MIT, GitHub shows none. 59 stars. npm 1.7.0 published 2026-08-24. main=dist/index.js but no documented API. REUSE: maybe as a reference for the Claude-plugin-to-other-agent mapping table; not a stable library.",
+      "source": "https://github.com/TokenRollAI/acplugin",
+      "confidence": "verified"
+     },
+     {
+      "agent": "compound-engineering-plugin converter (EveryInc, npm @every-env/compound-plugin)",
+      "item": "tool",
+      "user_config_path": "not found",
+      "project_config_path": "not found",
+      "format": "Reported: converts Claude Code plugins to other targets (e.g. `compound-plugin convert ... --to codex`). The Mintlify docs page returned HTTP 410 today",
+      "secrets": "not found",
+      "cli": "Reported: compound-plugin convert --to <target>. The README says the Bun CLI is for repository development and converter maintenance, not normal installation",
+      "notes": "Supported targets (install sections): Codex, Cursor, OpenCode, Copilot, Factory Droid, Pi, Antigravity CLI, Kimi, Cline, Grok, Devin, Qwen. MIT. 26k stars. npm 3.8.3 published 2026-05-18, repo pushed 2026-11-13. The converter's mappings are not documented on pages read today. REUSE: no.",
+      "source": "https://github.com/EveryInc/compound-engineering-plugin",
+      "confidence": "reported"
+     },
+     {
+      "agent": "agent-skill-porter (skill-mill/agent-skill-porter, formerly hatappo/agent-command-sync)",
+      "item": "tool",
+      "user_config_path": "Agent skill/command dirs; exact paths not listed",
+      "project_config_path": "Agent skill/command dirs; 'Zero config, no extra files'",
+      "format": "Commands are Markdown (most agents), TOML (Gemini CLI) or *.prompt.md (Copilot). Placeholder mapping: $ARGUMENTS <-> {{args}}, !`cmd` <-> !{cmd}, @file <-> @{file}; Gemini has no $1..$9. Skill frontmatter: Claude-only fields (model, hooks, context) are dropped; Codex policy.allow_implicit_invocation is the inverse of Claude disable-model-invocation. A 'Chimera Hub' internal format allows lossless round trips",
+      "secrets": "n/a",
+      "cli": "sk add|update [--min-age]|list|info|sync <from> <to>|import|apply|drift|plan|migrate",
+      "notes": "Supported agents: Claude Code, Gemini CLI, Codex CLI, OpenCode, GitHub Copilot, Cursor. No MCP. License: README says MIT, GitHub shows none. 25 stars. npm agent-skill-porter 8.0.0 published 2026-04-01 (old name agent-command-sync 5.8.0 published 2026-03-11). Node 24+. No API. REUSE: no; useful reference for command and skill field mapping. Distinct from jduncan-rva/skill-porter (Claude skills <-> Gemini extensions, MIT, 193 stars, last push 2025-12-02).",
+      "source": "https://github.com/skill-mill/agent-skill-porter",
+      "confidence": "verified"
+     },
+     {
+      "agent": "OpenSkills (numman-ali/openskills)",
+      "item": "tool",
+      "user_config_path": "~/.claude/skills (--global), ~/.agent/skills",
+      "project_config_path": "./.claude/skills (default), ./.agent/skills (--universal); writes an <available_skills> XML block into AGENTS.md",
+      "format": "SKILL.md folders + AGENTS.md block",
+      "secrets": "n/a",
+      "cli": "openskills install <source> [--global] [--universal]; sync [-y] [-o]; list; read <name>; update; manage; remove",
+      "notes": "Supported agents: Claude Code, Cursor, Windsurf, Aider, Codex and any agent that reads AGENTS.md. No MCP by design. License: README and npm say Apache-2.0, GitHub API says NOASSERTION. 10.8k stars. npm 1.5.0 published 2026-01-17, last push 2026-01-18 (stale). Uses .agent/ (singular), unlike the .agents/ convention. REUSE: no.",
+      "source": "https://github.com/numman-ali/openskills",
+      "confidence": "verified"
+     },
+     {
+      "agent": "SkillKit (rohitg00/skillkit)",
+      "item": "tool",
+      "user_config_path": "Per-agent skill dirs; not listed",
+      "project_config_path": "Per-agent skill dirs; not listed",
+      "format": "Skills; translation between agent formats",
+      "secrets": "n/a",
+      "cli": "skillkit|sk add|remove|update|translate <skill> --to <agent> [--dry-run]|sync|recommend|generate|serve|publish|marketplace|find|scan|tap ...",
+      "notes": "Supported agents: 32-46 claimed (count varies on the page), including Claude Code, Cursor, Codex, Gemini CLI, OpenCode, Copilot, Windsurf, Devin, Aider, Cline, Goose, Kiro, Roo, Trae and Antigravity. No MCP config sync; it ships its own MCP server (@skillkit/mcp). Apache-2.0. 1.6k stars. npm 1.24.0 published 2026-04-21, last push 2026-06-02. Library exports translateSkill, analyzeProject, RecommendationEngine; also @skillkit/core and @skillkit/api. REUSE: possible for translateSkill only; a large surface for a narrow need.",
+      "source": "https://github.com/rohitg00/skillkit",
+      "confidence": "verified"
+     },
+     {
+      "agent": "Other MCP sync scripts (ztripez/mcp-sync, Leoyang183/sync-agents-settings, Ephasme/ai-sync, alex-furrier/ai-config)",
+      "item": "tool",
+      "user_config_path": "not found",
+      "project_config_path": "not found",
+      "format": "not found",
+      "secrets": "not found",
+      "cli": "not found",
+      "notes": "ztripez/mcp-sync: Python, MIT, 46 stars, last push 2025-06-20 (stale). Leoyang183/sync-agents-settings: TS, MIT, 7 stars, pushed 2026-03-30; per its description it syncs MCP from Claude Code to Gemini CLI, Codex, OpenCode, Kiro and Cursor. Ephasme/ai-sync: PyPI 1.8.5 (2026-04-08), license PolyForm Noncommercial, so it cannot be reused; targets Codex, Cursor, Gemini, Claude Code. alex-furrier/ai-config (formerly safurrier): Python, MIT, 0 stars, pushed 2026-11-04, a declarative plugin manager with a `convert` command. 'mcp-sync' and 'agent-sync' are not found on npm; ejfn/mcp-sync returns 404. Features come from search snippets and repo metadata only. REUSE: no.",
+      "source": "https://github.com/ztripez/mcp-sync",
+      "confidence": "reported"
+     },
+     {
+      "agent": "Agent Plugins 1.0.0 (open plugin format; spec repo agentplugins/agent-plugins-spec)",
+      "item": "tool",
+      "user_config_path": "n/a (package format; install location is up to each client)",
+      "project_config_path": "Plugin root: plugin.json, skills/<name>/SKILL.md, mcp.json, reverse-domain extension dirs (e.g. com.example.client/)",
+      "format": "FORMAT ROW, not a tool. Spec 1.0.0, published by Vercel on 2026-08-06; 1.1.0 is a draft.\nplugin.json is a closed schema. Required: $schema (https://agent-plugins.org/schemas/1.0.0/plugin.schema.json) and name. Optional: version, description, author, homepage, repository, license, keywords, extensions.\nmcp.json:\n{\"$schema\":\"https://agent-plugins.org/schemas/1.0.0/mcp.schema.json\",\"mcpServers\":{...}}\nStdio entry: {\"type\":\"stdio\",\"command\":\"./bin/srv\",\"args\":[\"--data\",\"${PLUGIN_DATA}/x\"],\"env\":{\"CONFIG\":\"${PLUGIN_ROOT}/config.json\"}}\nRemote entry: {\"type\":\"streamable-http\"|\"sse\",\"url\":\"https://...\",\"headers\":{...}}\nCommands, hooks and agents are NOT part of v1.",
+      "secrets": "Only ${PLUGIN_ROOT} and ${PLUGIN_DATA} are expanded, in args, env values and cwd only. There is no ${env:VAR}. Headers are fixed values, and the spec says not to put secrets there.",
+      "cli": "n/a (installed by clients or the `plugins` CLI)",
+      "notes": "Launch clients: ChatGPT/Codex, Cursor, GitHub Copilot, Kiro, VS Code. Steering committee: AWS, Cursor, Microsoft, OpenAI, Vercel. Anthropic (Claude Code) is not a launch partner; Claude uses its own .claude-plugin/plugin.json. Spec license: not found ('openly licensed'). REUSE: adopt as Skill Advisor's portable export format for plugins (skills + MCP); it maps cleanly to the Claude .mcp.json mcpServers shape. Site: https://agent-plugins.org. Announcement: https://vercel.com/blog/introducing-agent-plugins",
+      "source": "https://github.com/agentplugins/agent-plugins-spec",
+      "confidence": "verified"
+     },
+     {
+      "agent": "AGENTS.md (agentsmd/agents.md)",
+      "item": "tool",
+      "user_config_path": "n/a (some tools link a global AGENTS.md, e.g. ~/.codex)",
+      "project_config_path": "AGENTS.md at the repo root; nested AGENTS.md per subproject; the nearest one wins",
+      "format": "FORMAT ROW. Plain Markdown, no required fields. No MCP or skills content",
+      "secrets": "n/a",
+      "cli": "n/a",
+      "notes": "Supported agents: Codex, Jules, Gemini CLI, Devin, Windsurf, Factory, Aider, goose, opencode, Zed, Warp, VS Code, UiPath, Junie, Amp, Cursor, RooCode, Kilo, Phoenix, Semgrep, Copilot coding agent, Ona, Augment. Stewarded by the Agentic AI Foundation (Linux Foundation). MIT. 25.5k stars. No page date. Relevant to Skill Advisor only for instruction files; ruler, rulesync and openskills write it.",
+      "source": "https://agents.md/",
+      "confidence": "verified"
+     },
+     {
+      "agent": ".agents/ folder convention + Agent Skills spec (agentskills.io)",
+      "item": "tool",
+      "user_config_path": "~/.agents/skills/ is used by codex, cline, pi, zed, warp and others per the skills CLI table. ~/.config/agents/skills/ is used by amp and universal. Sentry dotagents uses ~/.agents/agents.toml",
+      "project_config_path": ".agents/skills/<name>/SKILL.md is read natively by 24 agent ids per the skills CLI table, including codex, cursor, gemini-cli, github-copilot, opencode, antigravity, droid and kilo",
+      "format": "FORMAT ROW. A SKILL.md frontmatter has required name (<=64 chars, a-z0-9-, must match the folder) and description (<=1024 chars). Optional fields: license, compatibility (<=500), metadata (string map), allowed-tools (experimental). Optional dirs: scripts/, references/, assets/. Validator: skills-ref validate",
+      "secrets": "n/a",
+      "cli": "skills-ref validate ./my-skill",
+      "notes": "The .agents/ folder is a de facto convention spread by the skills CLI, Sentry dotagents, Ruler and acplugin; no formal spec for the folder itself was found. A shared mcp.json standard for client configs was not found: no official MCP SEP turned up. The de facto shape is {\"mcpServers\":{name:{command,args,env}|{type,url,headers}}} (Claude .mcp.json, Cursor); VS Code uses `servers`. The closest formal definition is Agent Plugins mcp.json. Spec URL: https://agentskills.io/specification",
+      "source": "https://agentskills.io/specification",
+      "confidence": "verified"
+     }
+    ]
+   },
+   "check": {
+    "checked": [
+     {
+      "agent": "compound-engineering-plugin converter (EveryInc)",
+      "item": "CLI",
+      "claim": "compound-plugin convert --to <target>; Bun CLI is for repo development, not normal installation",
+      "verdict": "corrected",
+      "correction": "Verified in source src/commands/convert.ts (main branch, pushed 2026-11-13). Command: `convert <source>`, where <source> is a Claude plugin directory. `--to` defaults to `opencode`; it accepts opencode | codex | pi | antigravity | all. `all` auto-detects installed tools. Other flags: -o/--output (project root), --codex-home (default $CODEX_HOME or ~/.codex), --pi-home (default ~/.pi/agent), --scope global|workspace, --also <csv>, --permissions none|broad|from-commands (default broad), --agentMode primary|subagent, --include-skills (Codex only; the default is agents-only). Other commands in src/commands: install, list, cleanup, plugin-path. The repo package.json is now private: name `compound-engineering`, version 3.38.1, run through `bun run src/index.ts convert`. npm @every-env/compound-plugin is still 3.8.3, last modified 2026-05-18, so it is far behind the repo. Its bin `compound-plugin` points to src/index.ts, a TypeScript file, so it needs Bun. README FAQ says Bun is only for repo development and converter maintenance (verified).",
+      "source": "https://github.com/EveryInc/compound-engineering-plugin/blob/main/src/commands/convert.ts ; https://github.com/EveryInc/compound-engineering-plugin/blob/main/package.json ; https://registry.npmjs.org/@every-env/compound-plugin"
+     },
+     {
+      "agent": "compound-engineering-plugin converter (EveryInc)",
+      "item": "supported targets",
+      "claim": "Converter targets: Codex, Cursor, OpenCode, Copilot, Factory Droid, Pi, Antigravity CLI, Kimi, Cline, Grok, Devin, Qwen",
+      "verdict": "corrected",
+      "correction": "That list covers the hosts the plugin installs on, as listed in the README. Most of them use native plugin install. The converter itself (src/targets/index.ts) implements only 4 targets: opencode, codex, pi, antigravity. src/converters also has claude-to-copilot.ts, claude-to-droid.ts and claude-to-kiro.ts, but they are not registered as targets. convert.ts prints: \"Use native plugin install for Claude Code, Copilot, Droid, oh-my-pi (omp), OpenCode, Pi, and Qwen.\" No converter exists for Cursor, Kimi, Cline, Grok, Devin or Qwen. MIT, 26,064 stars (verified via GitHub API today).",
+      "source": "https://github.com/EveryInc/compound-engineering-plugin/blob/main/src/targets/index.ts"
+     },
+     {
+      "agent": "compound-engineering-plugin converter (EveryInc)",
+      "item": "output paths and MCP mapping",
+      "claim": "user/project config path: not found; converter mappings not documented",
+      "verdict": "corrected",
+      "correction": "Read from source (src/utils/resolve-output.ts, src/targets/*.ts). Input: plugin manifest `mcpServers` (object, path or paths) or `<plugin>/.mcp.json`. Fields read: type, command, args, url, env, headers. Codex: writes to $CODEX_HOME or ~/.codex. MCP goes into config.toml as [mcp_servers.<name>] (command, args, [mcp_servers.<name>.env]) inside a managed block, from '# BEGIN Compound Engineering plugin MCP -- do not edit this block' to '# END Compound Engineering plugin MCP'. Hooks go to hooks.json. The default agents-only mode suppresses MCP; --include-skills enables it. OpenCode: without -o, writes to OPENCODE_CONFIG_DIR or ~/.config/opencode (flat layout); with -o, writes to <out>/opencode.json and <out>/.opencode/{agents,plugins,skills,commands}. MCP becomes `mcp`: {type:'local', command:[cmd,...args], environment, enabled:true} or {type:'remote', url, headers, enabled:true}. Existing user mcp entries win on merge. Antigravity: writes to <cwd or -o>/.agy/ (plugin.json, skills/, agents/, commands/*.toml, mcp_config.json {mcpServers}, hooks.json). Pi: writes to ~/.pi/agent, or ./.pi with workspace scope. MCP goes to an MCPorter file <root>/<managed>/mcporter.json, and the existing file is backed up first. Secrets: env values are copied verbatim, with no secret handling. Not in official docs; source only.",
+      "source": "https://github.com/EveryInc/compound-engineering-plugin/blob/main/src/targets/codex.ts ; https://github.com/EveryInc/compound-engineering-plugin/blob/main/src/converters/claude-to-opencode.ts ; https://github.com/EveryInc/compound-engineering-plugin/blob/main/src/targets/antigravity.ts ; https://github.com/EveryInc/compound-engineering-plugin/blob/main/src/utils/resolve-output.ts"
+     },
+     {
+      "agent": "ztripez/mcp-sync",
+      "item": "tool, config paths, CLI",
+      "claim": "Python, MIT, 46 stars, last push 2025-06-20; 'mcp-sync' not found on npm",
+      "verdict": "corrected",
+      "correction": "Metadata verified (MIT, Python, 46 stars, pushed 2025-06-20, not archived). The package is not on npm, but it is on PyPI: mcp-sync 0.4.2, uploaded 2025-06-20. Install: `uvx mcp-sync` or `uv tool install mcp-sync`. CLI: scan, status, diff, sync [--dry-run|--global-only|--project-only|--location <path>], add-location, remove-location, list-locations, add-server, remove-server, list-servers, vacuum (import), init, template, list-clients, client-info, edit-client-definitions. Own config: ~/.mcp-sync/global.json, project .mcp.json, custom clients in ~/.mcp-sync/client_definitions.json. Built-in clients: Claude Desktop, Claude Code, Cline, Roo, VS Code user settings, Cursor, Continue. Stale for 17 months.",
+      "source": "https://github.com/ztripez/mcp-sync ; https://pypi.org/project/mcp-sync/"
+     },
+     {
+      "agent": "Leoyang183/sync-agents-settings",
+      "item": "tool, targets, paths, CLI",
+      "claim": "TS, MIT, 7 stars, pushed 2026-03-30; syncs MCP from Claude Code to Gemini CLI, Codex, OpenCode, Kiro, Cursor",
+      "verdict": "corrected",
+      "correction": "Metadata verified. npm sync-agents-settings 0.4.3 (modified 2026-03-29); bins `sync-agents-settings` and `sync-agents`. The README lists more writers than the repo description. Source: ~/.claude.json plus .mcp.json of enabled plugins under ~/.claude/plugins/. Writers: ~/.gemini/settings.json, ~/.codex/config.toml, ~/.config/opencode/opencode.json, ~/.kiro/settings/mcp.json, ~/.cursor/mcp.json, ~/.kimi/mcp.json, ~/.vibe/config.toml, ~/.qwen/settings.json, ~/.config/amp/settings.json, ~/.cline/data/settings/cline_mcp_settings.json, ~/.codeium/windsurf/mcp_config.json. CLI: list, sync [--dry-run] [--no-backup], diff, doctor, validate, reconcile, sync-instructions, plus `--report json`. Each sync backs up first to ~/.sync-agents-backup/<timestamp>/. It can also run as a Claude Code plugin (/sync etc.). Secrets caveat: the Codex writer expands ${VAR:-default} to the actual env value, so secrets land in plaintext in config.toml.",
+      "source": "https://github.com/Leoyang183/sync-agents-settings ; https://www.npmjs.com/package/sync-agents-settings"
+     },
+     {
+      "agent": "Ephasme/ai-sync",
+      "item": "tool, license, CLI",
+      "claim": "PyPI 1.8.5 (2026-04-08), PolyForm Noncommercial, targets Codex, Cursor, Gemini, Claude Code",
+      "verdict": "corrected",
+      "correction": "PyPI facts verified: ai-sync 1.8.5, uploaded 2026-04-08, license LicenseRef-PolyForm-Noncommercial-1.0.0, so it is not reusable. The GitHub repo github.com/Ephasme/ai-sync returns HTTP 404 today (private or deleted), although PyPI links to it. Install: `pipx install ai-sync`. CLI: install, plan, apply [planfile], doctor, uninstall [--apply]. Config: project .ai-sync.yaml or .ai-sync.local.yaml; machine config ~/.ai-sync/config.toml. Secrets come from 1Password `op://` refs and are never written to .env.ai-sync. It writes only project-local files: .codex/*, .cursor/*, .gemini/*, .claude/*, .mcp.json, CLAUDE.md. It never modifies ~/.codex, ~/.cursor, ~/.gemini or ~/.claude.",
+      "source": "https://pypi.org/project/ai-sync/"
+     },
+     {
+      "agent": "alex-furrier/ai-config",
+      "item": "tool, CLI, targets",
+      "claim": "Python, MIT, 0 stars, pushed 2026-11-04, declarative plugin manager with a `convert` command",
+      "verdict": "confirmed",
+      "correction": "Verified. safurrier/ai-config redirects to alex-furrier/ai-config. PyPI package name is ai-config-cli (not ai-config), version 0.6.3, uploaded 2026-09-25, MIT. Install: `pip install ai-config-cli` or `uv tool install ai-config-cli`. CLI (src/ai_config/cli.py): sync [--dry-run|--verify|--fresh|--force-convert], status, init, doctor [--target], convert <plugin> [--target ... repeatable] [-o], watch, plus cache clear/create. Conversion targets: codex, cursor, opencode, pi. Config lookup order: .ai-config/config.yaml, then ~/.ai-config/config.yaml (or .yml). Cursor output, including MCP config, goes to .cursor/ or ~/.cursor/. OpenCode output goes to opencode.json and opencode.lsp.json. Codex output goes to .ai-config/codex/ as plugin packages managed through `codex plugin`. Pi output goes to .pi/ or ~/.pi/. The README warns that some MCP settings and hooks degrade or are skipped per target.",
+      "source": "https://github.com/alex-furrier/ai-config ; https://pypi.org/project/ai-config-cli/"
+     },
+     {
+      "agent": "ejfn/mcp-sync; npm 'agent-sync'",
+      "item": "existence",
+      "claim": "ejfn/mcp-sync returns 404; 'mcp-sync' and 'agent-sync' not on npm",
+      "verdict": "confirmed",
+      "correction": "Today the GitHub API returns 404 for ejfn/mcp-sync. npm registry returns E404 for both `mcp-sync` and `agent-sync`. Note: `mcp-sync` exists on PyPI (ztripez, 0.4.2).",
+      "source": "https://api.github.com/repos/ejfn/mcp-sync ; https://registry.npmjs.org/mcp-sync ; https://registry.npmjs.org/agent-sync"
+     }
+    ]
+   }
+  }
+ ]
+}

@@ -7,7 +7,10 @@
 
   /* Identifiants d'agents du CLI skills (src/agents.ts du dépôt vercel-labs/skills), relus le 12/11/2026. */
   var CLI = { claude: 'claude-code', gemini: 'gemini-cli', copilot: 'github-copilot' };
-  var LABEL = { wait: 'en attente', copy: 'copie…', link: 'liens…', done: 'installé', fail: 'échec', skip: 'non commencé' };
+  var LABEL = { wait: 'en attente', copy: 'copie…', link: 'liens…', done: 'installé', have: 'déjà installé', fail: 'échec', skip: 'non commencé' };
+  function live() { return !!(SA.live && SA.live.on); }
+  /* En mode réel, SA.data.agents porte déjà les identifiants du CLI : pas de seconde traduction. */
+  function cliId(id) { return live() ? id : CLI[id] || id; }
   var timers = [];
   var curRoot = null;
   var stop = false;
@@ -27,7 +30,7 @@
     return '<li class="cf-row cf-' + st + '" data-id="' + SA.esc(id) + '">' +
       '<div class="cf-id"><button type="button" class="cf-name mono" data-detail="' + SA.esc(id) + '">' + SA.esc(it[1]) + '</button>' +
         '<p class="cf-src mono mut">' + SA.esc(it[2]) + '</p>' +
-        (st === 'fail' ? '<p class="cf-err">' + SA.esc(i.err || '') + '</p>' : '') + '</div>' +
+        (st === 'fail' ? '<p class="cf-err">' + SA.esc((i.errs && i.errs[id]) || i.err || '') + '</p>' : '') + '</div>' +
       '<p class="cf-tot mono"><span class="num">' + (it[6] == null ? '–' : it[6]) + '</span> <span class="mut">sur 100</span></p>' +
       (idle ? '<p class="cf-warn">' + SA.detail.badge(it[7], id) + '</p>' : '') +
       '<p class="cf-st mono' + (st === 'done' ? ' cf-done' : '') + '">' + (st === 'done' ? SA.icon('check') : '') + '<span>' + LABEL[st] + '</span></p>' +
@@ -44,7 +47,8 @@
   }
 
   function agentsBlock() {
-    var s = SA.state, list = SA.agents().filter(function (a) { return a.st !== 'no'; });
+    /* Mode réel : un agent masqué dans « Agents » n'est pas proposé ici, sauf s'il est coché : on voit toujours où l'on écrit. */
+    var s = SA.state, list = SA.agents().filter(function (a) { return a.st !== 'no' && !(live() && a.hidden && !s.agents[a.id]); });
     if (!list.length) {
       return '<section class="cf-sec" data-st aria-labelledby="cf-t2"><h2 class="h2" id="cf-t2">Agents</h2>' +
         '<div class="note note-warn"><p class="note-t">Aucun agent trouvé sur cette machine</p>' +
@@ -69,19 +73,21 @@
     list.forEach(function (it) { out.push(SA.esc(SA.target('.agents/skills/' + it[1]))); });
     out.push('');
     out.push('<span class="dim"># liens depuis</span>');
-    var cline = false;
+    var cline = false, shared = [];
     on.forEach(function (a) {
-      if (a.id === 'cline') { cline = true; return; }
+      if (!live() && a.id === 'cline') { cline = true; return; }
+      if (live() && a.universal) { shared.push(a.name); return; }
       out.push(SA.esc(a.abs ? a.abs : SA.target(a.rel)));
     });
     if (cline) out.push('<span class="dim"># Cline lit le dossier commun</span>');
+    if (shared.length) out.push('<span class="dim"># ' + SA.esc(shared.join(', ')) + (shared.length > 1 ? ' lisent' : ' lit') + ' le dossier commun</span>');
     out.push('');
     out.push('<span class="dim"># commandes du moteur (CLI skills)</span>');
     var bySrc = {};
     list.forEach(function (it) { (bySrc[it[2]] = bySrc[it[2]] || []).push(it[1]); });
-    var ag = on.filter(function (a) { return !a.custom; }).map(function (a) { return '-a ' + (CLI[a.id] || a.id); }).join(' ');
+    var ag = on.filter(function (a) { return !a.custom; }).map(function (a) { return '-a ' + cliId(a.id); }).join(' ');
     Object.keys(bySrc).forEach(function (src) {
-      out.push(SA.esc((s.telemetryOff ? 'DISABLE_TELEMETRY=1 ' : '') + 'npx -y skills add ' + src + ' ' +
+      out.push(SA.esc((s.telemetryOff || live() ? 'DISABLE_TELEMETRY=1 ' : '') + 'npx -y skills add ' + src + ' ' +
         bySrc[src].map(function (n) { return '--skill ' + n; }).join(' ') + (s.scope === 'global' ? ' -g ' : ' ') + ag + ' -y'));
     });
     return out.join('\n');
@@ -92,13 +98,16 @@
     var i = inst(), m = SA.agentsOn().length, d = count('done'), f = count('fail'), k = count('skip');
     var eye = '<p class="eye" data-st>Étape 04 · Installation</p>';
     if (i.phase === 'done') {
+      var have = count('have');
       return eye + SA.h('Installation terminée') +
-        '<p class="lede" role="status" data-st>' + pl(d, 'skill installé', 'skills installés') + ' dans ' + pl(m, 'agent', 'agents') + '.</p>';
+        '<p class="lede" role="status" data-st>' + pl(d, 'skill installé', 'skills installés') + ' dans ' + pl(m, 'agent', 'agents') + '.' +
+        (have ? ' ' + pl(have, 'skill était déjà installé', 'skills étaient déjà installés') + '.' : '') + '</p>';
     }
     if (i.phase === 'fail') {
       return eye + SA.h('Installation incomplète') +
         '<div class="note note-bad" role="alert" data-st><p class="note-t">' + pl(f, 'skill n’a pas pu être installé', 'skills n’ont pas pu être installés') + '</p>' +
-        '<p class="sub">' + pl(d, 'skill est installé', 'skills sont installés') + '. Rien n’est resté à moitié écrit : la copie du skill en échec a été retirée.</p></div>';
+        '<p class="sub">' + pl(d, 'skill est installé', 'skills sont installés') + '. ' +
+        (live() ? 'La raison de chaque échec est indiquée sous le skill.' : 'Rien n’est resté à moitié écrit : la copie du skill en échec a été retirée.') + '</p></div>';
     }
     if (i.phase === 'cancel') {
       return eye + SA.h('Installation interrompue') +
@@ -107,7 +116,8 @@
     }
     if (i.phase === 'run') {
       return eye + SA.h('Installation en cours') +
-        '<p class="lede" role="status" data-st>Écriture dans ' + pl(m, 'agent', 'agents') + '. Vous pouvez annuler : le skill en cours ira au bout, les suivants ne seront pas commencés.</p>';
+        '<p class="lede" role="status" data-st>Écriture dans ' + pl(m, 'agent', 'agents') + '. ' +
+        (live() ? 'Le moteur télécharge chaque skill, le contrôle, puis l’écrit. Gardez cette page ouverte.' : 'Vous pouvez annuler : le skill en cours ira au bout, les suivants ne seront pas commencés.') + '</p>';
     }
     return eye + SA.h('Vérifiez avant d’écrire') +
       '<p class="lede" data-st>Voici exactement ce qui sera créé sur votre machine. Rien n’a encore été écrit.</p>' +
@@ -147,7 +157,7 @@
     s.installing = false;
     stop = false;
     i.phase = phase;
-    i.ids.forEach(function (id) { if (i.st[id] !== 'done' && i.st[id] !== 'fail') i.st[id] = 'skip'; });
+    i.ids.forEach(function (id) { if (i.st[id] !== 'done' && i.st[id] !== 'have' && i.st[id] !== 'fail') i.st[id] = 'skip'; });
     SA.repaint();
     if (phase === 'done') {
       /* Laisser lire le résultat, puis passer au guide. */
@@ -166,6 +176,7 @@
     stop = false;
     SA.repaint();
     root = curRoot;
+    if (live()) { liveRun(list); return; }
 
     var fails = s.pv.install === 'fail', n = 0;
     var failAt = fails ? Math.min(1, list.length - 1) : -1;
@@ -204,6 +215,43 @@
     step();
   }
 
+  /* Mode réel : une seule demande au serveur pour toute la liste, puis le résultat de chaque skill.
+     L'état de la machine revient avec la réponse : rien n'est ajouté à la main dans s.mine. */
+  function liveRun(list) {
+    var s = SA.state, i = inst(), byName = {};
+    var items = list.map(SA.item).filter(Boolean);
+    items.forEach(function (it) { byName[it[1]] = it[0]; });
+    i.errs = i.errs || {};
+    i.err = '';
+    list.forEach(function (id) { delete i.errs[id]; setStatus(id, 'copy'); });
+    say('Installation de ' + pl(items.length, 'skill', 'skills') + ' en cours.');
+    function ok(id, st) {
+      i.st[id] = st;
+      SA.cart.remove(id);
+      if (s.lastInstall.indexOf(id) < 0) s.lastInstall.push(id);
+    }
+    var body = {
+      items: items.map(function (it) { return { source: it[2], skill: it[1] }; }),
+      agents: SA.agentsOn().map(function (a) { return a.id; }),
+      scope: s.scope === 'projet' ? 'project' : 'global'
+    };
+    return SA.live.call('POST', '/api/skills/install', body).then(function (res) {
+      (res.installed || []).forEach(function (n) { if (byName[n]) ok(byName[n], 'done'); });
+      (res.skipped || []).forEach(function (n) { if (byName[n]) ok(byName[n], 'have'); });
+      (res.failed || []).forEach(function (f) {
+        var id = byName[f.name];
+        if (id) { i.st[id] = 'fail'; i.errs[id] = f.message || 'Échec de l’installation.'; }
+      });
+      list.forEach(function (id) {
+        if (i.st[id] === 'copy') { i.st[id] = 'fail'; i.errs[id] = 'Le serveur n’a pas donné de résultat pour ce skill. Ouvrez Mes skills pour vérifier.'; }
+      });
+    }, function (e) {
+      list.forEach(function (id) { i.st[id] = 'fail'; i.errs[id] = e && e.message ? e.message : 'Le serveur local n’a pas répondu.'; });
+    }).then(function () {
+      finish(count('fail') ? 'fail' : 'done');
+    });
+  }
+
   function undo() {
     var s = SA.state, i = inst();
     i.ids.forEach(function (id) {
@@ -230,7 +278,7 @@
     var sc = e.target.closest('[data-scope]');
     if (sc) { s.scope = sc.getAttribute('data-scope'); SA.repaint(); return; }
     var tel = e.target.closest('.cf-tel .sw');
-    if (tel) { s.telemetryOff = !s.telemetryOff; SA.repaint(); return; }
+    if (tel) { if (!live()) { s.telemetryOff = !s.telemetryOff; SA.repaint(); } return; }
     /* Retirer un skill ici passe par l'écoute commune (data-cart-rm), puis la liste se redessine. */
     if (e.target.closest('[data-cart-rm]')) setTimeout(function () { if (here()) SA.repaint(); }, 0);
   }
@@ -265,8 +313,10 @@
             '<section class="cf-sec cf-tel" data-st aria-labelledby="cf-t4"><h2 class="h2" id="cf-t4">Télémétrie</h2>' +
               '<div class="cf-tel-row"><div class="cf-tel-t">' +
                 '<p class="cf-tel-l">Couper la télémétrie du moteur d’installation</p>' +
-                '<p class="cf-tel-d sub">Le moteur (CLI skills) envoie un compteur d’installation anonyme. Le couper ajoute <span class="mono">DISABLE_TELEMETRY=1</span> à la commande ci-dessus, et coupe aussi ses requêtes d’audit. Skill Advisor n’envoie rien de son côté.</p>' +
-              '</div><button type="button" class="sw" role="switch" aria-checked="' + !!st.telemetryOff + '" aria-label="Couper la télémétrie du moteur d’installation"' + (st.installing ? ' disabled' : '') + '></button></div></section>'
+                (live()
+                  ? '<p class="cf-tel-d sub">Toujours coupée : Skill Advisor lance le moteur (CLI skills) avec <span class="mono">DISABLE_TELEMETRY=1</span>. Ni compteur d’installation, ni requêtes d’audit. Skill Advisor n’envoie rien de son côté.</p>'
+                  : '<p class="cf-tel-d sub">Le moteur (CLI skills) envoie un compteur d’installation anonyme. Le couper ajoute <span class="mono">DISABLE_TELEMETRY=1</span> à la commande ci-dessus, et coupe aussi ses requêtes d’audit. Skill Advisor n’envoie rien de son côté.</p>') +
+              '</div><button type="button" class="sw" role="switch" aria-checked="' + !!st.telemetryOff + '" aria-label="Couper la télémétrie du moteur d’installation"' + (st.installing || live() ? ' disabled' : '') + '></button></div></section>'
           : '');
     },
 
@@ -281,6 +331,8 @@
     actions: function () {
       var st = SA.state, i = inst(), m = SA.agentsOn().length, n = SA.cart.count();
       if (i.phase === 'run') {
+        /* Mode réel : une demande en cours ne s'interrompt pas. */
+        if (live()) return [{ label: 'Installation…', kind: 'primary', disabled: true, on: function () {} }];
         return [
           { label: stop ? 'Arrêt après ce skill…' : 'Annuler', kind: 'default', disabled: stop, on: function () { stop = true; SA.sync(); } },
           { label: 'Installation…', kind: 'primary', disabled: true, on: function () {} }

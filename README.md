@@ -8,7 +8,7 @@
 
 ![Status: prototype](https://img.shields.io/badge/status-prototype-f59e0b)
 ![License: MIT](https://img.shields.io/badge/license-MIT-2563eb)
-![Node.js 22+](https://img.shields.io/badge/node-22%2B-16a34a)
+![Node.js 22.20+](https://img.shields.io/badge/node-22.20%2B-16a34a)
 ![Tested on macOS, Windows 11, Linux](https://img.shields.io/badge/tested-macOS%20%C2%B7%20Windows%2011%20%C2%B7%20Linux-64748b)
 
 [![Skill Advisor in 20 seconds](docs/assets/video-youtube.jpg)](https://www.youtube.com/watch?v=hjwuJ8zlqQc)
@@ -28,7 +28,7 @@ An Agent Skill is a folder with a `SKILL.md` file that teaches an AI agent how t
 3. **What is installed on my machine?** One screen shows every skill, in every agent, with updates and warnings.
 
 > [!IMPORTANT]
-> **This release is a prototype.** The interface runs on an example machine and writes nothing to your disk. The catalogue, the security check and the installation commands are real and usable today. The local application that detects your agents and installs for you is the next step. See **What works today** below.
+> **This release is a prototype.** The installation script now starts the real local application. It reads and changes the real skills of your agents. The demonstration runs on an example machine and writes nothing to your disk: it stays available with `--demo`. The screenshots below still show the demonstration. See **What works today** below.
 
 ## What works today
 
@@ -38,13 +38,13 @@ An Agent Skill is a folder with a `SKILL.md` file that teaches an AI agent how t
 | Catalogue (`catalog/`) | Real data | Browse 242 rated skills in 16 project types. Snapshot of 12 November 2026. |
 | Security check (`tools/skill-scan.mjs`) | Works | Check any skill folder against 11 rules before you install it. |
 | Installation | Works through the `skills` CLI | Install, list, update and remove skills with commands tested on three systems. |
-| Local application | Not built yet | Detect your agents and install from the interface. |
+| Local application (`app/`) | New | Detect your agents, then install, update, disable and remove skills from the interface. Needs Node.js 22.20 or later. |
 
 ## Quick start
 
 ### One script
 
-One script downloads Skill Advisor, checks it and opens it in your browser. It asks for your language, French or English. It installs no system software and needs no administrator rights.
+One script downloads Skill Advisor, installs its one dependency, checks it and starts the local application in your browser. Without Node.js 22.20 or later, it opens the demonstration instead. It asks for your language, French or English. It installs no system software and needs no administrator rights.
 
 macOS and Linux:
 
@@ -64,9 +64,22 @@ Read a script before you run it. The options are in the [manual](docs/install/IN
 
 ![The installation script](docs/assets/screenshots/15-terminal-install-en.png)
 
+*This screenshot shows an earlier version of the script, which opened the demonstration.*
+
+### Start it again
+
+The application runs in the terminal until you press Ctrl+C. To start it again later, go to the installation folder and run `npm start`:
+
+```bash
+cd ~/skill-advisor
+npm start
+```
+
+On Windows, the folder is `skill-advisor` in your user profile. For the demonstration only, run the script with `--demo` (`-Demo` on Windows): it installs nothing and starts nothing.
+
 ### By hand
 
-You need a web browser. For the commands you also need [Node.js](https://nodejs.org) 22 or later (tested with Node.js 26).
+You need a web browser. For the commands you also need [Node.js](https://nodejs.org) 22 or later (tested with Node.js 26). The local application needs Node.js 22.20 or later.
 
 ```bash
 git clone https://github.com/warezfr/skill-advisor.git
@@ -74,6 +87,8 @@ cd skill-advisor
 ```
 
 Open `prototype/dist/preview.html` in your browser. That is the whole demonstration: no server, no install.
+
+To start the local application from this folder, run `npm ci --omit=dev`, then `npm start`.
 
 Then check the two example skills:
 
@@ -83,9 +98,42 @@ node tools/skill-scan.mjs examples/skills
 
 **The step-by-step manual, with a screenshot for every step: [docs/install/INSTALL.md](docs/install/INSTALL.md).**
 
+## The local application
+
+The script starts `node app/server.mjs`. The application works on your real machine: what you install, remove or disable changes the skill folders of your agents. It prints its address and opens it in your browser.
+
+What it does:
+
+- **Install** skills from the catalogue, for all your projects or for one project, in the agents you choose.
+- **Remove** skills. Before it removes, it can keep a backup. See **Backups** below.
+- **Update** skills. An update whose new version gets the verdict `rouge` is held back until you force it.
+- **Disable and enable** skills. A disabled skill moves to `~/.skill-advisor/disabled` and comes back when you enable it.
+- **Manage 78 agents.** Add an agent by hand with its skills folder, hide an agent, empty an agent of its skills, and choose which agents receive the installations.
+
+Safety:
+
+- The application listens on `127.0.0.1` only. Other machines cannot reach it.
+- The address it prints holds a one-time code, valid 10 minutes. To open the interface again later, stop the application with Ctrl+C and run `npm start` again.
+- Nothing is sent elsewhere, except the downloads of skills from GitHub and of the catalogue. The telemetry of the `skills` tool is off. The page loads its fonts from the internet.
+- Your settings are kept in `~/.skill-advisor/settings.json`.
+
+## Backups
+
+A backup keeps one or more skills as they were, with the agents that used them and the verdict of their security check. Backups live in `~/.skill-advisor/backups`.
+
+- **On demand.** Choose one or more skills and make a backup. You can add a label of 80 characters at most and a note of 500 characters at most.
+- **At uninstall.** The confirmation offers the checkbox "Garder une sauvegarde" (Keep a backup). Tick it to keep a copy of the skill before it is removed. The same checkbox appears when you empty an agent.
+- **Restore or delete.** Restore puts each copy back where it came from. When something already sits at one of those places, it refuses and changes nothing.
+- **Export.** Save a backup as one `.tar.gz` file.
+- **Import.** On another machine, import that file. Skill Advisor checks every skill again and stores it as a new backup. It installs nothing yet. It refuses a file that holds anything other than files and folders, a path that leaves the backup, more than 200 MB or more than 100,000 entries. It also refuses a file without a valid Skill Advisor manifest or with an invalid skill name.
+- **Apply.** Copy the skills of a backup to other agents: any known agent, or an agent you added by hand. When an agent already holds the same content, nothing changes. When it holds a different version, you choose: **Skip** leaves it in place, **Replace** first backs it up, then replaces it.
+- **Red skills.** A skill whose verdict is `rouge` is applied only after you confirm it.
+
+Step 9 of the [manual](docs/install/INSTALL.md) walks you through each action.
+
 ## A tour in screenshots
 
-The interface is in French for now. Each caption says what the screen does.
+The interface is in French for now. Each caption says what the screen does. These screenshots still show the demonstration, on an example machine.
 
 ### 1. My machine
 
@@ -183,6 +231,7 @@ Not tested yet: x64 processors and WSL. The reports are in [docs/etude/](docs/et
 ## Project layout
 
 ```text
+app/           Local application: server on 127.0.0.1 and actions on your skills
 prototype/     Interface of the demonstration (HTML, CSS, JavaScript, no dependency)
 catalog/       Catalogue, data snapshot and the scripts that build it
 tools/         skill-scan.mjs, the static security check
@@ -195,8 +244,8 @@ install.ps1   Installation script for Windows
 
 ## Roadmap
 
-- Local application started by one command, which detects the agents on your machine.
-- Installation, update, disabling and removal from the interface.
+- Screenshots of the local application.
+- Tests of the local application on Windows 11 and Linux.
 - Tests on x64 processors and WSL.
 
 ## License

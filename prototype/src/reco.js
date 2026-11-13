@@ -95,6 +95,276 @@
         stats: { kw: ['statistics', 'statistical', 'analytics', '=analysis'] },
         auto: { kw: ['automation', 'automate', '=pipeline', '=scheduled'] }
       }
+    },
+    /* Objectifs par catégorie. Le nom comparé inclut la source (« vercel-labs/agent-skills ») :
+       pas de mot-clé « agent », « skills », « ai », « web », « docs », « ui » seul, ils touchent des sources entières. */
+    frontend: {
+      base: ['frontend', 'ux'],
+      fw: {
+        react: { kw: ['react'] },
+        next: { kw: ['next.js', 'nextjs', '=next'] },
+        vue: { kw: ['vue', 'vue.js', 'vuejs', 'nuxt'] }
+      },
+      host: {
+        vercel: { kw: ['vercel-react', 'vercel/next.js', 'deploy-to-vercel'] },
+        cloudflare: { kw: ['cloudflare workers', 'nextjs-on-cloudflare', 'wrangler', '=workers'] }
+      },
+      needs: {
+        perf: { kw: ['performance', 'turbopack', '=cache', 'caching'] },
+        anim: { kw: ['gsap', 'animation', 'animations', 'view transition'] },
+        types: { kw: ['typescript'] },
+        auth: { kw: ['clerk', '=auth', 'authentication'] }
+      }
+    },
+    mobile: {
+      base: ['mobile', 'ux'],
+      os: {
+        ios: { kw: ['ios', 'swift', 'swiftui', 'iphone', 'testflight', 'xcode'] },
+        android: { kw: ['android', 'kotlin'] },
+        multi: { kw: ['react-native', 'expo', 'flutter', 'cross-platform'] }
+      },
+      tech: {
+        swift: { kw: ['swift', 'swiftui', 'uikit'] },
+        rn: { kw: ['react-native', 'expo'] },
+        flutter: { kw: ['flutter', 'dart'] }
+      },
+      needs: {
+        design: { kw: ['design-mobile-apps', 'ios-design', 'screens', 'layout', 'nativewind'] },
+        anim: { kw: ['animation', 'animations', 'animate', '=motion'] },
+        tests: { kw: ['=test', 'e2e', 'widgettester', 'testflight'] },
+        archi: { kw: ['architecture', '=architect', 'expo modules', '=module'] }
+      }
+    },
+    backend: {
+      base: ['backend', 'database'],
+      lang: {
+        node: { kw: ['node.js', 'nodejs', 'nestjs', 'express', 'fastify'] },
+        go: { kw: ['golang', '=go'] },
+        rust: { kw: ['rust', 'tokio'] },
+        python: { kw: ['python', 'django', 'fastapi', 'flask'] },
+        java: { kw: ['java', 'spring boot', 'springboot'] }
+      },
+      api: {
+        rest: { kw: ['rest', 'restful', 'api-design'] },
+        graphql: { kw: ['graphql'] }
+      },
+      needs: {
+        archi: { kw: ['architecture', '=patterns', 'api design'] },
+        tests: { kw: ['=testing', 'tdd', 'test-driven', 'unit tests', 'integration tests'] },
+        secu: { cats: ['securite'], kw: ['=security'] },
+        db: { cats: ['database'] }
+      }
+    },
+    database: {
+      base: ['database', 'backend'],
+      engine: {
+        postgres: { kw: ['postgres', 'postgresql', 'supabase', 'neon'] },
+        mongo: { kw: ['mongodb', 'mongo'] }
+      },
+      tool: {
+        prisma: { kw: ['prisma'] },
+        supabase: { kw: ['supabase'] },
+        neon: { kw: ['neon', 'neondatabase'] },
+        sql: { kw: ['sql', '=query', 'queries'] }
+      },
+      needs: {
+        schema: { kw: ['table-design', 'schema design', 'data types', '=schema'] },
+        perf: { kw: ['sql-optimization', 'query optimization', 'indexing', 'database performance'] },
+        migr: { kw: ['database-migration', 'zero-downtime', 'prisma-upgrade', 'mongodb-upgrade', 'schema migrations', 'migration guide'] }
+      }
+    },
+    ia: {
+      base: ['ia'],
+      type: {
+        agent: { kw: ['agents sdk', 'subagent', 'adk', 'agents-cli', 'autonomous', 'create an agent'] },
+        mcp: { kw: ['mcp', 'model context protocol'] },
+        app: { kw: ['ai sdk', 'llm', 'llms', 'claude api', 'anthropic sdk', 'ai-powered'] },
+        rag: { kw: ['rag', 'retrieval', 'vector', 'semantic search'] }
+      },
+      sdk: {
+        claude: { kw: ['claude api', 'anthropic sdk'] },
+        aisdk: { kw: ['ai sdk', 'vercel/ai'] },
+        adk: { kw: ['adk', 'agents-cli'] },
+        cloudflare: { kw: ['agents sdk', 'cloudflare agents'] }
+      },
+      needs: {
+        prompt: { kw: ['prompt', 'prompts'] },
+        eval: { kw: ['eval', 'evals', 'evaluation', 'evaluate my agent'] },
+        browser: { kw: ['browser', 'navigating', 'scraping'] }
+      }
+    },
+    tests: {
+      base: ['tests'],
+      type: {
+        tdd: { kw: ['tdd', 'test-driven', 'red-green'] },
+        review: { kw: ['review', 'code-review'] },
+        debug: { kw: ['=debug', 'debugging', 'traceback', 'root cause'] },
+        e2e: { kw: ['playwright', 'e2e', 'webapp-testing', 'browser'] }
+      },
+      code: {
+        web: { kw: ['webapp', 'web pages', 'web applications', 'playwright'] },
+        go: { kw: ['golang-testing'] },
+        rust: { kw: ['rust-testing'] },
+        mobile: { kw: ['mobile e2e', 'widgettester'] }
+      },
+      needs: {
+        qa: { kw: ['qa', 'github issues'] },
+        ab: { kw: ['a/b', 'ab-testing', 'experiment'] },
+        secu: { cats: ['securite'], kw: ['=security'] }
+      }
+    },
+    devops: {
+      base: ['devops'],
+      cloud: {
+        azure: { kw: ['azure'] },
+        aws: { kw: ['aws', 'lambda', 'eks'] },
+        cloudflare: { kw: ['wrangler', 'cloudflare workers', '=workers'] },
+        vercel: { kw: ['deploy-to-vercel', 'vercel cli', 'vercel deployment'] }
+      },
+      tool: {
+        docker: { kw: ['docker', 'dockerfile', 'containerized', 'docker compose'] },
+        k8s: { kw: ['kubernetes', 'eks', 'k8s'] },
+        ci: { kw: ['github actions', 'github-actions', '=ci', 'ci/cd'] },
+        serverless: { kw: ['serverless', 'lambda', '=workers', '=functions'] }
+      },
+      needs: {
+        deploy: { kw: ['deploy', 'deployment', 'deployments'] },
+        monitor: { kw: ['diagnostics', 'troubleshoot', 'telemetry', 'monitoring', 'log analytics'] },
+        secu: { cats: ['securite'], kw: ['=security'] },
+        infra: { kw: ['terraform', 'bicep', 'infrastructure as code', 'iac'] }
+      }
+    },
+    securite: {
+      base: ['securite'],
+      type: {
+        audit: { kw: ['security-audit', 'auditor', 'vulnerability', 'vulnerabilities', 'hardening'] },
+        auth: { kw: ['auth', 'authentication', 'oauth', 'passkeys', 'sign-in'] },
+        threat: { kw: ['threat', 'threats', 'mitigation', 'mitigations'] }
+      },
+      stack: {
+        firebase: { kw: ['firebase'] },
+        convex: { kw: ['convex'] },
+        betterauth: { kw: ['better-auth'] },
+        gcloud: { kw: ['google-cloud'] },
+        azure: { kw: ['azure-compliance', 'key vault'] }
+      },
+      needs: {
+        access: { kw: ['rbac', 'authorization', 'iam', 'privilege', 'security rules'] },
+        sessions: { kw: ['session management', 'secure sessions', 'sessions', 'secrets'] },
+        web: { kw: ['csrf', 'xss', 'injection', 'waf'] }
+      }
+    },
+    marketing: {
+      base: ['marketing'],
+      goal: {
+        seo: { kw: ['seo'] },
+        content: { kw: ['copywriting', 'content-strategy', '=copy', '=content'] },
+        email: { kw: ['email', 'cold-email', 'outbound'] },
+        brand: { kw: ['brand', 'branding'] }
+      },
+      channel: {
+        web: { kw: ['seo', 'search engine', '=schema'] },
+        ai: { kw: ['ai-seo', 'geo', 'chatgpt', 'perplexity'] },
+        mail: { kw: ['email', 'inbox', 'deliverability', 'subscribers'] }
+      },
+      needs: {
+        ideas: { kw: ['marketing-ideas', 'growth', 'psychology'] },
+        audit: { kw: ['seo-audit', 'diagnose'] },
+        scale: { kw: ['programmatic', 'at scale'] },
+        edit: { kw: ['copy-editing', 'proofread', 'tighten'] }
+      }
+    },
+    documents: {
+      base: ['documents', 'data'],
+      format: {
+        docx: { kw: ['docx', 'word'] },
+        pptx: { kw: ['pptx', 'slides', 'presentation', 'presentations', 'powerpoint'] },
+        xlsx: { kw: ['xlsx', 'excel', 'spreadsheet'] },
+        pdf: { kw: ['pdf'] }
+      },
+      act: {
+        create: { kw: ['=create', 'from scratch', 'create, read', 'create and edit', 'create strategic'] },
+        read: { kw: ['extracting', 'extract text', 'reading', 'ocr', 'view-pdf'] },
+        convert: { kw: ['convert', 'converting', 'convert-documents'] }
+      },
+      needs: {
+        gws: { kw: ['gws', 'google slides', 'google workspace'] },
+        html: { kw: ['html presentations', 'html-slides'] },
+        ocr: { kw: ['ocr', 'redact'] }
+      }
+    },
+    ux: {
+      base: ['ux', 'site-design'],
+      type: {
+        system: { kw: ['design-system', 'design tokens'] },
+        anim: { kw: ['animation', 'animations', 'animate', 'motion'] },
+        a11y: { kw: ['accessibility', 'a11y', 'aria', 'wcag'] },
+        type: { kw: ['typography', 'type scale', '=font', '=fonts'] }
+      },
+      tech: {
+        css: { kw: ['css', 'tailwind'] },
+        react: { kw: ['react'] },
+        rn: { kw: ['react-native', 'expo'] },
+        three: { kw: ['three.js', 'threejs', 'webgl'] }
+      },
+      needs: {
+        review: { kw: ['reviews', '=improve', 'review-animations'] },
+        perf: { kw: ['animation-performance', 'frame budget', 'main thread', '=perf'] },
+        tokens: { kw: ['design tokens', 'token architecture', 'token files'] }
+      }
+    },
+    ecommerce: {
+      base: ['ecommerce'],
+      platform: {
+        shopify: { kw: ['shopify'] },
+        stripe: { kw: ['stripe'] },
+        wordpress: { kw: ['wordpress', 'woocommerce', '=wp'] }
+      },
+      pay: {
+        card: { kw: ['card', 'cards', 'checkout', 'payment', 'payments'] },
+        sub: { kw: ['checkout, subscriptions', 'recurring'] },
+        agent: { kw: ['x402', 'agent payments', 'agent-payment', 'a2a-pay'] }
+      },
+      needs: {
+        shop: { kw: ['storefront', 'cart', '=admin', 'customer'] },
+        intl: { kw: ['cross-border', 'international', 'markets'] },
+        upgrade: { kw: ['upgrade-stripe', 'api versions'] }
+      }
+    },
+    methode: {
+      base: ['methode', 'tests'],
+      type: {
+        plan: { kw: ['writing-plans', 'executing-plans', '=plan', 'spec', 'implementation plan', 'sharpen a plan'] },
+        git: { kw: ['git', 'commit', 'commits', 'worktrees'] },
+        docs: { kw: ['adr', 'grill-with-docs', 'documentation', 'markdown file'] },
+        handoff: { kw: ['handoff', 'hand off', 'summary'] }
+      },
+      needs: {
+        skills: { kw: ['find-skills', 'writing-skills', 'discover and install'] },
+        archi: { kw: ['architecture', '=architect'] },
+        research: { kw: ['research', 'investigate', 'primary sources'] },
+        meeting: { kw: ['meeting', 'standup'] }
+      }
+    },
+    'desktop-jeu': {
+      base: ['desktop-jeu'],
+      engine: {
+        three: { kw: ['three.js', 'threejs', 'webgl', '=three'] },
+        godot: { kw: ['godot', 'gdscript'] },
+        unity: { kw: ['unity'] },
+        web: { kw: ['html5', 'canvas', 'browser games', 'browser game'] }
+      },
+      type: {
+        scene: { kw: ['scene', 'scenes', 'geometry', 'materials', 'camera'] },
+        game: { kw: ['game', 'games', 'playable', 'gamedev'] },
+        anim: { kw: ['threejs-animation', 'godot-animation', 'animationplayer', 'skeletal', 'keyframe', 'tween'] }
+      },
+      needs: {
+        ui: { kw: ['hud', 'huds', 'menus', 'game-ui'] },
+        feel: { kw: ['game-feel', 'juice', 'screen shake', 'hit-stop'] },
+        fx: { kw: ['shaders', 'shader', 'postprocessing', 'post-processing', 'effects'] },
+        assets: { kw: ['sprites', 'textures', '3d assets'] }
+      }
     }
   };
 

@@ -1,0 +1,87 @@
+/* Skill Advisor · écran Agents : recherche, filtres, groupes, menu d'actions, confirmation.
+   Seulement des classes ag-, sous .ag-mgr. Jetons seulement. */
+
+.ag-mgr .ag-find {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  margin-top: 24px;
+}
+.ag-mgr .ag-q { flex: 1 1 220px; min-width: 0; max-width: 320px; }
+.ag-mgr .ag-f { max-width: 100%; overflow-x: auto; }
+.ag-mgr .ag-f .seg > button { padding: 0 12px; }
+.ag-mgr .ag-fn { margin-left: 4px; font-family: var(--f-m); font-size: 12px; font-variant-numeric: tabular-nums; color: var(--ink-3); }
+.ag-mgr .ag-sys { display: flex; align-items: baseline; gap: 8px; margin: 0; }
+.ag-mgr .ag-sys .mono { color: var(--ink); }
+
+.ag-mgr .ag-msg:empty, .ag-mgr .ag-alert:empty { display: none; }
+.ag-mgr .ag-msg { margin: 12px 0 0; font-size: 13px; color: var(--ink-2); }
+.ag-mgr .ag-alert { margin: 12px 0 0; padding: 8px 12px; border-left: 2px solid var(--bad); border-radius: 0 var(--r1) var(--r1) 0; background: var(--bad-soft); font-size: 13px; color: var(--bad); }
+.ag-mgr .ag-empty { margin: 24px 0 0; }
+
+/* Ligne : interrupteur, nom, badge, bouton Actions ; dessous le dossier et le nombre de skills. */
+.ag-mgr .ag-row {
+  grid-template-columns: 48px minmax(0, 1fr) auto auto;
+  grid-template-areas:
+    "sw l1 bdg more"
+    "sw path path more";
+}
+.ag-mgr .ag-row.is-hidden .ag-n { color: var(--ink-2); }
+.ag-mgr .ag-path { display: flex; flex-wrap: wrap; gap: 2px 12px; }
+.ag-mgr .ag-path .mono { min-width: 0; overflow-wrap: anywhere; }
+.ag-mgr .ag-cnt { font-family: var(--f-b); font-size: 12.5px; color: var(--ink-3); }
+.ag-mgr .ag-more { grid-area: more; min-height: 36px; padding: 0 10px; font-size: 13px; }
+.ag-mgr .ag-more[aria-expanded="true"] { background: var(--bg-2); color: var(--ink); }
+.ag-mgr .ag-pane { grid-column: 2 / -1; padding-top: 8px; }
+
+.ag-mgr .ag-menu { display: flex; flex-wrap: wrap; gap: 4px; }
+.ag-mgr .ag-menu .btn { min-height: 36px; font-size: 13px; }
+
+.ag-mgr .ag-cf {
+  padding: 12px 16px;
+  border-left: 2px solid var(--bad);
+  border-radius: 0 var(--r1) var(--r1) 0;
+  background: var(--bg-2);
+}
+.ag-mgr .ag-cf-t { margin: 0; font-size: 14px; color: var(--ink); max-width: 64ch; }
+.ag-mgr .ag-cf-w { margin: 8px 0 0; font-size: 13px; color: var(--ink-2); max-width: 64ch; }
+.ag-mgr .ag-cb { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 14px; color: var(--ink); cursor: pointer; }
+.ag-mgr .ag-cb input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+.ag-mgr .ag-cf-a { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 0; }
+
+/* Groupes : autres agents (repliés), agents ajoutés à la main. */
+.ag-mgr .ag-grp { margin-top: 16px; border-top: 1px solid var(--line); }
+.ag-mgr .ag-grp-h { margin: 0; font: 500 13px/20px var(--f-b); color: var(--ink-2); padding: 12px 0 4px; }
+.ag-mgr .ag-grp-b {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  margin: -12px 0 -4px -8px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: var(--r1);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 500;
+}
+.ag-mgr .ag-grp-b:hover { background: var(--bg-2); }
+.ag-mgr .ag-grp-b .ic { transition: transform var(--t1) var(--ease); }
+.ag-mgr .ag-grp-b[aria-expanded="true"] .ic { transform: rotate(90deg); }
+
+@media (max-width: 760px) {
+  .ag-mgr .ag-row {
+    grid-template-columns: 48px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "sw l1 more"
+      "sw bdg bdg"
+      "sw path path";
+  }
+  .ag-mgr .ag-row > .bdg { justify-self: start; }
+  .ag-mgr .ag-q { max-width: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ag-mgr .ag-grp-b .ic { transition: none; }
+}

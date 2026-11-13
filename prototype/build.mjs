@@ -10,11 +10,11 @@ const dist = join(root, 'dist');
 
 const FONTS = 'https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap';
 
-const CSS = ['shell.css', 'views/wizard-a.css', 'views/wizard-b.css', 'views/recherche.css', 'views/v2.css'];
+const CSS = ['shell.css', 'views/wizard-a.css', 'views/wizard-b.css', 'views/recherche.css', 'views/v2.css', 'views/agents.css', 'views/sauvegardes.css'];
 const JS = [
-  'data.js', 'search-data.js', 'file-data.js', 'reco.js', 'machine-data.js', 'core.js', 'views/detail.js',
+  'data.js', 'search-data.js', 'file-data.js', 'reco.js', 'machine-data.js', 'live.js', 'core.js', 'views/detail.js',
   'views/accueil.js', 'views/objectif.js', 'views/questions.js', 'views/resultats.js', 'views/confirmation.js',
-  'views/guide.js', 'views/gestion.js', 'views/recherche.js', 'views/agents.js'
+  'views/guide.js', 'views/gestion.js', 'views/sauvegardes.js', 'views/recherche.js', 'views/agents.js'
 ];
 const REQUIRED = new Set(['index.html', 'shell.css', 'core.js']);
 
@@ -46,7 +46,14 @@ const head = [
   `<link rel="stylesheet" href="${FONTS}">`,
   `<style>\n${css}</style>`
 ].join('\n');
-const body = `${markup}\n<script>\n${js}\nif (window.SA && typeof SA.start === 'function') SA.start();\n</script>`;
+// En mode réel (window.SA_LIVE), l'interface démarre une fois l'état de la machine lu ; sinon tout de suite.
+const boot = [
+  "if (window.SA && typeof SA.start === 'function') {",
+  '  if (SA.live && SA.live.ready) SA.live.ready.then(function (ok) { if (ok) SA.start(); });',
+  '  else SA.start();',
+  '}'
+].join('\n');
+const body = `${markup}\n<script>\n${js}\n${boot}\n</script>`;
 
 const page = `${head}\n${body}\n`;
 const preview = `<!doctype html>

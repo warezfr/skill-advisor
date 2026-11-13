@@ -8,7 +8,7 @@
 
 ![Status: prototype](https://img.shields.io/badge/status-prototype-f59e0b)
 ![License: MIT](https://img.shields.io/badge/license-MIT-2563eb)
-![Node.js 22+](https://img.shields.io/badge/node-22%2B-16a34a)
+![Node.js 22.20+](https://img.shields.io/badge/node-22.20%2B-16a34a)
 ![Tested on macOS, Windows 11, Linux](https://img.shields.io/badge/tested-macOS%20%C2%B7%20Windows%2011%20%C2%B7%20Linux-64748b)
 
 [![Skill Advisor en 20 segundos](docs/assets/video-youtube.jpg)](https://www.youtube.com/watch?v=hjwuJ8zlqQc)
@@ -28,7 +28,7 @@ Un Agent Skill es una carpeta con un archivo `SKILL.md`. Ese archivo enseña a u
 3. **¿Qué hay instalado en mi máquina?** Una sola pantalla muestra todas las skills, en todos los agentes, con actualizaciones y avisos.
 
 > [!IMPORTANT]
-> **Esta versión es un prototipo.** La interfaz funciona con una máquina de ejemplo y no escribe nada en su disco. El catálogo, la verificación de seguridad y los comandos de instalación son reales y se pueden usar hoy. La aplicación local que detecta sus agentes e instala por usted es el siguiente paso. Consulte **Qué funciona hoy** más abajo.
+> **Esta versión es un prototipo.** El script de instalación ahora inicia la aplicación local real. Lee y cambia las skills reales de sus agentes. La demostración funciona con una máquina de ejemplo y no escribe nada en su disco: sigue disponible con `--demo`. Las capturas de pantalla de abajo aún muestran la demostración. Consulte **Qué funciona hoy** más abajo.
 
 ## Qué funciona hoy
 
@@ -38,13 +38,13 @@ Un Agent Skill es una carpeta con un archivo `SKILL.md`. Ese archivo enseña a u
 | Catálogo (`catalog/`) | Datos reales | Explore 242 skills valoradas en 16 tipos de proyecto. Instantánea del 12 de noviembre de 2026. |
 | Verificación de seguridad (`tools/skill-scan.mjs`) | Funciona | Compruebe cualquier carpeta de skill con 11 reglas antes de instalarla. |
 | Instalación | Funciona con la CLI `skills` | Instale, liste, actualice y elimine skills con comandos probados en tres sistemas. |
-| Aplicación local | Aún no desarrollada | Detectar sus agentes e instalar desde la interfaz. |
+| Aplicación local (`app/`) | Nueva | Detecte sus agentes y después instale, actualice, desactive y elimine skills desde la interfaz. Requiere Node.js 22.20 o posterior. |
 
 ## Inicio rápido
 
 ### Un solo script
 
-Un script descarga Skill Advisor, lo comprueba y lo abre en su navegador. Pregunta su idioma, francés o inglés. No instala ningún software del sistema y no pide permisos de administrador.
+Un script descarga Skill Advisor, instala su única dependencia, lo comprueba e inicia la aplicación local en su navegador. Sin Node.js 22.20 o posterior, abre la demostración en su lugar. Pregunta su idioma, francés o inglés. No instala ningún software del sistema y no pide permisos de administrador.
 
 macOS y Linux:
 
@@ -64,9 +64,22 @@ Lea un script antes de ejecutarlo. Las opciones están en el [manual](docs/insta
 
 ![El script de instalación](docs/assets/screenshots/15-terminal-install-en.png)
 
+*Esta captura muestra una versión anterior del script, que abría la demostración.*
+
+### Volver a iniciarla
+
+La aplicación funciona en la terminal hasta que pulse Ctrl+C. Para volver a iniciarla más tarde, vaya a la carpeta de instalación y ejecute `npm start`:
+
+```bash
+cd ~/skill-advisor
+npm start
+```
+
+En Windows, la carpeta es `skill-advisor` en su perfil de usuario. Para la demostración sola, ejecute el script con `--demo` (`-Demo` en Windows): no instala nada y no inicia nada.
+
 ### A mano
 
-Necesita un navegador web. Para los comandos necesita además [Node.js](https://nodejs.org) 22 o posterior (probado con Node.js 26).
+Necesita un navegador web. Para los comandos necesita además [Node.js](https://nodejs.org) 22 o posterior (probado con Node.js 26). La aplicación local requiere Node.js 22.20 o posterior.
 
 ```bash
 git clone https://github.com/warezfr/skill-advisor.git
@@ -74,6 +87,8 @@ cd skill-advisor
 ```
 
 Abra `prototype/dist/preview.html` en su navegador. Eso es toda la demostración: sin servidor y sin instalación.
+
+Para iniciar la aplicación local desde esta carpeta, ejecute `npm ci --omit=dev` y después `npm start`.
 
 Después, verifique las dos skills de ejemplo:
 
@@ -83,9 +98,42 @@ node tools/skill-scan.mjs examples/skills
 
 **El manual paso a paso, con una captura de pantalla por cada paso: [docs/install/INSTALL.es.md](docs/install/INSTALL.es.md).**
 
+## La aplicación local
+
+El script inicia `node app/server.mjs`. La aplicación trabaja en su máquina real: lo que instala, elimina o desactiva cambia las carpetas de skills de sus agentes. Muestra su dirección y la abre en su navegador.
+
+Qué hace:
+
+- **Instalar** skills del catálogo, para todos sus proyectos o para uno solo, en los agentes que usted elija.
+- **Eliminar** skills. Antes de eliminar, puede guardar una copia de seguridad. Vea **Copias de seguridad** más abajo.
+- **Actualizar** skills. Una actualización cuya nueva versión recibe el veredicto `rouge` queda retenida hasta que usted la fuerce.
+- **Desactivar y activar** skills. Una skill desactivada pasa a `~/.skill-advisor/disabled` y vuelve cuando la activa.
+- **Gestionar 78 agentes.** Añada un agente a mano con su carpeta de skills, oculte un agente, vacíe un agente de sus skills y elija qué agentes reciben las instalaciones.
+
+Seguridad:
+
+- La aplicación escucha solo en `127.0.0.1`. Las otras máquinas no pueden alcanzarla.
+- La dirección que muestra lleva un código de un solo uso, válido 10 minutos. Para volver a abrir la interfaz más tarde, detenga la aplicación con Ctrl+C y ejecute `npm start` de nuevo.
+- No se envía nada a otro sitio, salvo las descargas de skills desde GitHub y del catálogo. La telemetría de la herramienta `skills` está desactivada. La página carga sus fuentes desde internet.
+- Sus ajustes se guardan en `~/.skill-advisor/settings.json`.
+
+## Copias de seguridad
+
+Una copia de seguridad guarda una o varias skills tal como estaban, con los agentes que las usaban y el veredicto de su verificación de seguridad. Las copias se guardan en `~/.skill-advisor/backups`.
+
+- **A petición.** Elija una o varias skills y haga una copia de seguridad. Puede añadir un título de 80 caracteres como máximo y una nota de 500 caracteres como máximo.
+- **Al desinstalar.** La confirmación ofrece la casilla "Garder une sauvegarde" (Guardar una copia). Márquela para guardar una copia de la skill antes de eliminarla. La misma casilla aparece cuando vacía un agente.
+- **Restaurar o borrar.** Restaurar devuelve cada copia a su lugar de origen. Si algo ya ocupa uno de esos lugares, se niega y no cambia nada.
+- **Exportar.** Guarde una copia de seguridad en un solo archivo `.tar.gz`.
+- **Importar.** En otra máquina, importe ese archivo. Skill Advisor verifica de nuevo cada skill y la guarda como una nueva copia de seguridad. Todavía no instala nada. Rechaza un archivo que contenga algo distinto de archivos y carpetas, una ruta que salga de la copia, más de 200 MB o más de 100 000 entradas. También rechaza un archivo sin un manifiesto válido de Skill Advisor o con un nombre de skill no válido.
+- **Aplicar.** Copie las skills de una copia de seguridad a otros agentes: cualquier agente conocido, o un agente añadido a mano. Si un agente ya tiene el mismo contenido, nada cambia. Si tiene otra versión, usted elige: **Omitir** la deja en su sitio, **Reemplazar** primero la guarda en una copia y luego la reemplaza.
+- **Skills rojas.** Una skill cuyo veredicto es `rouge` solo se aplica después de que usted lo confirme.
+
+El paso 9 del [manual](docs/install/INSTALL.es.md) le guía en cada acción.
+
 ## Un recorrido en capturas de pantalla
 
-Por ahora la interfaz está en francés. Cada pie de imagen explica qué hace la pantalla.
+Por ahora la interfaz está en francés. Cada pie de imagen explica qué hace la pantalla. Estas capturas aún muestran la demostración, con una máquina de ejemplo.
 
 ### 1. Mi máquina
 
@@ -183,6 +231,7 @@ Aún sin probar: procesadores x64 y WSL. Los informes están en [docs/etude/](do
 ## Estructura del proyecto
 
 ```text
+app/           Local application: server on 127.0.0.1 and actions on your skills
 prototype/     Interface of the demonstration (HTML, CSS, JavaScript, no dependency)
 catalog/       Catalogue, data snapshot and the scripts that build it
 tools/         skill-scan.mjs, the static security check
@@ -195,8 +244,8 @@ install.ps1   Installation script for Windows
 
 ## Hoja de ruta
 
-- Aplicación local que se inicia con un solo comando y detecta los agentes de su máquina.
-- Instalación, actualización, desactivación y eliminación desde la interfaz.
+- Capturas de pantalla de la aplicación local.
+- Pruebas de la aplicación local en Windows 11 y Linux.
 - Pruebas en procesadores x64 y WSL.
 
 ## Licencia

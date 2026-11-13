@@ -1,0 +1,77 @@
+/* Skill Advisor · écran Sauvegardes (classes sv-, sous .sv et dans le tiroir .sv-ap),
+   plus le panneau « Sauvegarder » et le résumé de Mes skills (gs-save, gs-bk-a). Jetons seulement. */
+
+.sv .sv-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 24px; }
+.sv .gs-msg { margin: 16px 0 0; }
+.sv .sv-err, .sv .sv-warns { margin: 16px 0 0; }
+.sv .sv-wl { margin: 4px 0 0; padding-left: 18px; font-size: 14px; color: var(--ink-2); }
+.sv .sv-wl li + li { margin-top: 2px; }
+
+.sv .sv-list { margin-top: 24px; container-type: inline-size; }
+.sv .sv-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px 24px;
+  padding: 16px 0;
+}
+.sv .sv-main { display: grid; gap: 4px; min-width: 0; }
+.sv .sv-l1 { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0; }
+.sv .sv-label { font-weight: 500; color: var(--ink); overflow-wrap: anywhere; }
+.sv .sv-meta { display: flex; flex-wrap: wrap; gap: 2px 16px; margin: 0; font-size: 13px; }
+.sv .sv-note { margin: 0; font-size: 14px; color: var(--ink-2); max-width: 64ch; overflow-wrap: anywhere; }
+.sv .sv-items { display: flex; flex-wrap: wrap; gap: 2px 12px; margin: 4px 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--ink-2); }
+.sv .sv-items .mono { overflow-wrap: anywhere; }
+.sv .sv-act { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; max-width: 30rem; }
+.sv .sv-act .gs-ask { flex-basis: 100%; text-align: right; }
+.sv .sv-why { margin-top: 48px; }
+
+/* Tiroir « Appliquer à d'autres agents » : hors de #view, sous .sv-ap. */
+.sv-ap .sv-cks { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.sv-ap .sv-cb { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 8px; min-height: 44px; font-size: 14px; color: var(--ink); cursor: pointer; }
+.sv-ap .sv-cb input { width: 18px; height: 18px; margin: 0; flex: none; accent-color: var(--accent); }
+.sv-ap .sv-cb .mono { overflow-wrap: anywhere; }
+.sv-ap .sv-force { margin-left: 26px; min-height: 36px; font-size: 13px; color: var(--bad); }
+.sv-ap .sv-gh { margin: 8px 0 0; font: 500 13px/20px var(--f-b); color: var(--ink-2); }
+.sv-ap .sv-q { width: 100%; max-width: 320px; margin: 4px 0; }
+.sv-ap .sv-hint { margin: 4px 0 0; font-size: 13px; }
+.sv-ap .sv-ap-err { margin: 16px 0 0; }
+.sv-ap .sv-shared { margin: 8px 0 0; padding: 8px 12px; border-left: 2px solid var(--warn); background: var(--warn-soft); font-size: 13px; color: var(--ink); }
+.sv-ap .sv-warns { margin: 16px 0 0; }
+.sv-ap .sv-wl { margin: 4px 0 0; padding-left: 18px; font-size: 14px; color: var(--ink-2); }
+/* Bilan d'une application : dans le tiroir, puis gardé sur l'écran. */
+.sv .sv-res { margin: 8px 0 0; max-width: 48rem; }
+.sv-ap .sv-res li, .sv .sv-res li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; align-items: center; gap: 4px 12px; padding: 8px 0; }
+.sv-ap .sv-res-n, .sv .sv-res-n { font-weight: 500; color: var(--ink); overflow-wrap: anywhere; }
+.sv-ap .sv-res-a, .sv .sv-res-a { color: var(--ink-2); }
+.sv-ap .sv-res-t, .sv .sv-res-t { grid-column: 1 / -1; font-size: 13px; overflow-wrap: anywhere; }
+.sv-ap .sv-fail, .sv .sv-fail { color: var(--bad); }
+
+/* Mes skills : nom et note d'une sauvegarde à la demande, résumé des sauvegardes. */
+.gs-save {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 16px;
+  margin-top: 12px;
+  padding: 12px 16px;
+  border-left: 2px solid var(--accent);
+  border-radius: 0 var(--r1) var(--r1) 0;
+  background: var(--bg-2);
+}
+.gs-save .gs-bulk-n { flex-basis: 100%; margin: 0; }
+.gs-save .gs-bulk-n .mono { overflow-wrap: anywhere; }
+.gs-save-f { display: grid; gap: 4px; flex: 1 1 220px; min-width: 0; font-size: 13px; color: var(--ink-2); }
+.gs-save-f .fld { width: 100%; }
+.gs-save-a { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
+.gs-bk-a { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 12px 0 0; }
+
+/* Liste étroite : les actions passent sous la sauvegarde. */
+@container (max-width: 720px) {
+  .sv .sv-row { grid-template-columns: minmax(0, 1fr); }
+  .sv .sv-act { justify-content: flex-start; max-width: none; }
+  .sv .sv-act .gs-ask { text-align: left; }
+}
+@media (max-width: 760px) {
+  .sv-ap .sv-q { max-width: none; }
+}

@@ -104,6 +104,8 @@ window.SA = window.SA || {};
   };
   /* Example project folder used when the scope is "Ce projet seulement". */
   SA.projRoot = function () {
+    /* Mode réel : le projet est le dossier où le serveur a été lancé. */
+    if (SA.live && SA.live.on) return String((SA.live.state || {}).cwd || 'dossier du projet en cours');
     var os = (SA.state && SA.state.os) || 'mac', sep = SA.sep();
     return ((D().home || {})[os] || '') + sep + 'code' + sep + 'mon-app';
   };
@@ -144,6 +146,47 @@ window.SA = window.SA || {};
     return SA.agents().filter(function (a) { return a.st !== 'no' && on[a.id]; });
   };
   SA.agentPath = function (a) { return a.abs ? a.abs : a.rel ? SA.path(a.rel) : ''; };
+
+  /* ---- sauvegardes ---- */
+  SA.ORIGIN = { remove: 'à la suppression', manual: 'à la demande', import: 'importée', replace: 'avant remplacement' };
+  var VERDICTS = { vert: 1, 'vert-remarques': 1, orange: 1, rouge: 1 };
+  /* Clés venues de la machine : jamais une propriété héritée (constructor, toString…). */
+  function own(o, k) { return k != null && Object.prototype.hasOwnProperty.call(o, k); }
+  SA.own = own;
+  function verdictOf(r) {
+    if (r.scan && own(VERDICTS, r.scan.verdict)) return r.scan.verdict;
+    return r.warn === 2 ? 'rouge' : r.warn === 1 ? 'orange' : null;
+  }
+  /* Une forme unique pour l'écran : la forme Backup du contrat, ou une ligne de Mes skills gardée telle quelle
+     (désinstallation en démo, sauvegarde d'avant l'étape 1). */
+  SA.normBackup = function (b) {
+    b = b || {};
+    var items = Array.isArray(b.items) && b.items.length ? b.items : [{
+      name: b.name, src: b.src, agents: b.agents || Object.keys(b.ag || {}), verdict: b.verdict || verdictOf(b)
+    }];
+    items = items.map(function (i) {
+      return { name: String(i.name == null ? '' : i.name), src: i.src ? String(i.src) : '', agents: (i.agents || []).map(String), verdict: own(VERDICTS, i.verdict) ? i.verdict : null };
+    });
+    var size = Number(b.size);
+    return {
+      id: String(b.id == null ? '' : b.id), label: String(b.label || items[0].name || 'Sauvegarde'), note: b.note ? String(b.note) : '',
+      origin: own(SA.ORIGIN, b.origin) ? b.origin : 'remove', at: b.at ? String(b.at) : '', size: isFinite(size) && size > 0 ? size : 0,
+      items: items, raw: b
+    };
+  };
+  SA.size = function (n) {
+    n = Number(n) || 0;
+    if (n < 1024) return n + ' o';
+    var k = n / 1024, u = 'Ko';
+    if (k >= 1024) { k /= 1024; u = 'Mo'; }
+    return (k >= 10 ? String(Math.round(k)) : k.toFixed(1).replace('.', ',').replace(/,0$/, '')) + ' ' + u;
+  };
+  /* Copies des sauvegardes d'exemple : la démo les modifie sans toucher aux données d'origine. */
+  SA.demoBackups = function () {
+    return (D().backups || []).map(function (b) {
+      return Object.assign({}, b, { agents: (b.agents || []).slice(), items: (b.items || []).map(function (i) { return Object.assign({}, i, { agents: (i.agents || []).slice() }); }) });
+    });
+  };
 
   /* ---- sélection : un seul panier, alimenté par le conseil et par la recherche ---- */
   SA.cart = {
@@ -263,6 +306,7 @@ window.SA = window.SA || {};
     if (s.route === 'recherche') return 'recherche';
     if (s.route === 'gestion') return 'gestion';
     if (s.route === 'agents') return 'agents';
+    if (s.route === 'sauvegardes') return 'sauvegardes';
     return IDS[s.step - 1] || 'objectif';
   }
   SA.viewId = viewId;
@@ -346,7 +390,7 @@ window.SA = window.SA || {};
     return true;
   };
 
-  var ORDER = { accueil: 0, wizard: 1, recherche: 2, gestion: 3, agents: 4 };
+  var ORDER = { accueil: 0, wizard: 1, recherche: 2, gestion: 3, sauvegardes: 4, agents: 5 };
   SA.setRoute = function (route) {
     if (busy || !(route in ORDER)) return false;
     var s = SA.state;
@@ -597,6 +641,7 @@ window.SA = window.SA || {};
     } else if (s.route === 'accueil') html = two('Accueil', 'Ma machine');
     else if (s.route === 'recherche') html = two('Conseil', 'Recherche');
     else if (s.route === 'gestion') html = two('Gestion', 'Mes skills');
+    else if (s.route === 'sauvegardes') html = two('Gestion', 'Sauvegardes');
     else html = two('Gestion', 'Agents');
     if (c._h !== html) { c.innerHTML = html; c._h = html; }
     if (n.textContent !== count) n.textContent = count;
@@ -715,7 +760,7 @@ window.SA = window.SA || {};
       out.push(sec('Filtres actifs', act.length
         ? '<ul class="ds-list">' + act.map(function (a) { return '<li' + cls('srf:' + a, '') + '><span>' + SA.esc(a) + '</span></li>'; }).join('') + '</ul>'
         : '<p class="ds-none">Aucun filtre.</p>'));
-    } else if (s.route === 'accueil' || s.route === 'gestion') {
+    } else if (s.route === 'accueil' || s.route === 'gestion' || s.route === 'sauvegardes') {
       if (n) out.push(cart);
       out.push(machine());
       out.push(sec('Agents actifs', agentList('ga:')));
@@ -869,7 +914,7 @@ window.SA = window.SA || {};
     if (key === 'machine') {
       var fresh = (D().mine || []).map(function (r) { return Object.assign({}, r, { ag: Object.assign({}, r.ag) }); });
       s.mine = val === 'vide' ? [] : fresh;
-      s.backups = [];
+      s.backups = val === 'vide' ? [] : SA.demoBackups();
       s.g.sel = {};
       s.lastInstall = [];
       if (val === 'vide' && s.route === 'accueil') s.route = 'wizard';
@@ -930,6 +975,12 @@ window.SA = window.SA || {};
     $('theme-btn').addEventListener('click', toggleTheme);
     $('pv-btn').innerHTML = SA.icon('sliders') + '<span>Aperçu</span>';
     $('pv-btn').addEventListener('click', openPv);
+    /* Mode réel : pas de réglages d'aperçu, la machine affichée est la vôtre. */
+    if (SA.live && SA.live.on) {
+      $('pv-btn').hidden = true;
+      var sample = document.querySelector('.rail-sample');
+      if (sample) sample.textContent = 'Base réelle · votre machine';
+    }
     if (window.matchMedia) {
       var mq = window.matchMedia('(prefers-color-scheme: dark)');
       var onMq = function () { renderTheme(); };
@@ -1050,6 +1101,8 @@ window.SA = window.SA || {};
     SA._started = true;
     if (!document.documentElement.getAttribute('lang')) document.documentElement.setAttribute('lang', 'fr');
     if (!SA.state) SA.initState();
+    /* Démo : la machine d'exemple a déjà quelques sauvegardes. En mode réel, elles viennent du serveur. */
+    if (!(SA.live && SA.live.on) && !(SA.state.backups || []).length && SA.state.mine.length) SA.state.backups = SA.demoBackups();
     buildRail();
     bind();
     renderTheme();
