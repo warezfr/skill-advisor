@@ -1,0 +1,24 @@
+{
+  "source": "https://git-scm.com/install (pages mac, windows, linux), lues le 12/11/2026",
+  "detection": "Lancer `git --version`. Si la commande échoue, proposer les méthodes du système détecté, la première en tête.",
+  "macos": [
+    { "id": "xcode-clt", "label": "Outils en ligne de commande d’Apple", "command": "xcode-select --install", "note": "Aucun autre outil requis. Une fenêtre système demande confirmation." },
+    { "id": "homebrew", "label": "Homebrew", "command": "brew install git", "requires": "Homebrew déjà installé (https://brew.sh)" },
+    { "id": "macports", "label": "MacPorts", "command": "sudo port install git", "requires": "MacPorts déjà installé (https://www.macports.org)", "admin": true }
+  ],
+  "windows": [
+    { "id": "winget", "label": "winget (Windows 10 et 11)", "command": "winget install --id Git.Git -e --source winget", "note": "Paquet non maintenu par l’équipe Git for Windows ; peut avoir une version de retard." },
+    { "id": "installer", "label": "Installeur Git for Windows", "url": "https://git-scm.com/install/windows", "note": "Versions x64 et ARM64. Existe aussi en version portable, sans installation." },
+    { "id": "chocolatey", "label": "Chocolatey", "command": "choco install git", "requires": "Chocolatey déjà installé (https://chocolatey.org)", "admin": true }
+  ],
+  "linux": [
+    { "id": "apt", "label": "Debian, Ubuntu", "command": "sudo apt-get install git", "admin": true },
+    { "id": "dnf", "label": "Fedora", "command": "sudo dnf install git", "admin": true },
+    { "id": "pacman", "label": "Arch Linux", "command": "sudo pacman -S git", "admin": true },
+    { "id": "zypper", "label": "openSUSE", "command": "sudo zypper install git", "admin": true },
+    { "id": "apk", "label": "Alpine", "command": "sudo apk add git", "admin": true },
+    { "id": "nix", "label": "Nix, NixOS", "command": "nix-env -i git" },
+    { "id": "emerge", "label": "Gentoo", "command": "sudo emerge --ask --verbose dev-vcs/git", "admin": true }
+  ],
+  "regle": "L’application affiche la commande et la copie dans le presse-papiers. Elle ne lance jamais elle-même une commande qui demande les droits d’administrateur. Après installation, un bouton « Revérifier » relance `git --version`."
+}

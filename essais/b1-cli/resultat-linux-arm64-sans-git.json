@@ -1,0 +1,324 @@
+{
+  "essai": "B1",
+  "label": "linux-arm64-sans-git",
+  "date": "2026-11-13T11:40:05.960Z",
+  "cli": "skills@1.8.1",
+  "cheminAvecEspaceEtAccent": false,
+  "systeme": {
+    "plateforme": "linux",
+    "architecture": "arm64",
+    "noyau": "6.8.0-117-generic",
+    "node": "v26.13.1",
+    "uid": 1000,
+    "version": "Debian GNU/Linux 12 (bookworm)"
+  },
+  "git": "absent",
+  "sondeDesLiens": {
+    "lienDeDossier": "possible",
+    "jonction": "possible",
+    "lienDeFichier": "possible"
+  },
+  "bilan": {
+    "juges": 17,
+    "reussis": 17,
+    "echoues": []
+  },
+  "etapes": [
+    {
+      "id": "0b",
+      "titre": "Version de npm",
+      "commande": "npm -v",
+      "code": 0,
+      "dureeMs": 62,
+      "sortie": "11.20.0",
+      "ok": true,
+      "constat": "npm 11.20.0"
+    },
+    {
+      "id": "0c",
+      "titre": "Présence de git",
+      "commande": "git --version",
+      "code": null,
+      "erreurLancement": "ENOENT spawnSync git ENOENT",
+      "dureeMs": 2,
+      "sortie": "",
+      "ok": null,
+      "constat": "git absent de cette machine"
+    },
+    {
+      "id": "1a",
+      "titre": "Lancer le CLI par npx",
+      "commande": "npx -y skills@1.8.1 --version",
+      "code": 0,
+      "dureeMs": 811,
+      "sortie": "1.8.1",
+      "ok": true,
+      "constat": "skills 1.8.1 se lance par npx"
+    },
+    {
+      "id": "2",
+      "titre": "Simuler trois agents",
+      "ok": true,
+      "constat": "dossiers .claude, .gemini et .cursor créés dans le faux dossier personnel"
+    },
+    {
+      "id": "3",
+      "titre": "Installer (portée compte)",
+      "commande": "npx -y skills@1.8.1 add vercel-labs/agent-skills --skill web-design-guidelines -g -a claude-code -a cursor -y",
+      "code": 0,
+      "dureeMs": 1225,
+      "sortie": "███████╗██╗  ██╗██╗██╗     ██╗     ███████╗\n██╔════╝██║ ██╔╝██║██║     ██║     ██╔════╝\n███████╗█████╔╝ ██║██║     ██║     ███████╗\n╚════██║██╔═██╗ ██║██║     ██║     ╚════██║\n███████║██║  ██╗██║███████╗███████╗███████║\n╚══════╝╚═╝  ╚═╝╚═╝╚══════╝╚══════╝╚══════╝\n\n┌   skills \n│\n│  Tip: use the --yes (-y) and --global (-g) flags to install without prompts.\n│\n◇  Source: https://github.com/vercel-labs/agent-skills.git\n│\n◒  Fetching skills…◐  Fetching skills…◓  Fetching skills…◑  Fetching skills…◒  Fetching skills…◐  Fetching skills…◓  Fetching skills…◑  Fetching skills…◒  Fetching skills….◐  Fetching skills….◇  Found 9 skills\n│\n●  Selected 1 skill: web-design-guidelines\n\n│\n◇  Installation Summary ───────────────────╮\n│                                          │\n│  ~/.agents/skills/web-design-guidelines  │\n│    universal: Cursor                     │\n│    symlink → Claude Code                 │\n│                                          │\n├──────────────────────────────────────────╯\n│\n◇  Installation complete\n\n│\n◇  Installed 1 skill ────────────────────────╮\n│                                            │\n│  ✓ ~/.agents/skills/web-design-guidelines  │\n│    universal: Cursor                       │\n│    symlinked: Claude Code                  │\n│                                            │\n├────────────────────────────────────────────╯\n\n│\n└  Done!  Review skills before use; they run with full agent permissions.",
+      "ok": true,
+      "disque": {
+        "dossierCommun": {
+          "type": "dossier",
+          "fichiers": 1
+        },
+        "dansClaude": {
+          "type": "lien symbolique",
+          "cible": "../../.agents/skills/web-design-guidelines",
+          "relatif": true,
+          "cibleValide": true
+        },
+        "dansCursor": {
+          "type": "absent"
+        },
+        "verrou": {
+          "version": 3,
+          "champs": [
+            "source",
+            "sourceType",
+            "sourceUrl",
+            "skillPath",
+            "skillFolderHash",
+            "installedAt",
+            "updatedAt"
+          ]
+        }
+      },
+      "constat": "dossier commun : dossier de 1 fichier(s) · chez Claude Code : lien symbolique vers ../../.agents/skills/web-design-guidelines · chez Cursor : absent · verrou : présent"
+    },
+    {
+      "id": "4",
+      "titre": "Lister (portée compte, JSON)",
+      "commande": "npx -y skills@1.8.1 list -g --json",
+      "code": 0,
+      "dureeMs": 348,
+      "sortie": "[\n  {\n    \"name\": \"web-design-guidelines\",\n    \"path\": \"<BAC>/perso/.agents/skills/web-design-guidelines\",\n    \"scope\": \"global\",\n    \"agents\": [\n      \"Claude Code\",\n      \"Cursor\",\n      \"Gemini CLI\"\n    ],\n    \"source\": \"vercel-labs/agent-skills\",\n    \"sourceUrl\": \"https://github.com/vercel-labs/agent-skills.git\",\n    \"sourceType\": \"github\",\n    \"status\": \"tracked\"\n  }\n]",
+      "liste": [
+        {
+          "name": "web-design-guidelines",
+          "scope": "global",
+          "agents": [
+            "Claude Code",
+            "Cursor",
+            "Gemini CLI"
+          ],
+          "source": "vercel-labs/agent-skills",
+          "status": "tracked",
+          "path": "<BAC>/perso/.agents/skills/web-design-guidelines"
+        }
+      ],
+      "ok": true,
+      "constat": "suivi : tracked · agents : Claude Code, Cursor, Gemini CLI"
+    },
+    {
+      "id": "5a",
+      "titre": "Vérifier (portée projet, projet vide)",
+      "commande": "npx -y skills@1.8.1 check",
+      "code": 0,
+      "dureeMs": 467,
+      "sortie": "Checking for skill updates…\n\nFetching 1 source…\nChecking skills from source: vercel-labs/agent-skills\n✓ All global skills are up to date",
+      "ok": true,
+      "constat": "code 0"
+    },
+    {
+      "id": "5b",
+      "titre": "Vérifier (portée compte)",
+      "commande": "npx -y skills@1.8.1 check -g",
+      "code": 0,
+      "dureeMs": 404,
+      "sortie": "Checking for skill updates…\n\nFetching 1 source…\nChecking skills from source: vercel-labs/agent-skills\n✓ All global skills are up to date",
+      "ok": true,
+      "constat": "code 0"
+    },
+    {
+      "id": "6",
+      "titre": "Mettre à jour (portée compte)",
+      "commande": "npx -y skills@1.8.1 update -g -y",
+      "code": 0,
+      "dureeMs": 411,
+      "sortie": "Checking for skill updates…\n\nFetching 1 source…\nChecking skills from source: vercel-labs/agent-skills\n✓ All global skills are up to date",
+      "ok": true,
+      "constat": "code 0"
+    },
+    {
+      "id": "7a",
+      "titre": "Retirer chez Claude Code seulement",
+      "commande": "npx -y skills@1.8.1 remove --skill web-design-guidelines -g -a claude-code -y",
+      "code": 0,
+      "dureeMs": 315,
+      "sortie": "│\n◇  Found 1 unique installed skill(s)\n│\n◇  Removal process complete\n│\n◆  Successfully removed 1 skill(s)\n\n│\n└  Done!",
+      "ok": true,
+      "constat": "chez Claude Code : absent · dossier commun : dossier de 1 fichier(s)"
+    },
+    {
+      "id": "7b",
+      "titre": "Retirer partout",
+      "commande": "npx -y skills@1.8.1 remove --skill web-design-guidelines -g -y",
+      "code": 0,
+      "dureeMs": 306,
+      "sortie": "│\n◇  Found 1 unique installed skill(s)\n│\n◇  Removal process complete\n│\n◆  Successfully removed 1 skill(s)\n\n│\n└  Done!",
+      "ok": true,
+      "constat": "dossier commun : absent"
+    },
+    {
+      "id": "8a",
+      "titre": "Installer (portée projet)",
+      "commande": "npx -y skills@1.8.1 add vercel-labs/agent-skills --skill web-design-guidelines -a claude-code -a cursor -y",
+      "code": 0,
+      "dureeMs": 566,
+      "sortie": "███████╗██╗  ██╗██╗██╗     ██╗     ███████╗\n██╔════╝██║ ██╔╝██║██║     ██║     ██╔════╝\n███████╗█████╔╝ ██║██║     ██║     ███████╗\n╚════██║██╔═██╗ ██║██║     ██║     ╚════██║\n███████║██║  ██╗██║███████╗███████╗███████║\n╚══════╝╚═╝  ╚═╝╚═╝╚══════╝╚══════╝╚══════╝\n\n┌   skills \n│\n│  Tip: use the --yes (-y) and --global (-g) flags to install without prompts.\n│\n◇  Source: https://github.com/vercel-labs/agent-skills.git\n│\n◒  Fetching skills…◐  Fetching skills…◓  Fetching skills…◇  Found 9 skills\n│\n●  Selected 1 skill: web-design-guidelines\n\n│\n◇  Installation Summary ───────────────────╮\n│                                          │\n│  ./.agents/skills/web-design-guidelines  │\n│    universal: Cursor                     │\n│    symlink → Claude Code                 │\n│                                          │\n├──────────────────────────────────────────╯\n│\n◇  Installation complete\n\n│\n◇  Installed 1 skill ────────────────────────╮\n│                                            │\n│  ✓ ./.agents/skills/web-design-guidelines  │\n│    universal: Cursor                       │\n│    symlinked: Claude Code                  │\n│                                            │\n├────────────────────────────────────────────╯\n\n│\n└  Done!  Review skills before use; they run with full agent permissions.",
+      "ok": true,
+      "disque": {
+        "dossierCommun": {
+          "type": "dossier",
+          "fichiers": 1
+        },
+        "dansClaude": {
+          "type": "lien symbolique",
+          "cible": "../../.agents/skills/web-design-guidelines",
+          "relatif": true,
+          "cibleValide": true
+        },
+        "verrouProjet": true
+      },
+      "constat": "dossier commun du projet : dossier de 1 fichier(s) · chez Claude Code : lien symbolique vers ../../.agents/skills/web-design-guidelines · skills-lock.json : présent"
+    },
+    {
+      "id": "8b",
+      "titre": "Lister (portée projet, JSON)",
+      "commande": "npx -y skills@1.8.1 list --json",
+      "code": 0,
+      "dureeMs": 299,
+      "sortie": "[\n  {\n    \"name\": \"web-design-guidelines\",\n    \"path\": \"<BAC>/projet/.agents/skills/web-design-guidelines\",\n    \"scope\": \"project\",\n    \"agents\": [\n      \"Claude Code\",\n      \"Cursor\",\n      \"Gemini CLI\"\n    ],\n    \"source\": \"vercel-labs/agent-skills\",\n    \"sourceUrl\": null,\n    \"sourceType\": \"github\",\n    \"status\": \"tracked\"\n  }\n]",
+      "liste": [
+        {
+          "name": "web-design-guidelines",
+          "scope": "project",
+          "agents": [
+            "Claude Code",
+            "Cursor",
+            "Gemini CLI"
+          ],
+          "source": "vercel-labs/agent-skills",
+          "status": "tracked",
+          "path": "<BAC>/projet/.agents/skills/web-design-guidelines"
+        }
+      ],
+      "ok": true,
+      "constat": "portée : project · suivi : tracked"
+    },
+    {
+      "id": "9a",
+      "titre": "Installer le paquet skills pour lire son module",
+      "commande": "npm install skills@1.8.1 --prefix <BAC>/paquet --no-audit --no-fund --loglevel error",
+      "code": 0,
+      "dureeMs": 357,
+      "sortie": "added 9 packages in 322ms",
+      "ok": true,
+      "constat": "code 0"
+    },
+    {
+      "id": "9b",
+      "titre": "detectAgents() du module",
+      "commande": "/usr/local/bin/node <BAC>/detecter.mjs   (node detecter.mjs)",
+      "code": 0,
+      "dureeMs": 51,
+      "sortie": "{\"exporte\":[\"detectAgents\",\"diagnostics\",\"getSupportedAgents\",\"installSkills\",\"isDiagnostic\",\"listSkills\",\"removeSkills\",\"resolveSource\",\"version\"],\"detectes\":{\"agents\":[{\"id\":\"claude-code\",\"name\":\"Claude Code\",\"projectSkillsDir\":\".claude/skills\",\"globalSkillsDir\":\"<BAC>/perso/.claude/skills\",\"universal\":false},{\"id\":\"cursor\",\"name\":\"Cursor\",\"projectSkillsDir\":\".agents/skills\",\"globalSkillsDir\":\"<BAC>/perso/.cursor/skills\",\"universal\":true},{\"id\":\"gemini-cli\",\"name\":\"Gemini CLI\",\"projectSkillsDir\":\".agents/skills\",\"globalSkillsDir\":\"<BAC>/perso/.gemini/skills\",\"universal\":true}]}}",
+      "detectes": [
+        {
+          "id": "claude-code",
+          "dossierCompte": "<BAC>/perso/.claude/skills",
+          "universel": false
+        },
+        {
+          "id": "cursor",
+          "dossierCompte": "<BAC>/perso/.cursor/skills",
+          "universel": true
+        },
+        {
+          "id": "gemini-cli",
+          "dossierCompte": "<BAC>/perso/.gemini/skills",
+          "universel": true
+        }
+      ],
+      "ok": true,
+      "constat": "détectés : claude-code, cursor, gemini-cli"
+    },
+    {
+      "id": "10",
+      "titre": "Installer avec CLAUDE_CONFIG_DIR déplacé",
+      "commande": "npx -y skills@1.8.1 add vercel-labs/agent-skills --skill web-design-guidelines -g -a claude-code -y   (CLAUDE_CONFIG_DIR=<BAC>/perso/autre-claude)",
+      "code": 0,
+      "dureeMs": 758,
+      "sortie": "███████╗██╗  ██╗██╗██╗     ██╗     ███████╗\n██╔════╝██║ ██╔╝██║██║     ██║     ██╔════╝\n███████╗█████╔╝ ██║██║     ██║     ███████╗\n╚════██║██╔═██╗ ██║██║     ██║     ╚════██║\n███████║██║  ██╗██║███████╗███████╗███████║\n╚══════╝╚═╝  ╚═╝╚═╝╚══════╝╚══════╝╚══════╝\n\n┌   skills \n│\n│  Tip: use the --yes (-y) and --global (-g) flags to install without prompts.\n│\n◇  Source: https://github.com/vercel-labs/agent-skills.git\n│\n◒  Fetching skills…◐  Fetching skills…◓  Fetching skills…◑  Fetching skills…◒  Fetching skills…◇  Found 9 skills\n│\n●  Selected 1 skill: web-design-guidelines\n\n│\n◇  Installation Summary ───────────────────╮\n│                                          │\n│  ~/.agents/skills/web-design-guidelines  │\n│    copy → Claude Code                    │\n│                                          │\n├──────────────────────────────────────────╯\n│\n◇  Installation complete\n\n│\n◇  Installed 1 skill ───────────────────────────────╮\n│                                                   │\n│  ✓ web-design-guidelines (copied)                 │\n│    → ~/autre-claude/skills/web-design-guidelines  │\n│                                                   │\n├───────────────────────────────────────────────────╯\n\n│\n└  Done!  Review skills before use; they run with full agent permissions.",
+      "ok": true,
+      "disque": {
+        "dansLeDossierDeplace": {
+          "type": "dossier",
+          "fichiers": 1
+        },
+        "dansLeDossierParDefaut": {
+          "type": "absent"
+        }
+      },
+      "constat": "dossier déplacé : dossier de 1 fichier(s) · dossier par défaut : absent"
+    },
+    {
+      "id": "11a",
+      "titre": "Lister avec un skill posé à la main",
+      "commande": "npx -y skills@1.8.1 list -g --json",
+      "code": 0,
+      "dureeMs": 299,
+      "sortie": "[\n  {\n    \"name\": \"manuel\",\n    \"path\": \"<BAC>/perso/.claude/skills/manuel\",\n    \"scope\": \"global\",\n    \"agents\": [\n      \"Claude Code\"\n    ],\n    \"source\": null,\n    \"sourceUrl\": null,\n    \"sourceType\": null,\n    \"status\": \"untracked\"\n  },\n  {\n    \"name\": \"web-design-guidelines\",\n    \"path\": null,\n    \"scope\": \"global\",\n    \"agents\": [],\n    \"source\": \"vercel-labs/agent-skills\",\n    \"sourceUrl\": \"https://github.com/vercel-labs/agent-skills.git\",\n    \"sourceType\": \"github\",\n    \"status\": \"missing\"\n  }\n]",
+      "liste": [
+        {
+          "name": "manuel",
+          "scope": "global",
+          "agents": [
+            "Claude Code"
+          ],
+          "source": null,
+          "status": "untracked",
+          "path": "<BAC>/perso/.claude/skills/manuel"
+        },
+        {
+          "name": "web-design-guidelines",
+          "scope": "global",
+          "agents": [],
+          "source": "vercel-labs/agent-skills",
+          "status": "missing",
+          "path": null
+        }
+      ],
+      "ok": true,
+      "constat": "manuel : untracked, source null"
+    },
+    {
+      "id": "11b",
+      "titre": "Tout retirer (portée compte)",
+      "commande": "npx -y skills@1.8.1 remove --all -g -y",
+      "code": 0,
+      "dureeMs": 306,
+      "sortie": "│\n◇  Found 1 unique installed skill(s)\n│\n▲  [SKILLS_REMOVE_UNTRACKED_SKIPPED] Skipped 1 untracked skill(s) not recorded in the lock file: manuel\n│  ╰▶ fix: Remove them by name, e.g. skills remove <name>\n│\n◇  Removal process complete\n│\n◆  Successfully removed 1 skill(s)\n\n│\n└  Done!",
+      "ok": true,
+      "constat": "skill posé à la main : dossier de 1 fichier(s) · dossier commun du skill suivi : absent"
+    }
+  ],
+  "horsDuBac": {
+    "dossiersReelsIntacts": true,
+    "entreesAjoutees": 0,
+    "dontConnues": []
+  }
+}

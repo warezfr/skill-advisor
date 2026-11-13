@@ -1,0 +1,163 @@
+/* ---------- Gestion (route gestion) ---------- */
+
+.gs [hidden] { display: none; }
+
+/* counters: one row, hairline separators, numerals on one baseline */
+.gs-counts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: baseline;
+  margin-top: 32px;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.gs-count {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 24px 24px 24px 0;
+}
+.gs-count + .gs-count {
+  padding-left: 24px;
+  border-left: 1px solid var(--line);
+}
+.gs-n {
+  font-family: var(--f-m);
+  font-size: 2.5rem;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.gs-cl {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ink-3);
+}
+
+/* toolbar */
+.gs-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-top: 32px;
+}
+.gs-all { margin-left: auto; }
+.gs-k { font-family: var(--f-m); font-variant-numeric: tabular-nums; }
+
+/* ledger rows */
+.gs-listwrap { margin-top: 16px; container-type: inline-size; }
+/* Each row is its own grid, so the status and action columns are fixed to line up across rows.
+   Every row is 80px: 16 + 44 (button) + 16, with room to spare. */
+.gs-ri {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 11rem 14.5rem;
+  grid-template-areas: "main st act";
+  align-items: center;
+  column-gap: 16px;
+  row-gap: 8px;
+  min-height: 80px;
+  padding: 16px 0;
+}
+.gs-main { grid-area: main; }
+.gs-st { grid-area: st; }
+.gs-act { grid-area: act; }
+.gs-main {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.gs-name {
+  font-family: var(--f-m);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink);
+  overflow-wrap: break-word;
+}
+.gs-meta {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 16px;
+  min-width: 0;
+  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.gs-src { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--ink-3); }
+.gs-ag { flex: none; color: var(--ink-2); }
+.gs-st { display: flex; align-items: center; min-width: 0; }
+.gs-st .bdg { transition: opacity var(--t1) var(--ease); }
+.gs-act {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+.gs-note {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  font-size: 13px;
+  color: var(--ink-3);
+  text-align: right;
+}
+.gs-act .gs-cancel { order: 1; }
+.gs-act .gs-un { order: 2; }
+.gs-act .gs-up { order: 0; }
+.gs-up[aria-busy="true"] { opacity: .56; transition: opacity var(--t2) var(--ease); }
+
+.gs-empty {
+  padding: 16px 0;
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-3);
+  border-top: 1px solid var(--line);
+}
+
+/* closing block */
+.gs-why {
+  margin-top: 48px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+.gs-why .sub {
+  margin: 8px 0 0;
+  max-width: 60ch;
+}
+
+/* When the list is too narrow for three columns, the badge moves under the name
+   and the actions keep the right edge. Rows still line up: badges share the left edge. */
+@container (max-width: 640px) {
+  .gs-ri {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas: "main act" "st act";
+    row-gap: 8px;
+  }
+  .gs-st { justify-content: flex-start; }
+}
+@container (max-width: 480px) {
+  .gs-act { flex-direction: column; align-items: flex-end; gap: 4px; }
+  .gs-note { max-width: 10rem; min-height: 0; }
+}
+
+@media (max-width: 760px) {
+  .gs-count { padding: 16px 12px 16px 0; }
+  .gs-count + .gs-count { padding-left: 12px; }
+  .gs-n { font-size: 2rem; }
+  .gs-cl { font-size: 12px; }
+  .gs-bar { align-items: stretch; }
+  .gs-seg { max-width: 100%; overflow-x: auto; }
+  .gs-all { margin-left: 0; width: 100%; }
+}
+
+@media (max-width: 480px) {
+  .gs-seg > button { padding: 0 10px; }
+}

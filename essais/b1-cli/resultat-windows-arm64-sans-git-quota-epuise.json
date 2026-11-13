@@ -1,0 +1,299 @@
+{
+  "essai": "B1",
+  "label": "windows-arm64-sans-git",
+  "date": "2026-11-13T11:45:46.585Z",
+  "cli": "skills@1.8.1",
+  "cheminAvecEspaceEtAccent": false,
+  "systeme": {
+    "plateforme": "win32",
+    "architecture": "arm64",
+    "noyau": "10.0.26300",
+    "node": "v26.13.1",
+    "niveauIntegrite": "moyen (utilisateur ordinaire)",
+    "modeDeveloppeur": "désactivé",
+    "version": "Microsoft Windows [version 10.0.26300.9711]"
+  },
+  "git": "absent",
+  "sondeDesLiens": {
+    "lienDeDossier": "refusé (EPERM)",
+    "jonction": "possible",
+    "lienDeFichier": "refusé (EPERM)"
+  },
+  "bilan": {
+    "juges": 17,
+    "reussis": 11,
+    "echoues": [
+      "3",
+      "4",
+      "7a",
+      "8a",
+      "8b",
+      "10"
+    ]
+  },
+  "etapes": [
+    {
+      "id": "0b",
+      "titre": "Version de npm",
+      "commande": "npm -v",
+      "code": 0,
+      "dureeMs": 376,
+      "sortie": "11.20.0",
+      "ok": true,
+      "constat": "npm 11.20.0"
+    },
+    {
+      "id": "0c",
+      "titre": "Présence de git",
+      "commande": "git --version",
+      "code": 1,
+      "dureeMs": 42,
+      "sortie": "'git' n'est pas reconnu en tant que commande interne\nou externe, un programme ex�cutable ou un fichier de commandes.",
+      "ok": null,
+      "constat": "git absent de cette machine"
+    },
+    {
+      "id": "1a",
+      "titre": "Lancer le CLI par npx",
+      "commande": "npx -y skills@1.8.1 --version",
+      "code": 0,
+      "dureeMs": 2765,
+      "sortie": "1.8.1",
+      "ok": true,
+      "constat": "skills 1.8.1 se lance par npx"
+    },
+    {
+      "id": "1c",
+      "titre": "npx sans interpréteur",
+      "commande": "npx --version",
+      "code": null,
+      "erreurLancement": "ENOENT spawnSync npx ENOENT",
+      "dureeMs": 1,
+      "sortie": "",
+      "ok": null,
+      "constat": "ne se lance pas : ENOENT spawnSync npx ENOENT"
+    },
+    {
+      "id": "1d",
+      "titre": "npx.cmd sans interpréteur",
+      "commande": "npx.cmd --version",
+      "code": null,
+      "erreurLancement": "EINVAL spawnSync npx.cmd EINVAL",
+      "dureeMs": 0,
+      "sortie": "",
+      "ok": null,
+      "constat": "ne se lance pas : EINVAL spawnSync npx.cmd EINVAL"
+    },
+    {
+      "id": "2",
+      "titre": "Simuler trois agents",
+      "ok": true,
+      "constat": "dossiers .claude, .gemini et .cursor créés dans le faux dossier personnel"
+    },
+    {
+      "id": "3",
+      "titre": "Installer (portée compte)",
+      "commande": "npx -y skills@1.8.1 add vercel-labs/agent-skills --skill web-design-guidelines -g -a claude-code -a cursor -y",
+      "code": 1,
+      "dureeMs": 1274,
+      "sortie": "███████╗██╗  ██╗██╗██╗     ██╗     ███████╗\n██╔════╝██║ ██╔╝██║██║     ██║     ██╔════╝\n███████╗█████╔╝ ██║██║     ██║     ███████╗\n╚════██║██╔═██╗ ██║██║     ██║     ╚════██║\n███████║██║  ██╗██║███████╗███████╗███████║\n╚══════╝╚═╝  ╚═╝╚═╝╚══════╝╚══════╝╚══════╝\n\nT   skills \n|\n|  Tip: use the --yes (-y) and --global (-g) flags to install without prompts.\n|\no  Source: https://github.com/vercel-labs/agent-skills.git\n|\n|\nx  Failed to clone repository\n|\n|  [SKILLS_GIT_CLONE_FAILED] Failed to clone https://github.com/vercel-labs/agent-skills.git: Error: spawn git ENOENT\n|\n|      at ChildProcess._handle.onexit (node:internal/child_process:315:19)\n|\n|      at onErrorNT (node:internal/child_process:553:16)\n|\n|      at process.processTicksAndRejections (node:internal/process/task_queues:90:21)\n|\n—  Installation failed\n\nx  Canceled",
+      "ok": false,
+      "disque": {
+        "dossierCommun": {
+          "type": "absent"
+        },
+        "dansClaude": {
+          "type": "absent"
+        },
+        "dansCursor": {
+          "type": "absent"
+        },
+        "verrou": null
+      },
+      "constat": "dossier commun : absent · chez Claude Code : absent · chez Cursor : absent · verrou : absent"
+    },
+    {
+      "id": "4",
+      "titre": "Lister (portée compte, JSON)",
+      "commande": "npx -y skills@1.8.1 list -g --json",
+      "code": 0,
+      "dureeMs": 1078,
+      "sortie": "[]",
+      "liste": [],
+      "ok": false,
+      "constat": "le skill installé n’apparaît pas dans la liste"
+    },
+    {
+      "id": "5a",
+      "titre": "Vérifier (portée projet, projet vide)",
+      "commande": "npx -y skills@1.8.1 check",
+      "code": 0,
+      "dureeMs": 1077,
+      "sortie": "Checking for skill updates…\n\nNo global skills tracked in lock file.\nInstall skills with npx skills add <package> -g",
+      "ok": true,
+      "constat": "code 0"
+    },
+    {
+      "id": "5b",
+      "titre": "Vérifier (portée compte)",
+      "commande": "npx -y skills@1.8.1 check -g",
+      "code": 0,
+      "dureeMs": 970,
+      "sortie": "Checking for skill updates…\n\nNo global skills tracked in lock file.\nInstall skills with npx skills add <package> -g",
+      "ok": true,
+      "constat": "code 0 (rien d’installé : résultat sans portée)"
+    },
+    {
+      "id": "6",
+      "titre": "Mettre à jour (portée compte)",
+      "commande": "npx -y skills@1.8.1 update -g -y",
+      "code": 0,
+      "dureeMs": 951,
+      "sortie": "Checking for skill updates…\n\nNo global skills tracked in lock file.\nInstall skills with npx skills add <package> -g",
+      "ok": true,
+      "constat": "code 0"
+    },
+    {
+      "id": "7a",
+      "titre": "Retirer chez Claude Code seulement",
+      "commande": "npx -y skills@1.8.1 remove --skill web-design-guidelines -g -a claude-code -y",
+      "code": 0,
+      "dureeMs": 953,
+      "sortie": "|\no  Found 0 unique installed skill(s)\n|\n—  No skills found to remove.",
+      "ok": false,
+      "constat": "chez Claude Code : absent · dossier commun : absent"
+    },
+    {
+      "id": "7b",
+      "titre": "Retirer partout",
+      "commande": "npx -y skills@1.8.1 remove --skill web-design-guidelines -g -y",
+      "code": 0,
+      "dureeMs": 919,
+      "sortie": "|\no  Found 0 unique installed skill(s)\n|\n—  No skills found to remove.",
+      "ok": true,
+      "constat": "dossier commun : absent"
+    },
+    {
+      "id": "8a",
+      "titre": "Installer (portée projet)",
+      "commande": "npx -y skills@1.8.1 add vercel-labs/agent-skills --skill web-design-guidelines -a claude-code -a cursor -y",
+      "code": 1,
+      "dureeMs": 1096,
+      "sortie": "███████╗██╗  ██╗██╗██╗     ██╗     ███████╗\n██╔════╝██║ ██╔╝██║██║     ██║     ██╔════╝\n███████╗█████╔╝ ██║██║     ██║     ███████╗\n╚════██║██╔═██╗ ██║██║     ██║     ╚════██║\n███████║██║  ██╗██║███████╗███████╗███████║\n╚══════╝╚═╝  ╚═╝╚═╝╚══════╝╚══════╝╚══════╝\n\nT   skills \n|\n|  Tip: use the --yes (-y) and --global (-g) flags to install without prompts.\n|\no  Source: https://github.com/vercel-labs/agent-skills.git\n|\n|\nx  Failed to clone repository\n|\n|  [SKILLS_GIT_CLONE_FAILED] Failed to clone https://github.com/vercel-labs/agent-skills.git: Error: spawn git ENOENT\n|\n|      at ChildProcess._handle.onexit (node:internal/child_process:315:19)\n|\n|      at onErrorNT (node:internal/child_process:553:16)\n|\n|      at process.processTicksAndRejections (node:internal/process/task_queues:90:21)\n|\n—  Installation failed\n\nx  Canceled",
+      "ok": false,
+      "disque": {
+        "dossierCommun": {
+          "type": "absent"
+        },
+        "dansClaude": {
+          "type": "absent"
+        },
+        "verrouProjet": false
+      },
+      "constat": "dossier commun du projet : absent · chez Claude Code : absent · skills-lock.json : absent"
+    },
+    {
+      "id": "8b",
+      "titre": "Lister (portée projet, JSON)",
+      "commande": "npx -y skills@1.8.1 list --json",
+      "code": 0,
+      "dureeMs": 941,
+      "sortie": "[]",
+      "liste": [],
+      "ok": false,
+      "constat": "le skill du projet n’apparaît pas dans la liste"
+    },
+    {
+      "id": "9a",
+      "titre": "Installer le paquet skills pour lire son module",
+      "commande": "npm install skills@1.8.1 --prefix <BAC>\\paquet --no-audit --no-fund --loglevel error",
+      "code": 0,
+      "dureeMs": 1742,
+      "sortie": "added 9 packages in 1s",
+      "ok": true,
+      "constat": "code 0"
+    },
+    {
+      "id": "9b",
+      "titre": "detectAgents() du module",
+      "commande": "<DOSSIER-PERSONNEL>\\b1-outils\\node\\node-v26.13.1-win-arm64\\node.exe <BAC>\\detecter.mjs   (node detecter.mjs)",
+      "code": 0,
+      "dureeMs": 182,
+      "sortie": "{\"exporte\":[\"detectAgents\",\"diagnostics\",\"getSupportedAgents\",\"installSkills\",\"isDiagnostic\",\"listSkills\",\"removeSkills\",\"resolveSource\",\"version\"],\"detectes\":{\"agents\":[{\"id\":\"claude-code\",\"name\":\"Claude Code\",\"projectSkillsDir\":\".claude/skills\",\"globalSkillsDir\":\"<BAC>\\\\perso\\\\.claude\\\\skills\",\"universal\":false},{\"id\":\"cursor\",\"name\":\"Cursor\",\"projectSkillsDir\":\".agents/skills\",\"globalSkillsDir\":\"<BAC>\\\\perso\\\\.cursor\\\\skills\",\"universal\":true},{\"id\":\"gemini-cli\",\"name\":\"Gemini CLI\",\"projectSkillsDir\":\".agents/skills\",\"globalSkillsDir\":\"<BAC>\\\\perso\\\\.gemini\\\\skills\",\"universal\":true}]}}",
+      "detectes": [
+        {
+          "id": "claude-code",
+          "dossierCompte": "<BAC>\\perso\\.claude\\skills",
+          "universel": false
+        },
+        {
+          "id": "cursor",
+          "dossierCompte": "<BAC>\\perso\\.cursor\\skills",
+          "universel": true
+        },
+        {
+          "id": "gemini-cli",
+          "dossierCompte": "<BAC>\\perso\\.gemini\\skills",
+          "universel": true
+        }
+      ],
+      "ok": true,
+      "constat": "détectés : claude-code, cursor, gemini-cli"
+    },
+    {
+      "id": "10",
+      "titre": "Installer avec CLAUDE_CONFIG_DIR déplacé",
+      "commande": "npx -y skills@1.8.1 add vercel-labs/agent-skills --skill web-design-guidelines -g -a claude-code -y   (CLAUDE_CONFIG_DIR=<BAC>/perso/autre-claude)",
+      "code": 1,
+      "dureeMs": 1110,
+      "sortie": "███████╗██╗  ██╗██╗██╗     ██╗     ███████╗\n██╔════╝██║ ██╔╝██║██║     ██║     ██╔════╝\n███████╗█████╔╝ ██║██║     ██║     ███████╗\n╚════██║██╔═██╗ ██║██║     ██║     ╚════██║\n███████║██║  ██╗██║███████╗███████╗███████║\n╚══════╝╚═╝  ╚═╝╚═╝╚══════╝╚══════╝╚══════╝\n\nT   skills \n|\n|  Tip: use the --yes (-y) and --global (-g) flags to install without prompts.\n|\no  Source: https://github.com/vercel-labs/agent-skills.git\n|\n•  Cloning repository…|\nx  Failed to clone repository\n|\n|  [SKILLS_GIT_CLONE_FAILED] Failed to clone https://github.com/vercel-labs/agent-skills.git: Error: spawn git ENOENT\n|\n|      at ChildProcess._handle.onexit (node:internal/child_process:315:19)\n|\n|      at onErrorNT (node:internal/child_process:553:16)\n|\n|      at process.processTicksAndRejections (node:internal/process/task_queues:90:21)\n|\n—  Installation failed\n\nx  Canceled",
+      "ok": false,
+      "disque": {
+        "dansLeDossierDeplace": {
+          "type": "absent"
+        },
+        "dansLeDossierParDefaut": {
+          "type": "absent"
+        }
+      },
+      "constat": "dossier déplacé : absent · dossier par défaut : absent"
+    },
+    {
+      "id": "11a",
+      "titre": "Lister avec un skill posé à la main",
+      "commande": "npx -y skills@1.8.1 list -g --json",
+      "code": 0,
+      "dureeMs": 950,
+      "sortie": "[\n  {\n    \"name\": \"manuel\",\n    \"path\": \"<BAC>\\\\perso\\\\.claude\\\\skills\\\\manuel\",\n    \"scope\": \"global\",\n    \"agents\": [\n      \"Claude Code\"\n    ],\n    \"source\": null,\n    \"sourceUrl\": null,\n    \"sourceType\": null,\n    \"status\": \"untracked\"\n  }\n]",
+      "liste": [
+        {
+          "name": "manuel",
+          "scope": "global",
+          "agents": [
+            "Claude Code"
+          ],
+          "source": null,
+          "status": "untracked",
+          "path": "<BAC>\\perso\\.claude\\skills\\manuel"
+        }
+      ],
+      "ok": true,
+      "constat": "manuel : untracked, source null"
+    },
+    {
+      "id": "11b",
+      "titre": "Tout retirer (portée compte)",
+      "commande": "npx -y skills@1.8.1 remove --all -g -y",
+      "code": 0,
+      "dureeMs": 937,
+      "sortie": "|\no  Found 1 unique installed skill(s)\n|\n!  [SKILLS_REMOVE_UNTRACKED_SKIPPED] Skipped 1 untracked skill(s) not recorded in the lock file: manuel\n|  ╰▶ fix: Remove them by name, e.g. skills remove <name>\n|\n—  No globally managed skills found to remove.",
+      "ok": true,
+      "constat": "skill posé à la main : dossier de 1 fichier(s) · dossier commun du skill suivi : absent"
+    }
+  ],
+  "horsDuBac": {
+    "dossiersReelsIntacts": true,
+    "entreesAjoutees": 0,
+    "dontConnues": []
+  }
+}

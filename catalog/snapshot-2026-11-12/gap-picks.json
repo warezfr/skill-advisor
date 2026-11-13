@@ -1,0 +1,120 @@
+{
+ "mobile": [
+  "emilkowalski/skills/write-swift",
+  "twostraws/swiftui-agent-skill/swiftui-pro",
+  "clerk/skills/clerk-android",
+  "affaan-m/ecc/android-clean-architecture"
+ ],
+ "frontend": [
+  "ejirocodes/agent-skills/svelte5-best-practices",
+  "sveltejs/ai-tools/svelte-code-writer",
+  "astrolicious/agent-skills/astro",
+  "clerk/skills/clerk-astro-patterns",
+  "angular/skills/angular-developer",
+  "analogjs/angular-skills/angular-component",
+  "antfu/skills/nuxt",
+  "nuxt/ui/nuxt-ui",
+  "wshobson/agents/typescript-advanced-types",
+  "jeffallan/claude-skills/typescript-pro"
+ ],
+ "backend": [
+  "affaan-m/ecc/django-patterns",
+  "affaan-m/ecc/django-security",
+  "mindrally/skills/fastapi-python",
+  "jeffallan/claude-skills/fastapi-expert",
+  "jeffallan/claude-skills/laravel-specialist",
+  "affaan-m/ecc/laravel-security",
+  "affaan-m/ecc/rails-patterns",
+  "everyinc/compound-engineering-plugin/ce-dhh-rails-style",
+  "github/awesome-copilot/java-springboot",
+  "affaan-m/ecc/springboot-patterns",
+  "apollographql/skills/rust-best-practices",
+  "wshobson/agents/rust-async-patterns",
+  "microsoft/azure-skills/python-appservice-deploy",
+  "wshobson/agents/python-testing-patterns",
+  "wshobson/agents/dotnet-backend-patterns",
+  "jeffallan/claude-skills/csharp-developer",
+  "kadajett/agent-nestjs-skills/nestjs-best-practices",
+  "affaan-m/ecc/nestjs-patterns"
+ ],
+ "database": [
+  "supabase/agent-skills/supabase-postgres-best-practices",
+  "prisma/skills/prisma-postgres",
+  "prisma/skills/prisma-mongodb-upgrade",
+  "mongodb/agent-skills/mongodb-query-optimizer",
+  "giuseppe-trisciuoglio/developer-kit/nestjs-drizzle-crud-generator",
+  "pproenca/dot-skills/drizzle-sqlite",
+  "upstash/skills/upstash-redis-js",
+  "affaan-m/ecc/redis-patterns"
+ ],
+ "data": [
+  "jeffallan/claude-skills/pandas-pro",
+  "andikarachman/data-science-plugin/pandas-pro",
+  "openai/skills/jupyter-notebook",
+  "zc277584121/marketing-skills/jupyter-notebook-writing",
+  "coreyhaines31/marketingskills/analytics",
+  "wshobson/agents/postgresql-table-design",
+  "k-dense-ai/scientific-agent-skills/statistical-analysis",
+  "k-dense-ai/scientific-agent-skills/scientific-brainstorming",
+  "dbt-labs/dbt-agent-skills/using-dbt-for-analytics-engineering",
+  "dbt-labs/dbt-agent-skills/adding-dbt-unit-test"
+ ],
+ "devops": [
+  "github/awesome-copilot/multi-stage-dockerfile",
+  "affaan-m/ecc/docker-patterns",
+  "microsoft/azure-skills/azure-kubernetes",
+  "wshobson/agents/k8s-security-policies",
+  "huaweicloud/huaweicloud-skills/huawei-cloud-terraform-installer",
+  "huaweicloud/huaweicloud-skills/huawei-cloud-terraform-generator",
+  "wshobson/agents/github-actions-templates",
+  "superagent-ai/skills/ci-cd-security",
+  "aws/agent-toolkit-for-aws/aws-serverless",
+  "aws/agent-toolkit-for-aws/aws-iam"
+ ],
+ "securite": [
+  "zhaono1/agent-playbook/security-auditor",
+  "usestrix/strix/owasp-top-10-testing",
+  "hoodini/ai-agents-skills/owasp-security",
+  "openai/skills/security-threat-model",
+  "securityskills/skills/stride-threat-modeling"
+ ],
+ "ux": [
+  "addyosmani/web-quality-skills/accessibility",
+  "jakubkrehel/skills/better-accessibility",
+  "arvindrk/extract-design-system/extract-design-system",
+  "wshobson/agents/tailwind-design-system"
+ ],
+ "ecommerce": [
+  "jeffallan/claude-skills/wordpress-pro",
+  "wordpress/agent-skills/wp-plugin-development",
+  "mindrally/skills/woocommerce",
+  "wshobson/agents/stripe-integration",
+  "stripe/ai/upgrade-stripe"
+ ],
+ "methode": [
+  "mattpocock/skills/setup-pre-commit",
+  "addyosmani/agent-skills/git-workflow-and-versioning",
+  "othmanadi/planning-with-files/planning-with-files",
+  "mbfinotti/partnerships-skills/joint-gtm-planning",
+  "anthropics/skills/doc-coauthoring",
+  "samber/cc-skills-golang/golang-documentation"
+ ],
+ "desktop-jeu": [
+  "jimliu/baoyu-skills/baoyu-electron-extract",
+  "partme-ai/full-stack-skills/electron",
+  "thedivergentai/game-dev-agentic-skills/godot-master",
+  "jwynia/agent-skills/godot-best-practices",
+  "wshobson/agents/unity-ecs-patterns",
+  "mindrally/skills/unity"
+ ],
+ "ia": [
+  "vercel/ai/ai-sdk",
+  "vercel/ai/migrate-ai-sdk-v6-to-v7",
+  "langchain-ai/langchain-skills/langgraph-fundamentals",
+  "langchain-ai/langchain-skills/langgraph-persistence"
+ ],
+ "marketing": [
+  "coreyhaines31/marketingskills/seo-audit",
+  "resciencelab/opc-skills/seo-geo"
+ ]
+}

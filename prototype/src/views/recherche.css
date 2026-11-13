@@ -1,0 +1,74 @@
+/* Skill Advisor prototype: view "recherche", version compacte. Classes préfixées sr-. Couleurs par jetons uniquement.
+   Objectif : le champ, une ligne de filtres, puis les résultats dès le premier écran. */
+
+.sr-qbox { position: relative; margin-top: 16px; }
+.sr-q { width: 100%; min-height: 48px; padding-right: 44px; font-size: 16px; }
+.sr-qk { position: absolute; right: 12px; top: 14px; pointer-events: none; }
+.sr-q:focus + .sr-qk { opacity: 0; }
+
+.sr-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+.sr-f { display: block; min-width: 0; }
+.sr-f .fld { max-width: 146px; font-size: 13.5px; text-overflow: ellipsis; }
+.sr-f:last-child { margin-left: auto; }
+.sr-offbox { display: inline-flex; align-items: center; gap: 2px; font-size: 14px; color: var(--ink-2); white-space: nowrap; }
+
+.sr-statusbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 44px; margin: 4px 0 0; }
+.sr-status { font-size: 12.5px; }
+.sr-list { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+.sr-row { display: grid; grid-template-columns: minmax(0, 1fr) 88px 64px 116px; gap: 16px; align-items: center; padding: 8px 0; }
+.sr-main { min-width: 0; }
+.sr-l1 { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; margin: 0; }
+.sr-name { padding: 0; border: 0; background: none; text-align: left; font-size: 14.5px; font-weight: 500; color: var(--ink); overflow-wrap: anywhere; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 4px; transition: text-decoration-color var(--t1) var(--ease); }
+.sr-name:hover { text-decoration-color: var(--ink-3); }
+.sr-src { font-size: 12.5px; overflow-wrap: anywhere; }
+.sr-tags { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 0; align-items: center; }
+.sr-tags .tag { height: 22px; }
+.sr-inst, .sr-score { display: grid; justify-items: end; gap: 2px; margin: 0; text-align: right; line-height: 1.2; }
+.sr-inst .num { font-size: 14px; color: var(--ink); }
+.sr-score .num { font: 500 1.25rem/1 var(--f-m); letter-spacing: -0.02em; }
+.sr-u { font-size: 11.5px; }
+.sr-act { display: flex; justify-content: flex-end; }
+.sr-none { padding: 24px 0; }
+.sr-morebox { margin: 16px 0 0; }
+.sr-foot { margin: 32px 0 0; font-size: 13px; max-width: 70ch; }
+.sr-skl-a { width: 46%; height: 18px; margin: 0; }
+.sr-skl-b { width: 30%; height: 14px; margin: 8px 0 0; }
+.sr-skl-c { width: 48px; height: 18px; margin: 0; justify-self: end; }
+.sr-skl-d { width: 100px; height: 40px; margin: 0; justify-self: end; }
+
+@media (max-width: 760px) {
+  .sr-row { grid-template-columns: minmax(0, 1fr) auto; row-gap: 8px; }
+  .sr-inst, .sr-score { justify-items: start; text-align: left; grid-auto-flow: column; gap: 6px; align-items: baseline; }
+  .sr-act { grid-column: 2; grid-row: 1; }
+  .sr-f:last-child { margin-left: 0; }
+}
+
+/* Fenêtre de rapport */
+.sr-pop {
+  width: min(560px, calc(100% - 32px)); max-height: min(80%, 720px); box-sizing: border-box;
+  padding: 24px; border: 1px solid var(--line-2); border-radius: var(--r3);
+  background: var(--bg); color: var(--ink); overflow: auto;
+}
+.sr-pop::backdrop { background: var(--scrim); }
+.sr-pop[open] { animation: sr-pop-in var(--t2) var(--ease); }
+@keyframes sr-pop-in { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
+.sr-pop .h2 { margin: 8px 0 16px; }
+.sr-pop-dl { margin: 0 0 8px; display: grid; }
+.sr-pop-dl > div { display: flex; justify-content: space-between; align-items: center; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.sr-pop-dl dt { color: var(--ink-2); font-size: 14px; }
+.sr-pop-dl dd { margin: 0; text-align: right; }
+.sr-pop-cats { font-size: 12.5px; }
+.sr-pop-h { margin: 16px 0 8px; font: 500 14px/1.4 var(--f-b); }
+.sr-pop-s { margin: 0; line-height: 1.6; }
+.sr-pop-n { margin: 12px 0 0; font-size: 13px; }
+.sr-pop-list { margin: 16px 0 0; padding: 0; list-style: none; }
+.sr-pop-list li { padding: 12px 0; display: grid; gap: 6px; }
+.sr-pop-l { margin: 0; font-weight: 500; }
+.sr-pop-f { margin: 0; font-size: 12.5px; overflow-wrap: anywhere; }
+.sr-pop-x { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.sr-pop-foot { margin: 24px 0 0; display: flex; flex-wrap: wrap; gap: 12px; }
+.sr-pop-foot a.btn { text-decoration: none; }
+
+.sr-pop-sec { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); display: grid; gap: 8px; }
+.sr-pop-sec .sr-pop-h { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.sr-pop-lk { margin: 0; }

@@ -1,0 +1,91 @@
+<div class="app" id="app">
+  <aside class="rail" id="rail" aria-label="Navigation principale">
+    <div class="rail-brand">
+      <!-- Logo : le nom, souligné par la barre de note du produit. Ses quatre segments ont les poids réels de la note : 40, 25, 15, 20. -->
+      <span class="rail-logo">
+        <span class="rail-name">Skill Advisor</span>
+        <span class="rail-rule" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+      </span>
+    </div>
+
+    <nav class="rail-nav" aria-label="Sections">
+      <button type="button" class="rail-link" data-route="accueil">
+        <span class="rail-ico"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3.5" y="5" width="17" height="11" rx="1.5"/><path d="M9 19.5h6M12 16v3.5"/></svg></span>
+        <span>Ma machine</span>
+      </button>
+      <button type="button" class="rail-link" data-route="wizard">
+        <span class="rail-ico"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="8"/><path d="M14.8 9.2l-1.7 3.9-3.9 1.7 1.7-3.9z"/></svg></span>
+        <span>Conseil</span>
+      </button>
+      <button type="button" class="rail-link" data-route="recherche">
+        <span class="rail-ico"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="11" cy="11" r="6"/><path d="M15.5 15.5L20 20"/></svg></span>
+        <span>Recherche</span>
+      </button>
+      <button type="button" class="rail-link" data-route="gestion">
+        <span class="rail-ico"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4" y="4.5" width="16" height="6" rx="1.5"/><rect x="4" y="13.5" width="16" height="6" rx="1.5"/></svg></span>
+        <span>Mes skills</span>
+      </button>
+      <button type="button" class="rail-link" data-route="agents">
+        <span class="rail-ico"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></svg></span>
+        <span>Agents</span>
+      </button>
+    </nav>
+
+    <section class="rail-steps" id="rail-steps" aria-label="Étapes du parcours">
+      <p class="eye rail-lbl">Parcours</p>
+      <ol class="rail-ol" id="rail-ol"></ol>
+    </section>
+
+    <div class="rail-foot">
+      <div class="rail-status">
+        <p class="rail-local"><span class="rail-pipbox" aria-hidden="true"><i class="rail-pip"></i></span><span class="mono rail-net">En local · 127.0.0.1</span></p>
+        <p class="rail-sample">Base réelle · machine d’exemple</p>
+      </div>
+      <div class="rail-tools">
+        <button type="button" class="btn quiet rail-pv" id="pv-btn" aria-haspopup="dialog" aria-label="Aperçu du prototype : voir chaque état"></button>
+        <button type="button" class="btn quiet rail-theme" id="theme-btn" aria-label="Passer en thème sombre"></button>
+      </div>
+    </div>
+  </aside>
+
+  <div class="work" id="work">
+    <main class="stage" id="stage">
+      <header class="stage-head">
+        <div class="stage-head-in">
+          <p class="stage-crumb" id="crumb"></p>
+          <p class="stage-count mono" id="crumb-count"></p>
+        </div>
+      </header>
+      <div class="scroll" id="scroll">
+        <div id="view" class="view"></div>
+      </div>
+      <!-- Sous 1 200 px, et sur les écrans pleine largeur, le volet de droite se replie dans ce bandeau. -->
+      <div class="cart-band" id="cart-band" hidden>
+        <div class="cb-in">
+          <p class="cb-txt mono"></p>
+          <button type="button" class="btn" data-cart-open>Voir</button>
+          <button type="button" class="btn primary" data-cart-go>Installer</button>
+        </div>
+      </div>
+      <div class="ac-bar" id="actions" hidden>
+        <div class="ac-in" id="actions-in"></div>
+      </div>
+    </main>
+
+    <aside class="dossier-pane" id="dossier-pane" aria-label="Dossier du projet">
+      <header class="ds-head">
+        <p class="eye">Dossier</p>
+      </header>
+      <div class="ds-body" id="dossier"></div>
+    </aside>
+  </div>
+</div>
+
+<div class="scrim" id="scrim" hidden></div>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-labelledby="drawer-title" hidden>
+  <header class="drawer-head">
+    <h2 class="h2" id="drawer-title"></h2>
+    <button type="button" class="btn quiet drawer-close" id="drawer-close" aria-label="Fermer le détail"></button>
+  </header>
+  <div class="drawer-body" id="drawer-body"></div>
+</aside>

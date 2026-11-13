@@ -1,0 +1,1362 @@
+{
+ "site-design": {
+  "label": "Sites web et design d’interface",
+  "cands": [
+   {
+    "id": "anthropics/skills/frontend-design",
+    "source": "anthropics/skills",
+    "skillId": "frontend-design",
+    "name": "frontend-design",
+    "installs": 1107660,
+    "bestRank": 0
+   },
+   {
+    "id": "vercel-labs/agent-skills/web-design-guidelines",
+    "source": "vercel-labs/agent-skills",
+    "skillId": "web-design-guidelines",
+    "name": "web-design-guidelines",
+    "installs": 853669,
+    "bestRank": 0
+   },
+   {
+    "id": "leonxlnx/taste-skill/design-taste-frontend",
+    "source": "leonxlnx/taste-skill",
+    "skillId": "design-taste-frontend",
+    "name": "design-taste-frontend",
+    "installs": 765236,
+    "bestRank": 1
+   },
+   {
+    "id": "leonxlnx/taste-skill/high-end-visual-design",
+    "source": "leonxlnx/taste-skill",
+    "skillId": "high-end-visual-design",
+    "name": "high-end-visual-design",
+    "installs": 458891,
+    "bestRank": 4
+   },
+   {
+    "id": "nextlevelbuilder/ui-ux-pro-max-skill/ui-ux-pro-max",
+    "source": "nextlevelbuilder/ui-ux-pro-max-skill",
+    "skillId": "ui-ux-pro-max",
+    "name": "ui-ux-pro-max",
+    "installs": 447814,
+    "bestRank": 2
+   },
+   {
+    "id": "leonxlnx/taste-skill/design-taste-frontend-v1",
+    "source": "leonxlnx/taste-skill",
+    "skillId": "design-taste-frontend-v1",
+    "name": "design-taste-frontend-v1",
+    "installs": 330390,
+    "bestRank": 2
+   },
+   {
+    "id": "wshobson/agents/tailwind-design-system",
+    "source": "wshobson/agents",
+    "skillId": "tailwind-design-system",
+    "name": "tailwind-design-system",
+    "installs": 73122,
+    "bestRank": 6
+   },
+   {
+    "id": "heygen-com/hyperframes/tailwind",
+    "source": "heygen-com/hyperframes",
+    "skillId": "tailwind",
+    "name": "tailwind",
+    "installs": 70553,
+    "bestRank": 7
+   },
+   {
+    "id": "101-skills/superpowers/landing-page-design",
+    "source": "101-skills/superpowers",
+    "skillId": "landing-page-design",
+    "name": "landing-page-design",
+    "installs": 65412,
+    "bestRank": 0
+   },
+   {
+    "id": "anthropics/claude-code/frontend-design",
+    "source": "anthropics/claude-code",
+    "skillId": "frontend-design",
+    "name": "frontend-design",
+    "installs": 63897,
+    "bestRank": 28
+   }
+  ]
+ },
+ "frontend": {
+  "label": "Frameworks front (React, Next.js, Vue…)",
+  "cands": [
+   {
+    "id": "vercel-labs/agent-skills/vercel-react-best-practices",
+    "source": "vercel-labs/agent-skills",
+    "skillId": "vercel-react-best-practices",
+    "name": "vercel-react-best-practices",
+    "installs": 893012,
+    "bestRank": 0
+   },
+   {
+    "id": "vercel-labs/agent-skills/vercel-react-view-transitions",
+    "source": "vercel-labs/agent-skills",
+    "skillId": "vercel-react-view-transitions",
+    "name": "vercel-react-view-transitions",
+    "installs": 188544,
+    "bestRank": 10
+   },
+   {
+    "id": "greensock/gsap-skills/gsap-react",
+    "source": "greensock/gsap-skills",
+    "skillId": "gsap-react",
+    "name": "gsap-react",
+    "installs": 76804,
+    "bestRank": 25
+   },
+   {
+    "id": "cloudflare/skills/nextjs-on-cloudflare",
+    "source": "cloudflare/skills",
+    "skillId": "nextjs-on-cloudflare",
+    "name": "nextjs-on-cloudflare",
+    "installs": 56201,
+    "bestRank": 0
+   },
+   {
+    "id": "clerk/skills/clerk-nextjs-patterns",
+    "source": "clerk/skills",
+    "skillId": "clerk-nextjs-patterns",
+    "name": "clerk-nextjs-patterns",
+    "installs": 55778,
+    "bestRank": 1
+   },
+   {
+    "id": "vuejs-ai/skills/vue-best-practices",
+    "source": "vuejs-ai/skills",
+    "skillId": "vue-best-practices",
+    "name": "vue-best-practices",
+    "installs": 45326,
+    "bestRank": 0
+   },
+   {
+    "id": "antfu/skills/vue",
+    "source": "antfu/skills",
+    "skillId": "vue",
+    "name": "vue",
+    "installs": 36641,
+    "bestRank": 23
+   },
+   {
+    "id": "wshobson/agents/nextjs-app-router-patterns",
+    "source": "wshobson/agents",
+    "skillId": "nextjs-app-router-patterns",
+    "name": "nextjs-app-router-patterns",
+    "installs": 33802,
+    "bestRank": 2
+   },
+   {
+    "id": "vuejs-ai/skills/vue-debug-guides",
+    "source": "vuejs-ai/skills",
+    "skillId": "vue-debug-guides",
+    "name": "vue-debug-guides",
+    "installs": 28128,
+    "bestRank": 1
+   },
+   {
+    "id": "vercel/next.js/next-cache-components-adoption",
+    "source": "vercel/next.js",
+    "skillId": "next-cache-components-adoption",
+    "name": "next-cache-components-adoption",
+    "installs": 26765,
+    "bestRank": 12
+   }
+  ]
+ },
+ "mobile": {
+  "label": "Applications mobiles",
+  "cands": [
+   {
+    "id": "designed-by-ai/skills/design-mobile-apps",
+    "source": "designed-by-ai/skills",
+    "skillId": "design-mobile-apps",
+    "name": "design-mobile-apps",
+    "installs": 1372869,
+    "bestRank": 9
+   },
+   {
+    "id": "uizze.sh/ios-design",
+    "source": "uizze.sh",
+    "skillId": "ios-design",
+    "name": "ios-design",
+    "installs": 418869,
+    "bestRank": 0
+   },
+   {
+    "id": "vercel-labs/agent-skills/vercel-react-native-skills",
+    "source": "vercel-labs/agent-skills",
+    "skillId": "vercel-react-native-skills",
+    "name": "vercel-react-native-skills",
+    "installs": 274927,
+    "bestRank": 0
+   },
+   {
+    "id": "emilkowalski/skills/animate-expo",
+    "source": "emilkowalski/skills",
+    "skillId": "animate-expo",
+    "name": "animate-expo",
+    "installs": 176113,
+    "bestRank": 13
+   },
+   {
+    "id": "emilkowalski/skills/mobile-native",
+    "source": "emilkowalski/skills",
+    "skillId": "mobile-native",
+    "name": "mobile-native",
+    "installs": 126911,
+    "bestRank": 2
+   },
+   {
+    "id": "expo/skills/expo-tailwind-setup",
+    "source": "expo/skills",
+    "skillId": "expo-tailwind-setup",
+    "name": "expo-tailwind-setup",
+    "installs": 53559,
+    "bestRank": 12
+   },
+   {
+    "id": "flutter/agent-plugins/flutter-apply-architecture-best-practices",
+    "source": "flutter/agent-plugins",
+    "skillId": "flutter-apply-architecture-best-practices",
+    "name": "flutter-apply-architecture-best-practices",
+    "installs": 45765,
+    "bestRank": 0
+   },
+   {
+    "id": "flutter/agent-plugins/flutter-build-responsive-layout",
+    "source": "flutter/agent-plugins",
+    "skillId": "flutter-build-responsive-layout",
+    "name": "flutter-build-responsive-layout",
+    "installs": 45401,
+    "bestRank": 1
+   },
+   {
+    "id": "limrun-inc/skills/limrun-expo-development",
+    "source": "limrun-inc/skills",
+    "skillId": "limrun-expo-development",
+    "name": "limrun-expo-development",
+    "installs": 44865,
+    "bestRank": 26
+   },
+   {
+    "id": "flutter/agent-plugins/flutter-fix-layout-issues",
+    "source": "flutter/agent-plugins",
+    "skillId": "flutter-fix-layout-issues",
+    "name": "flutter-fix-layout-issues",
+    "installs": 42483,
+    "bestRank": 2
+   }
+  ]
+ },
+ "backend": {
+  "label": "Backend et API",
+  "cands": [
+   {
+    "id": "microsoft/azure-skills/python-appservice-deploy",
+    "source": "microsoft/azure-skills",
+    "skillId": "python-appservice-deploy",
+    "name": "python-appservice-deploy",
+    "installs": 349296,
+    "bestRank": 2
+   },
+   {
+    "id": "addyosmani/agent-skills/api-and-interface-design",
+    "source": "addyosmani/agent-skills",
+    "skillId": "api-and-interface-design",
+    "name": "api-and-interface-design",
+    "installs": 74269,
+    "bestRank": 0
+   },
+   {
+    "id": "wshobson/agents/nodejs-backend-patterns",
+    "source": "wshobson/agents",
+    "skillId": "nodejs-backend-patterns",
+    "name": "nodejs-backend-patterns",
+    "installs": 50013,
+    "bestRank": 0
+   },
+   {
+    "id": "samber/cc-skills-golang/golang-code-style",
+    "source": "samber/cc-skills-golang",
+    "skillId": "golang-code-style",
+    "name": "golang-code-style",
+    "installs": 46259,
+    "bestRank": 0
+   },
+   {
+    "id": "samber/cc-skills-golang/golang-testing",
+    "source": "samber/cc-skills-golang",
+    "skillId": "golang-testing",
+    "name": "golang-testing",
+    "installs": 45541,
+    "bestRank": 1
+   },
+   {
+    "id": "samber/cc-skills-golang/golang-error-handling",
+    "source": "samber/cc-skills-golang",
+    "skillId": "golang-error-handling",
+    "name": "golang-error-handling",
+    "installs": 45522,
+    "bestRank": 2
+   },
+   {
+    "id": "samber/cc-skills-golang/golang-security",
+    "source": "samber/cc-skills-golang",
+    "skillId": "golang-security",
+    "name": "golang-security",
+    "installs": 44343,
+    "bestRank": 3
+   },
+   {
+    "id": "samber/cc-skills-golang/golang-design-patterns",
+    "source": "samber/cc-skills-golang",
+    "skillId": "golang-design-patterns",
+    "name": "golang-design-patterns",
+    "installs": 43944,
+    "bestRank": 4
+   },
+   {
+    "id": "samber/cc-skills-golang/golang-performance",
+    "source": "samber/cc-skills-golang",
+    "skillId": "golang-performance",
+    "name": "golang-performance",
+    "installs": 43796,
+    "bestRank": 5
+   },
+   {
+    "id": "samber/cc-skills-golang/golang-concurrency",
+    "source": "samber/cc-skills-golang",
+    "skillId": "golang-concurrency",
+    "name": "golang-concurrency",
+    "installs": 43753,
+    "bestRank": 6
+   }
+  ]
+ },
+ "database": {
+  "label": "Bases de données",
+  "cands": [
+   {
+    "id": "supabase/agent-skills/supabase-postgres-best-practices",
+    "source": "supabase/agent-skills",
+    "skillId": "supabase-postgres-best-practices",
+    "name": "supabase-postgres-best-practices",
+    "installs": 482958,
+    "bestRank": 0
+   },
+   {
+    "id": "prisma/skills/prisma-client-api",
+    "source": "prisma/skills",
+    "skillId": "prisma-client-api",
+    "name": "prisma-client-api",
+    "installs": 424720,
+    "bestRank": 0
+   },
+   {
+    "id": "prisma/skills/prisma-database-setup",
+    "source": "prisma/skills",
+    "skillId": "prisma-database-setup",
+    "name": "prisma-database-setup",
+    "installs": 422921,
+    "bestRank": 1
+   },
+   {
+    "id": "prisma/skills/prisma-cli",
+    "source": "prisma/skills",
+    "skillId": "prisma-cli",
+    "name": "prisma-cli",
+    "installs": 421731,
+    "bestRank": 2
+   },
+   {
+    "id": "prisma/skills/prisma-postgres",
+    "source": "prisma/skills",
+    "skillId": "prisma-postgres",
+    "name": "prisma-postgres",
+    "installs": 414789,
+    "bestRank": 1
+   },
+   {
+    "id": "prisma/skills/prisma-postgres-setup",
+    "source": "prisma/skills",
+    "skillId": "prisma-postgres-setup",
+    "name": "prisma-postgres-setup",
+    "installs": 409407,
+    "bestRank": 2
+   },
+   {
+    "id": "prisma/skills/prisma-driver-adapter-implementation",
+    "source": "prisma/skills",
+    "skillId": "prisma-driver-adapter-implementation",
+    "name": "prisma-driver-adapter-implementation",
+    "installs": 409336,
+    "bestRank": 5
+   },
+   {
+    "id": "prisma/skills/prisma-upgrade-v7",
+    "source": "prisma/skills",
+    "skillId": "prisma-upgrade-v7",
+    "name": "prisma-upgrade-v7",
+    "installs": 409132,
+    "bestRank": 6
+   },
+   {
+    "id": "prisma/skills/prisma-compute",
+    "source": "prisma/skills",
+    "skillId": "prisma-compute",
+    "name": "prisma-compute",
+    "installs": 404259,
+    "bestRank": 7
+   },
+   {
+    "id": "prisma/skills/prisma-mongodb-upgrade",
+    "source": "prisma/skills",
+    "skillId": "prisma-mongodb-upgrade",
+    "name": "prisma-mongodb-upgrade",
+    "installs": 402741,
+    "bestRank": 8
+   }
+  ]
+ },
+ "data": {
+  "label": "Analyse de données",
+  "cands": [
+   {
+    "id": "anthropics/skills/xlsx",
+    "source": "anthropics/skills",
+    "skillId": "xlsx",
+    "name": "xlsx",
+    "installs": 197382,
+    "bestRank": 3
+   },
+   {
+    "id": "yuan1z0825/nature-skills/nature-data",
+    "source": "yuan1z0825/nature-skills",
+    "skillId": "nature-data",
+    "name": "nature-data",
+    "installs": 16306,
+    "bestRank": 12
+   },
+   {
+    "id": "anthropics/knowledge-work-plugins/data-visualization",
+    "source": "anthropics/knowledge-work-plugins",
+    "skillId": "data-visualization",
+    "name": "data-visualization",
+    "installs": 14578,
+    "bestRank": 0
+   },
+   {
+    "id": "claude-office-skills/skills/data-analysis",
+    "source": "claude-office-skills/skills",
+    "skillId": "data-analysis",
+    "name": "data-analysis",
+    "installs": 8226,
+    "bestRank": 1
+   },
+   {
+    "id": "github/awesome-copilot/datanalysis-credit-risk",
+    "source": "github/awesome-copilot",
+    "skillId": "datanalysis-credit-risk",
+    "name": "datanalysis-credit-risk",
+    "installs": 7312,
+    "bestRank": 0
+   },
+   {
+    "id": "jeffallan/claude-skills/pandas-pro",
+    "source": "jeffallan/claude-skills",
+    "skillId": "pandas-pro",
+    "name": "pandas-pro",
+    "installs": 6138,
+    "bestRank": 24
+   },
+   {
+    "id": "cline/skills/data-analyst",
+    "source": "cline/skills",
+    "skillId": "data-analyst",
+    "name": "data-analyst",
+    "installs": 2621,
+    "bestRank": 9
+   },
+   {
+    "id": "dbt-labs/dbt-agent-skills/using-dbt-for-analytics-engineering",
+    "source": "dbt-labs/dbt-agent-skills",
+    "skillId": "using-dbt-for-analytics-engineering",
+    "name": "using-dbt-for-analytics-engineering",
+    "installs": 1208,
+    "bestRank": 6
+   },
+   {
+    "id": "jimliu/baoyu-design/claude-dashboard",
+    "source": "jimliu/baoyu-design",
+    "skillId": "claude-dashboard",
+    "name": "claude-dashboard",
+    "installs": 1088,
+    "bestRank": 5
+   },
+   {
+    "id": "syncfusion/react-ui-components-skills/syncfusion-react-charts",
+    "source": "syncfusion/react-ui-components-skills",
+    "skillId": "syncfusion-react-charts",
+    "name": "syncfusion-react-charts",
+    "installs": 777,
+    "bestRank": 7
+   }
+  ]
+ },
+ "ia": {
+  "label": "IA, agents et LLM",
+  "cands": [
+   {
+    "id": "vercel-labs/agent-browser/agent-browser",
+    "source": "vercel-labs/agent-browser",
+    "skillId": "agent-browser",
+    "name": "agent-browser",
+    "installs": 1419676,
+    "bestRank": 2
+   },
+   {
+    "id": "anthropics/skills/mcp-builder",
+    "source": "anthropics/skills",
+    "skillId": "mcp-builder",
+    "name": "mcp-builder",
+    "installs": 140568,
+    "bestRank": 8
+   },
+   {
+    "id": "antibrow/anti-detect-browser-skills/browser-mcp-agent",
+    "source": "antibrow/anti-detect-browser-skills",
+    "skillId": "browser-mcp-agent",
+    "name": "browser-mcp-agent",
+    "installs": 126793,
+    "bestRank": 10
+   },
+   {
+    "id": "anthropics/skills/claude-api",
+    "source": "anthropics/skills",
+    "skillId": "claude-api",
+    "name": "claude-api",
+    "installs": 79560,
+    "bestRank": 0
+   },
+   {
+    "id": "jane-o-o-o-o/agent-pulse-skill/agent-pulse",
+    "source": "jane-o-o-o-o/agent-pulse-skill",
+    "skillId": "agent-pulse",
+    "name": "agent-pulse",
+    "installs": 47548,
+    "bestRank": 4
+   },
+   {
+    "id": "mcp-use/mcp-use/mcp-apps-builder",
+    "source": "mcp-use/mcp-use",
+    "skillId": "mcp-apps-builder",
+    "name": "mcp-apps-builder",
+    "installs": 33576,
+    "bestRank": 9
+   },
+   {
+    "id": "wshobson/agents/prompt-engineering-patterns",
+    "source": "wshobson/agents",
+    "skillId": "prompt-engineering-patterns",
+    "name": "prompt-engineering-patterns",
+    "installs": 24394,
+    "bestRank": 1
+   },
+   {
+    "id": "wshobson/agents/rag-implementation",
+    "source": "wshobson/agents",
+    "skillId": "rag-implementation",
+    "name": "rag-implementation",
+    "installs": 14535,
+    "bestRank": 2
+   },
+   {
+    "id": "affaan-m/ecc/eval-harness",
+    "source": "affaan-m/ecc",
+    "skillId": "eval-harness",
+    "name": "eval-harness",
+    "installs": 12297,
+    "bestRank": 5
+   },
+   {
+    "id": "github/awesome-copilot/typescript-mcp-server-generator",
+    "source": "github/awesome-copilot",
+    "skillId": "typescript-mcp-server-generator",
+    "name": "typescript-mcp-server-generator",
+    "installs": 12095,
+    "bestRank": 0
+   }
+  ]
+ },
+ "tests": {
+  "label": "Tests, revue et débogage",
+  "cands": [
+   {
+    "id": "mattpocock/skills/tdd",
+    "source": "mattpocock/skills",
+    "skillId": "tdd",
+    "name": "tdd",
+    "installs": 1232016,
+    "bestRank": 6
+   },
+   {
+    "id": "mattpocock/skills/code-review",
+    "source": "mattpocock/skills",
+    "skillId": "code-review",
+    "name": "code-review",
+    "installs": 883561,
+    "bestRank": 0
+   },
+   {
+    "id": "obra/superpowers/systematic-debugging",
+    "source": "obra/superpowers",
+    "skillId": "systematic-debugging",
+    "name": "systematic-debugging",
+    "installs": 330162,
+    "bestRank": 0
+   },
+   {
+    "id": "emilkowalski/skills/review-animations",
+    "source": "emilkowalski/skills",
+    "skillId": "review-animations",
+    "name": "review-animations",
+    "installs": 302668,
+    "bestRank": 16
+   },
+   {
+    "id": "obra/superpowers/requesting-code-review",
+    "source": "obra/superpowers",
+    "skillId": "requesting-code-review",
+    "name": "requesting-code-review",
+    "installs": 279071,
+    "bestRank": 1
+   },
+   {
+    "id": "obra/superpowers/test-driven-development",
+    "source": "obra/superpowers",
+    "skillId": "test-driven-development",
+    "name": "test-driven-development",
+    "installs": 277515,
+    "bestRank": 0
+   },
+   {
+    "id": "obra/superpowers/receiving-code-review",
+    "source": "obra/superpowers",
+    "skillId": "receiving-code-review",
+    "name": "receiving-code-review",
+    "installs": 237492,
+    "bestRank": 2
+   },
+   {
+    "id": "anthropics/skills/webapp-testing",
+    "source": "anthropics/skills",
+    "skillId": "webapp-testing",
+    "name": "webapp-testing",
+    "installs": 203436,
+    "bestRank": 0
+   },
+   {
+    "id": "currents-dev/playwright-best-practices-skill/playwright-best-practices",
+    "source": "currents-dev/playwright-best-practices-skill",
+    "skillId": "playwright-best-practices",
+    "name": "playwright-best-practices",
+    "installs": 105649,
+    "bestRank": 5
+   },
+   {
+    "id": "mattpocock/skills/review",
+    "source": "mattpocock/skills",
+    "skillId": "review",
+    "name": "review",
+    "installs": 89886,
+    "bestRank": 19
+   }
+  ]
+ },
+ "devops": {
+  "label": "DevOps et déploiement",
+  "cands": [
+   {
+    "id": "microsoft/azure-skills/azure-prepare",
+    "source": "microsoft/azure-skills",
+    "skillId": "azure-prepare",
+    "name": "azure-prepare",
+    "installs": 687471,
+    "bestRank": 10
+   },
+   {
+    "id": "microsoft/azure-skills/azure-deploy",
+    "source": "microsoft/azure-skills",
+    "skillId": "azure-deploy",
+    "name": "azure-deploy",
+    "installs": 686431,
+    "bestRank": 21
+   },
+   {
+    "id": "microsoft/azure-skills/azure-validate",
+    "source": "microsoft/azure-skills",
+    "skillId": "azure-validate",
+    "name": "azure-validate",
+    "installs": 686121,
+    "bestRank": 22
+   },
+   {
+    "id": "microsoft/azure-skills/azure-cloud-migrate",
+    "source": "microsoft/azure-skills",
+    "skillId": "azure-cloud-migrate",
+    "name": "azure-cloud-migrate",
+    "installs": 633113,
+    "bestRank": 6
+   },
+   {
+    "id": "microsoft/azure-skills/azure-enterprise-infra-planner",
+    "source": "microsoft/azure-skills",
+    "skillId": "azure-enterprise-infra-planner",
+    "name": "azure-enterprise-infra-planner",
+    "installs": 558660,
+    "bestRank": 23
+   },
+   {
+    "id": "microsoft/azure-skills/azure-kubernetes",
+    "source": "microsoft/azure-skills",
+    "skillId": "azure-kubernetes",
+    "name": "azure-kubernetes",
+    "installs": 552899,
+    "bestRank": 0
+   },
+   {
+    "id": "microsoft/azure-skills/python-appservice-deploy",
+    "source": "microsoft/azure-skills",
+    "skillId": "python-appservice-deploy",
+    "name": "python-appservice-deploy",
+    "installs": 349296,
+    "bestRank": 24
+   },
+   {
+    "id": "microsoft/azure-skills/azure-app-onboard-prereq",
+    "source": "microsoft/azure-skills",
+    "skillId": "azure-app-onboard-prereq",
+    "name": "azure-app-onboard-prereq",
+    "installs": 272224,
+    "bestRank": 11
+   },
+   {
+    "id": "cloudflare/skills/wrangler",
+    "source": "cloudflare/skills",
+    "skillId": "wrangler",
+    "name": "wrangler",
+    "installs": 145743,
+    "bestRank": 2
+   },
+   {
+    "id": "cloudflare/skills/cloudflare-one",
+    "source": "cloudflare/skills",
+    "skillId": "cloudflare-one",
+    "name": "cloudflare-one",
+    "installs": 107817,
+    "bestRank": 1
+   }
+  ]
+ },
+ "securite": {
+  "label": "Sécurité",
+  "cands": [
+   {
+    "id": "microsoft/azure-skills/azure-compliance",
+    "source": "microsoft/azure-skills",
+    "skillId": "azure-compliance",
+    "name": "azure-compliance",
+    "installs": 684861,
+    "bestRank": 2
+   },
+   {
+    "id": "firebase/agent-skills/firebase-security-rules-auditor",
+    "source": "firebase/agent-skills",
+    "skillId": "firebase-security-rules-auditor",
+    "name": "firebase-security-rules-auditor",
+    "installs": 147249,
+    "bestRank": 0
+   },
+   {
+    "id": "addyosmani/agent-skills/security-and-hardening",
+    "source": "addyosmani/agent-skills",
+    "skillId": "security-and-hardening",
+    "name": "security-and-hardening",
+    "installs": 83537,
+    "bestRank": 8
+   },
+   {
+    "id": "better-auth/skills/better-auth-security-best-practices",
+    "source": "better-auth/skills",
+    "skillId": "better-auth-security-best-practices",
+    "name": "better-auth-security-best-practices",
+    "installs": 51103,
+    "bestRank": 6
+   },
+   {
+    "id": "samber/cc-skills-golang/golang-security",
+    "source": "samber/cc-skills-golang",
+    "skillId": "golang-security",
+    "name": "golang-security",
+    "installs": 44343,
+    "bestRank": 1
+   },
+   {
+    "id": "getsentry/skills/security-review",
+    "source": "getsentry/skills",
+    "skillId": "security-review",
+    "name": "security-review",
+    "installs": 23308,
+    "bestRank": 0
+   },
+   {
+    "id": "firebase/agent-skills/firestore-security-rules-auditor",
+    "source": "firebase/agent-skills",
+    "skillId": "firestore-security-rules-auditor",
+    "name": "firestore-security-rules-auditor",
+    "installs": 20399,
+    "bestRank": 1
+   },
+   {
+    "id": "affaan-m/ecc/security-review",
+    "source": "affaan-m/ecc",
+    "skillId": "security-review",
+    "name": "security-review",
+    "installs": 20224,
+    "bestRank": 1
+   },
+   {
+    "id": "usestrix/strix/ci-security-scanning-with-strix",
+    "source": "usestrix/strix",
+    "skillId": "ci-security-scanning-with-strix",
+    "name": "ci-security-scanning-with-strix",
+    "installs": 18984,
+    "bestRank": 17
+   },
+   {
+    "id": "usestrix/strix/managed-pentesting-with-strix",
+    "source": "usestrix/strix",
+    "skillId": "managed-pentesting-with-strix",
+    "name": "managed-pentesting-with-strix",
+    "installs": 18898,
+    "bestRank": 18
+   }
+  ]
+ },
+ "marketing": {
+  "label": "SEO, marketing et contenu",
+  "cands": [
+   {
+    "id": "coreyhaines31/marketingskills/seo-audit",
+    "source": "coreyhaines31/marketingskills",
+    "skillId": "seo-audit",
+    "name": "seo-audit",
+    "installs": 252862,
+    "bestRank": 0
+   },
+   {
+    "id": "coreyhaines31/marketingskills/copywriting",
+    "source": "coreyhaines31/marketingskills",
+    "skillId": "copywriting",
+    "name": "copywriting",
+    "installs": 252800,
+    "bestRank": 0
+   },
+   {
+    "id": "coreyhaines31/marketingskills/content-strategy",
+    "source": "coreyhaines31/marketingskills",
+    "skillId": "content-strategy",
+    "name": "content-strategy",
+    "installs": 176096,
+    "bestRank": 0
+   },
+   {
+    "id": "coreyhaines31/marketingskills/marketing-psychology",
+    "source": "coreyhaines31/marketingskills",
+    "skillId": "marketing-psychology",
+    "name": "marketing-psychology",
+    "installs": 176027,
+    "bestRank": 8
+   },
+   {
+    "id": "coreyhaines31/marketingskills/ai-seo",
+    "source": "coreyhaines31/marketingskills",
+    "skillId": "ai-seo",
+    "name": "ai-seo",
+    "installs": 163328,
+    "bestRank": 1
+   },
+   {
+    "id": "coreyhaines31/marketingskills/copy-editing",
+    "source": "coreyhaines31/marketingskills",
+    "skillId": "copy-editing",
+    "name": "copy-editing",
+    "installs": 160572,
+    "bestRank": 10
+   },
+   {
+    "id": "coreyhaines31/marketingskills/programmatic-seo",
+    "source": "coreyhaines31/marketingskills",
+    "skillId": "programmatic-seo",
+    "name": "programmatic-seo",
+    "installs": 160436,
+    "bestRank": 3
+   },
+   {
+    "id": "coreyhaines31/marketingskills/cold-email",
+    "source": "coreyhaines31/marketingskills",
+    "skillId": "cold-email",
+    "name": "cold-email",
+    "installs": 137481,
+    "bestRank": 8
+   },
+   {
+    "id": "coreyhaines31/marketingskills/social",
+    "source": "coreyhaines31/marketingskills",
+    "skillId": "social",
+    "name": "social",
+    "installs": 97116,
+    "bestRank": 4
+   },
+   {
+    "id": "coreyhaines31/marketingskills/emails",
+    "source": "coreyhaines31/marketingskills",
+    "skillId": "emails",
+    "name": "emails",
+    "installs": 87537,
+    "bestRank": 6
+   }
+  ]
+ },
+ "documents": {
+  "label": "Documents bureautiques",
+  "cands": [
+   {
+    "id": "anthropics/skills/pptx",
+    "source": "anthropics/skills",
+    "skillId": "pptx",
+    "name": "pptx",
+    "installs": 253834,
+    "bestRank": 0
+   },
+   {
+    "id": "anthropics/skills/pdf",
+    "source": "anthropics/skills",
+    "skillId": "pdf",
+    "name": "pdf",
+    "installs": 227573,
+    "bestRank": 0
+   },
+   {
+    "id": "anthropics/skills/docx",
+    "source": "anthropics/skills",
+    "skillId": "docx",
+    "name": "docx",
+    "installs": 216956,
+    "bestRank": 0
+   },
+   {
+    "id": "affaan-m/ecc/frontend-slides",
+    "source": "affaan-m/ecc",
+    "skillId": "frontend-slides",
+    "name": "frontend-slides",
+    "installs": 14355,
+    "bestRank": 28
+   },
+   {
+    "id": "openai/skills/pdf",
+    "source": "openai/skills",
+    "skillId": "pdf",
+    "name": "pdf",
+    "installs": 13778,
+    "bestRank": 1
+   },
+   {
+    "id": "firecrawl/anydoc/convert-documents-to-markdown",
+    "source": "firecrawl/anydoc",
+    "skillId": "convert-documents-to-markdown",
+    "name": "convert-documents-to-markdown",
+    "installs": 13459,
+    "bestRank": 0
+   },
+   {
+    "id": "affaan-m/ecc/nutrient-document-processing",
+    "source": "affaan-m/ecc",
+    "skillId": "nutrient-document-processing",
+    "name": "nutrient-document-processing",
+    "installs": 11729,
+    "bestRank": 20
+   },
+   {
+    "id": "github/awesome-copilot/pdftk-server",
+    "source": "github/awesome-copilot",
+    "skillId": "pdftk-server",
+    "name": "pdftk-server",
+    "installs": 9993,
+    "bestRank": 2
+   },
+   {
+    "id": "tanis90/pdf-converter-mineru/pdf-converter",
+    "source": "tanis90/pdf-converter-mineru",
+    "skillId": "pdf-converter",
+    "name": "pdf-converter",
+    "installs": 9699,
+    "bestRank": 3
+   },
+   {
+    "id": "claude-office-skills/skills/pdf-extraction",
+    "source": "claude-office-skills/skills",
+    "skillId": "pdf-extraction",
+    "name": "pdf-extraction",
+    "installs": 9525,
+    "bestRank": 5
+   }
+  ]
+ },
+ "ux": {
+  "label": "Design system, accessibilité, animation",
+  "cands": [
+   {
+    "id": "heygen-com/hyperframes/hyperframes-animation",
+    "source": "heygen-com/hyperframes",
+    "skillId": "hyperframes-animation",
+    "name": "hyperframes-animation",
+    "installs": 1005453,
+    "bestRank": 0
+   },
+   {
+    "id": "heygen-com/hyperframes/remotion-to-hyperframes",
+    "source": "heygen-com/hyperframes",
+    "skillId": "remotion-to-hyperframes",
+    "name": "remotion-to-hyperframes",
+    "installs": 605034,
+    "bestRank": 2
+   },
+   {
+    "id": "nextlevelbuilder/ui-ux-pro-max-skill/ui-ux-pro-max",
+    "source": "nextlevelbuilder/ui-ux-pro-max-skill",
+    "skillId": "ui-ux-pro-max",
+    "name": "ui-ux-pro-max",
+    "installs": 447814,
+    "bestRank": 7
+   },
+   {
+    "id": "heygen-com/hyperframes/figma",
+    "source": "heygen-com/hyperframes",
+    "skillId": "figma",
+    "name": "figma",
+    "installs": 419749,
+    "bestRank": 0
+   },
+   {
+    "id": "emilkowalski/skills/review-animations",
+    "source": "emilkowalski/skills",
+    "skillId": "review-animations",
+    "name": "review-animations",
+    "installs": 302668,
+    "bestRank": 4
+   },
+   {
+    "id": "emilkowalski/skills/animation-vocabulary",
+    "source": "emilkowalski/skills",
+    "skillId": "animation-vocabulary",
+    "name": "animation-vocabulary",
+    "installs": 280657,
+    "bestRank": 3
+   },
+   {
+    "id": "emilkowalski/skills/improve-animations",
+    "source": "emilkowalski/skills",
+    "skillId": "improve-animations",
+    "name": "improve-animations",
+    "installs": 267285,
+    "bestRank": 5
+   },
+   {
+    "id": "emilkowalski/skills/find-animation-opportunities",
+    "source": "emilkowalski/skills",
+    "skillId": "find-animation-opportunities",
+    "name": "find-animation-opportunities",
+    "installs": 250393,
+    "bestRank": 6
+   },
+   {
+    "id": "arvindrk/extract-design-system/extract-design-system",
+    "source": "arvindrk/extract-design-system",
+    "skillId": "extract-design-system",
+    "name": "extract-design-system",
+    "installs": 131470,
+    "bestRank": 0
+   },
+   {
+    "id": "emilkowalski/skills/animation-performance",
+    "source": "emilkowalski/skills",
+    "skillId": "animation-performance",
+    "name": "animation-performance",
+    "installs": 78788,
+    "bestRank": 10
+   }
+  ]
+ },
+ "ecommerce": {
+  "label": "E-commerce, CMS et paiement",
+  "cands": [
+   {
+    "id": "nexscope-ai/ecommerce-skills/cross-border-ecommerce",
+    "source": "nexscope-ai/ecommerce-skills",
+    "skillId": "cross-border-ecommerce",
+    "name": "cross-border-ecommerce",
+    "installs": 63018,
+    "bestRank": 0
+   },
+   {
+    "id": "shopify/shopify-ai-toolkit/shopify-admin",
+    "source": "shopify/shopify-ai-toolkit",
+    "skillId": "shopify-admin",
+    "name": "shopify-admin",
+    "installs": 17808,
+    "bestRank": 0
+   },
+   {
+    "id": "wshobson/agents/stripe-integration",
+    "source": "wshobson/agents",
+    "skillId": "stripe-integration",
+    "name": "stripe-integration",
+    "installs": 13878,
+    "bestRank": 7
+   },
+   {
+    "id": "shopify/shopify-ai-toolkit/shopify-storefront-graphql",
+    "source": "shopify/shopify-ai-toolkit",
+    "skillId": "shopify-storefront-graphql",
+    "name": "shopify-storefront-graphql",
+    "installs": 13677,
+    "bestRank": 2
+   },
+   {
+    "id": "shopify/shopify-ai-toolkit/shopify-liquid",
+    "source": "shopify/shopify-ai-toolkit",
+    "skillId": "shopify-liquid",
+    "name": "shopify-liquid",
+    "installs": 13030,
+    "bestRank": 3
+   },
+   {
+    "id": "shopify/shopify-ai-toolkit/shopify-dev",
+    "source": "shopify/shopify-ai-toolkit",
+    "skillId": "shopify-dev",
+    "name": "shopify-dev",
+    "installs": 12737,
+    "bestRank": 4
+   },
+   {
+    "id": "shopify/shopify-ai-toolkit/shopify-custom-data",
+    "source": "shopify/shopify-ai-toolkit",
+    "skillId": "shopify-custom-data",
+    "name": "shopify-custom-data",
+    "installs": 11621,
+    "bestRank": 5
+   },
+   {
+    "id": "shopify/shopify-ai-toolkit/shopify-use-shopify-cli",
+    "source": "shopify/shopify-ai-toolkit",
+    "skillId": "shopify-use-shopify-cli",
+    "name": "shopify-use-shopify-cli",
+    "installs": 11210,
+    "bestRank": 6
+   },
+   {
+    "id": "shopify/shopify-ai-toolkit/shopify-polaris-app-home",
+    "source": "shopify/shopify-ai-toolkit",
+    "skillId": "shopify-polaris-app-home",
+    "name": "shopify-polaris-app-home",
+    "installs": 11031,
+    "bestRank": 7
+   },
+   {
+    "id": "shopify/shopify-ai-toolkit/shopify-functions",
+    "source": "shopify/shopify-ai-toolkit",
+    "skillId": "shopify-functions",
+    "name": "shopify-functions",
+    "installs": 10821,
+    "bestRank": 8
+   }
+  ]
+ },
+ "methode": {
+  "label": "Méthode de travail (plan, git, docs)",
+  "cands": [
+   {
+    "id": "vercel-labs/skills/find-skills",
+    "source": "vercel-labs/skills",
+    "skillId": "find-skills",
+    "name": "find-skills",
+    "installs": 4320589,
+    "bestRank": 0
+   },
+   {
+    "id": "open.feishu.cn/lark-doc",
+    "source": "open.feishu.cn",
+    "skillId": "lark-doc",
+    "name": "lark-doc",
+    "installs": 892114,
+    "bestRank": 6
+   },
+   {
+    "id": "mattpocock/skills/research",
+    "source": "mattpocock/skills",
+    "skillId": "research",
+    "name": "research",
+    "installs": 797791,
+    "bestRank": 7
+   },
+   {
+    "id": "mattpocock/skills/writing-for-agents",
+    "source": "mattpocock/skills",
+    "skillId": "writing-for-agents",
+    "name": "writing-for-agents",
+    "installs": 549526,
+    "bestRank": 1
+   },
+   {
+    "id": "mattpocock/skills/writing-beats",
+    "source": "mattpocock/skills",
+    "skillId": "writing-beats",
+    "name": "writing-beats",
+    "installs": 537643,
+    "bestRank": 2
+   },
+   {
+    "id": "mattpocock/skills/writing-shape",
+    "source": "mattpocock/skills",
+    "skillId": "writing-shape",
+    "name": "writing-shape",
+    "installs": 537276,
+    "bestRank": 3
+   },
+   {
+    "id": "mattpocock/skills/writing-fragments",
+    "source": "mattpocock/skills",
+    "skillId": "writing-fragments",
+    "name": "writing-fragments",
+    "installs": 536467,
+    "bestRank": 4
+   },
+   {
+    "id": "larksuite/cli/lark-doc",
+    "source": "larksuite/cli",
+    "skillId": "lark-doc",
+    "name": "lark-doc",
+    "installs": 492842,
+    "bestRank": 11
+   },
+   {
+    "id": "obra/superpowers/brainstorming",
+    "source": "obra/superpowers",
+    "skillId": "brainstorming",
+    "name": "brainstorming",
+    "installs": 426087,
+    "bestRank": 0
+   },
+   {
+    "id": "anthropics/skills/docx",
+    "source": "anthropics/skills",
+    "skillId": "docx",
+    "name": "docx",
+    "installs": 216956,
+    "bestRank": 9
+   }
+  ]
+ },
+ "desktop-jeu": {
+  "label": "Bureau, jeux et 3D",
+  "cands": [
+   {
+    "id": "cloudai-x/threejs-skills/threejs-geometry",
+    "source": "cloudai-x/threejs-skills",
+    "skillId": "threejs-geometry",
+    "name": "threejs-geometry",
+    "installs": 19196,
+    "bestRank": 4
+   },
+   {
+    "id": "cloudai-x/threejs-skills/threejs-interaction",
+    "source": "cloudai-x/threejs-skills",
+    "skillId": "threejs-interaction",
+    "name": "threejs-interaction",
+    "installs": 18723,
+    "bestRank": 5
+   },
+   {
+    "id": "cloudai-x/threejs-skills/threejs-loaders",
+    "source": "cloudai-x/threejs-skills",
+    "skillId": "threejs-loaders",
+    "name": "threejs-loaders",
+    "installs": 17147,
+    "bestRank": 6
+   },
+   {
+    "id": "wshobson/agents/unity-ecs-patterns",
+    "source": "wshobson/agents",
+    "skillId": "unity-ecs-patterns",
+    "name": "unity-ecs-patterns",
+    "installs": 12535,
+    "bestRank": 10
+   },
+   {
+    "id": "nodnarbnitram/claude-code-extensions/tauri-v2",
+    "source": "nodnarbnitram/claude-code-extensions",
+    "skillId": "tauri-v2",
+    "name": "tauri-v2",
+    "installs": 8398,
+    "bestRank": 0
+   },
+   {
+    "id": "jimliu/baoyu-skills/baoyu-electron-extract",
+    "source": "jimliu/baoyu-skills",
+    "skillId": "baoyu-electron-extract",
+    "name": "baoyu-electron-extract",
+    "installs": 8227,
+    "bestRank": 2
+   },
+   {
+    "id": "jeffallan/claude-skills/game-developer",
+    "source": "jeffallan/claude-skills",
+    "skillId": "game-developer",
+    "name": "game-developer",
+    "installs": 6915,
+    "bestRank": 9
+   },
+   {
+    "id": "thedivergentai/game-dev-agentic-skills/godot-master",
+    "source": "thedivergentai/game-dev-agentic-skills",
+    "skillId": "godot-master",
+    "name": "godot-master",
+    "installs": 5280,
+    "bestRank": 13
+   },
+   {
+    "id": "cloudai-x/threejs-skills/threejs-asset-pipeline",
+    "source": "cloudai-x/threejs-skills",
+    "skillId": "threejs-asset-pipeline",
+    "name": "threejs-asset-pipeline",
+    "installs": 5252,
+    "bestRank": 7
+   },
+   {
+    "id": "freshtechbro/claudedesignskills/threejs-webgl",
+    "source": "freshtechbro/claudedesignskills",
+    "skillId": "threejs-webgl",
+    "name": "threejs-webgl",
+    "installs": 5086,
+    "bestRank": 8
+   }
+  ]
+ }
+}

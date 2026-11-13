@@ -1,0 +1,458 @@
+[
+ {
+  "cat": "site-design",
+  "q": "frontend design",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "site-design",
+  "q": "landing page design",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "site-design",
+  "q": "web design guidelines",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "site-design",
+  "q": "tailwind css",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "site-design",
+  "q": "ui ux design",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "frontend",
+  "q": "react best practices",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "frontend",
+  "q": "next.js",
+  "n": 30,
+  "type": "fuzzy"
+ },
+ {
+  "cat": "frontend",
+  "q": "vue",
+  "n": 30,
+  "type": "fuzzy"
+ },
+ {
+  "cat": "frontend",
+  "q": "svelte",
+  "n": 30,
+  "type": "fuzzy"
+ },
+ {
+  "cat": "frontend",
+  "q": "astro",
+  "n": 30,
+  "type": "fuzzy"
+ },
+ {
+  "cat": "mobile",
+  "q": "react native",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "mobile",
+  "q": "flutter",
+  "n": 30,
+  "type": "fuzzy"
+ },
+ {
+  "cat": "mobile",
+  "q": "swiftui ios",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "mobile",
+  "q": "android kotlin",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "mobile",
+  "q": "expo mobile app",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "backend",
+  "q": "api design",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "backend",
+  "q": "node backend",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "backend",
+  "q": "python fastapi",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "backend",
+  "q": "django",
+  "n": 30,
+  "type": "fuzzy"
+ },
+ {
+  "cat": "backend",
+  "q": "laravel php",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "backend",
+  "q": "golang",
+  "n": 30,
+  "type": "fuzzy"
+ },
+ {
+  "cat": "database",
+  "q": "postgres",
+  "n": 30,
+  "type": "fuzzy"
+ },
+ {
+  "cat": "database",
+  "q": "database schema design",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "database",
+  "q": "supabase",
+  "n": 30,
+  "type": "fuzzy"
+ },
+ {
+  "cat": "database",
+  "q": "prisma",
+  "n": 30,
+  "type": "fuzzy"
+ },
+ {
+  "cat": "database",
+  "q": "sql optimization",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "data",
+  "q": "data analysis",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "data",
+  "q": "pandas data science",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "data",
+  "q": "excel spreadsheet analysis",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "data",
+  "q": "data visualization charts",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "data",
+  "q": "sql analytics",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "ia",
+  "q": "ai agent development",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "ia",
+  "q": "mcp server",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "ia",
+  "q": "prompt engineering",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "ia",
+  "q": "rag llm",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "ia",
+  "q": "claude api",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "tests",
+  "q": "testing",
+  "n": 30,
+  "type": "fuzzy"
+ },
+ {
+  "cat": "tests",
+  "q": "playwright e2e",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "tests",
+  "q": "test driven development",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "tests",
+  "q": "code review",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "tests",
+  "q": "debugging",
+  "n": 30,
+  "type": "fuzzy"
+ },
+ {
+  "cat": "devops",
+  "q": "docker",
+  "n": 30,
+  "type": "fuzzy"
+ },
+ {
+  "cat": "devops",
+  "q": "kubernetes",
+  "n": 30,
+  "type": "fuzzy"
+ },
+ {
+  "cat": "devops",
+  "q": "github actions ci cd",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "devops",
+  "q": "terraform",
+  "n": 30,
+  "type": "fuzzy"
+ },
+ {
+  "cat": "devops",
+  "q": "cloudflare deploy",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "securite",
+  "q": "security review",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "securite",
+  "q": "security audit",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "securite",
+  "q": "owasp",
+  "n": 30,
+  "type": "fuzzy"
+ },
+ {
+  "cat": "securite",
+  "q": "secrets detection",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "marketing",
+  "q": "seo",
+  "n": 30,
+  "type": "fuzzy"
+ },
+ {
+  "cat": "marketing",
+  "q": "copywriting",
+  "n": 30,
+  "type": "fuzzy"
+ },
+ {
+  "cat": "marketing",
+  "q": "marketing strategy",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "marketing",
+  "q": "content strategy",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "marketing",
+  "q": "email marketing",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "documents",
+  "q": "pdf",
+  "n": 30,
+  "type": "fuzzy"
+ },
+ {
+  "cat": "documents",
+  "q": "docx word document",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "documents",
+  "q": "pptx presentation slides",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "documents",
+  "q": "xlsx excel",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "ux",
+  "q": "design system",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "ux",
+  "q": "accessibility",
+  "n": 30,
+  "type": "fuzzy"
+ },
+ {
+  "cat": "ux",
+  "q": "animation motion",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "ux",
+  "q": "figma",
+  "n": 30,
+  "type": "fuzzy"
+ },
+ {
+  "cat": "ecommerce",
+  "q": "shopify",
+  "n": 30,
+  "type": "fuzzy"
+ },
+ {
+  "cat": "ecommerce",
+  "q": "wordpress",
+  "n": 30,
+  "type": "fuzzy"
+ },
+ {
+  "cat": "ecommerce",
+  "q": "stripe payments",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "ecommerce",
+  "q": "ecommerce",
+  "n": 30,
+  "type": "fuzzy"
+ },
+ {
+  "cat": "methode",
+  "q": "git workflow",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "methode",
+  "q": "documentation writing",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "methode",
+  "q": "project planning",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "methode",
+  "q": "brainstorming",
+  "n": 30,
+  "type": "fuzzy"
+ },
+ {
+  "cat": "methode",
+  "q": "find skills",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "desktop-jeu",
+  "q": "electron desktop app",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "desktop-jeu",
+  "q": "game development",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "desktop-jeu",
+  "q": "three.js 3d",
+  "n": 30,
+  "type": "semantic"
+ },
+ {
+  "cat": "desktop-jeu",
+  "q": "tauri",
+  "n": 30,
+  "type": "fuzzy"
+ }
+]

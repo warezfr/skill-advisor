@@ -1,0 +1,231 @@
+{
+  "date": "2026-11-12T22:54:34.868Z",
+  "cli": "skills@1.8.1",
+  "systeme": "darwin 27.3.0 arm64",
+  "node": "v26.13.0",
+  "agents": [
+    "claude-code",
+    "cursor"
+  ],
+  "demande": [
+    {
+      "source": "vercel-labs/agent-skills",
+      "skill": "web-design-guidelines"
+    },
+    {
+      "source": "vercel-labs/agent-skills",
+      "skill": "vercel-react-best-practices"
+    },
+    {
+      "source": "anthropics/skills",
+      "skill": "frontend-design"
+    }
+  ],
+  "machineA": {
+    "etapes": [
+      {
+        "commande": "npx -y skills@1.8.1 add vercel-labs/agent-skills --skill web-design-guidelines --skill vercel-react-best-practices -g -a claude-code -a cursor -y",
+        "code": 0
+      },
+      {
+        "commande": "npx -y skills@1.8.1 add anthropics/skills --skill frontend-design -g -a claude-code -a cursor -y",
+        "code": 0
+      }
+    ],
+    "skills": [
+      {
+        "name": "frontend-design",
+        "source": "anthropics/skills",
+        "status": "tracked",
+        "agents": [
+          "Claude Code"
+        ],
+        "path": ".agents/skills/frontend-design"
+      },
+      {
+        "name": "vercel-react-best-practices",
+        "source": "vercel-labs/agent-skills",
+        "status": "tracked",
+        "agents": [
+          "Claude Code"
+        ],
+        "path": ".agents/skills/vercel-react-best-practices"
+      },
+      {
+        "name": "web-design-guidelines",
+        "source": "vercel-labs/agent-skills",
+        "status": "tracked",
+        "agents": [
+          "Claude Code"
+        ],
+        "path": ".agents/skills/web-design-guidelines"
+      }
+    ]
+  },
+  "fichierInstallation": [
+    {
+      "source": "anthropics/skills",
+      "skill": "frontend-design"
+    },
+    {
+      "source": "vercel-labs/agent-skills",
+      "skill": "vercel-react-best-practices"
+    },
+    {
+      "source": "vercel-labs/agent-skills",
+      "skill": "web-design-guidelines"
+    }
+  ],
+  "machineB": {
+    "etapes": [
+      {
+        "commande": "npx -y skills@1.8.1 add anthropics/skills --skill frontend-design -g -a claude-code -a cursor -y",
+        "code": 0
+      },
+      {
+        "commande": "npx -y skills@1.8.1 add vercel-labs/agent-skills --skill vercel-react-best-practices --skill web-design-guidelines -g -a claude-code -a cursor -y",
+        "code": 0
+      }
+    ],
+    "skills": [
+      {
+        "name": "frontend-design",
+        "source": "anthropics/skills",
+        "status": "tracked",
+        "agents": [
+          "Claude Code"
+        ],
+        "path": ".agents/skills/frontend-design"
+      },
+      {
+        "name": "vercel-react-best-practices",
+        "source": "vercel-labs/agent-skills",
+        "status": "tracked",
+        "agents": [
+          "Claude Code"
+        ],
+        "path": ".agents/skills/vercel-react-best-practices"
+      },
+      {
+        "name": "web-design-guidelines",
+        "source": "vercel-labs/agent-skills",
+        "status": "tracked",
+        "agents": [
+          "Claude Code"
+        ],
+        "path": ".agents/skills/web-design-guidelines"
+      }
+    ]
+  },
+  "comparaison": {
+    "listeIdentique": true,
+    "fichiersCompares": 81,
+    "fichiersDifferents": [],
+    "verrou": {
+      "lisible": true,
+      "entrees": [
+        "frontend-design",
+        "vercel-react-best-practices",
+        "web-design-guidelines"
+      ],
+      "champsDifferents": [
+        "installedAt",
+        "updatedAt"
+      ],
+      "champsDuVerrou": [
+        "source",
+        "sourceType",
+        "sourceUrl",
+        "skillPath",
+        "skillFolderHash",
+        "pluginName",
+        "installedAt",
+        "updatedAt"
+      ]
+    }
+  },
+  "arbreA": {
+    ".agents/skills/frontend-design/LICENSE.txt": "0d542e0c8804e39a",
+    ".agents/skills/frontend-design/SKILL.md": "d91970639e9f5c37",
+    ".agents/skills/vercel-react-best-practices/AGENTS.md": "fc93e7421177bbf8",
+    ".agents/skills/vercel-react-best-practices/README.md": "9eafb2123d3b8b2a",
+    ".agents/skills/vercel-react-best-practices/SKILL.md": "71ed7794962fa6e8",
+    ".agents/skills/vercel-react-best-practices/rules/_sections.md": "01c59969e4e867f0",
+    ".agents/skills/vercel-react-best-practices/rules/_template.md": "99df2a3ea088c6c2",
+    ".agents/skills/vercel-react-best-practices/rules/advanced-effect-event-deps.md": "55ed8f9f27a1bff8",
+    ".agents/skills/vercel-react-best-practices/rules/advanced-event-handler-refs.md": "a3097edeecfb2ff6",
+    ".agents/skills/vercel-react-best-practices/rules/advanced-init-once.md": "3e4dc22173eb0e2b",
+    ".agents/skills/vercel-react-best-practices/rules/advanced-use-latest.md": "8a3f64dfe5a77d15",
+    ".agents/skills/vercel-react-best-practices/rules/async-api-routes.md": "523338540d73427d",
+    ".agents/skills/vercel-react-best-practices/rules/async-cheap-condition-before-await.md": "03107c1f70a293cd",
+    ".agents/skills/vercel-react-best-practices/rules/async-defer-await.md": "f3c142d090615abd",
+    ".agents/skills/vercel-react-best-practices/rules/async-dependencies.md": "16ef469f877e30c6",
+    ".agents/skills/vercel-react-best-practices/rules/async-parallel.md": "6d2f841896279e97",
+    ".agents/skills/vercel-react-best-practices/rules/async-suspense-boundaries.md": "de05fedac2eb7ae5",
+    ".agents/skills/vercel-react-best-practices/rules/bundle-analyzable-paths.md": "62090b5c815fd71b",
+    ".agents/skills/vercel-react-best-practices/rules/bundle-barrel-imports.md": "e648f6d54525f07a",
+    ".agents/skills/vercel-react-best-practices/rules/bundle-conditional.md": "09c8259c3efb04fc",
+    ".agents/skills/vercel-react-best-practices/rules/bundle-defer-third-party.md": "3719fb47b191e8db",
+    ".agents/skills/vercel-react-best-practices/rules/bundle-dynamic-imports.md": "401817a7369f315f",
+    ".agents/skills/vercel-react-best-practices/rules/bundle-preload.md": "d1f7cc28da7cd5ab",
+    ".agents/skills/vercel-react-best-practices/rules/client-event-listeners.md": "242a873349febc1c",
+    ".agents/skills/vercel-react-best-practices/rules/client-localstorage-schema.md": "0fb7cdf9dc93fdf2",
+    ".agents/skills/vercel-react-best-practices/rules/client-passive-event-listeners.md": "1f35016f9053de69",
+    ".agents/skills/vercel-react-best-practices/rules/client-swr-dedup.md": "644652c39c6cc00d",
+    ".agents/skills/vercel-react-best-practices/rules/js-batch-dom-css.md": "480b891b9eaf96e9",
+    ".agents/skills/vercel-react-best-practices/rules/js-cache-function-results.md": "3daaa11d24f4295c",
+    ".agents/skills/vercel-react-best-practices/rules/js-cache-property-access.md": "73e47431e74878a9",
+    ".agents/skills/vercel-react-best-practices/rules/js-cache-storage.md": "11b826b0433898c1",
+    ".agents/skills/vercel-react-best-practices/rules/js-combine-iterations.md": "71add08aeeb43091",
+    ".agents/skills/vercel-react-best-practices/rules/js-early-exit.md": "925ce5ce87f33471",
+    ".agents/skills/vercel-react-best-practices/rules/js-flatmap-filter.md": "9e5b166a41914d97",
+    ".agents/skills/vercel-react-best-practices/rules/js-hoist-regexp.md": "f9e9aef2f7c2307d",
+    ".agents/skills/vercel-react-best-practices/rules/js-index-maps.md": "5df1bdc2cfabb2c9",
+    ".agents/skills/vercel-react-best-practices/rules/js-length-check-first.md": "8b54a311c826b299",
+    ".agents/skills/vercel-react-best-practices/rules/js-min-max-loop.md": "87dfb67e2f39df6a",
+    ".agents/skills/vercel-react-best-practices/rules/js-request-idle-callback.md": "ee08f83905b4011a",
+    ".agents/skills/vercel-react-best-practices/rules/js-set-map-lookups.md": "a7fd781a6ba9ad49",
+    ".agents/skills/vercel-react-best-practices/rules/js-tosorted-immutable.md": "d0a5e1b0fec48a0a",
+    ".agents/skills/vercel-react-best-practices/rules/rendering-activity.md": "1e5e7eaf3555e61d",
+    ".agents/skills/vercel-react-best-practices/rules/rendering-animate-svg-wrapper.md": "9c6ae0ca7a51434e",
+    ".agents/skills/vercel-react-best-practices/rules/rendering-conditional-render.md": "2ec2fa23c4148285",
+    ".agents/skills/vercel-react-best-practices/rules/rendering-content-visibility.md": "64eee6d5b916fe74",
+    ".agents/skills/vercel-react-best-practices/rules/rendering-hoist-jsx.md": "93b229560fae9200",
+    ".agents/skills/vercel-react-best-practices/rules/rendering-hydration-no-flicker.md": "dc7ab358c67c177b",
+    ".agents/skills/vercel-react-best-practices/rules/rendering-hydration-suppress-warning.md": "915bacb934e2927d",
+    ".agents/skills/vercel-react-best-practices/rules/rendering-resource-hints.md": "351b1095d641717b",
+    ".agents/skills/vercel-react-best-practices/rules/rendering-script-defer-async.md": "4cea07b7875ba7fc",
+    ".agents/skills/vercel-react-best-practices/rules/rendering-svg-precision.md": "ed468533f6e95f62",
+    ".agents/skills/vercel-react-best-practices/rules/rendering-usetransition-loading.md": "3a1249c3f13026b6",
+    ".agents/skills/vercel-react-best-practices/rules/rerender-defer-reads.md": "234050a77faf50cb",
+    ".agents/skills/vercel-react-best-practices/rules/rerender-dependencies.md": "17eb5830956fb564",
+    ".agents/skills/vercel-react-best-practices/rules/rerender-derived-state-no-effect.md": "cb11ec76f50aa7b6",
+    ".agents/skills/vercel-react-best-practices/rules/rerender-derived-state.md": "1c326bb67b01fb08",
+    ".agents/skills/vercel-react-best-practices/rules/rerender-functional-setstate.md": "5e68df6b2ae8058e",
+    ".agents/skills/vercel-react-best-practices/rules/rerender-lazy-state-init.md": "4ae844740f266fc8",
+    ".agents/skills/vercel-react-best-practices/rules/rerender-memo-with-default-value.md": "81c47476564ad8a7",
+    ".agents/skills/vercel-react-best-practices/rules/rerender-memo.md": "1f258990c2f27ff6",
+    ".agents/skills/vercel-react-best-practices/rules/rerender-move-effect-to-event.md": "abc2cbf167bee056",
+    ".agents/skills/vercel-react-best-practices/rules/rerender-no-inline-components.md": "1cc32907a7702725",
+    ".agents/skills/vercel-react-best-practices/rules/rerender-simple-expression-in-memo.md": "5bdcf2d1558ba520",
+    ".agents/skills/vercel-react-best-practices/rules/rerender-split-combined-hooks.md": "6f45d703343484ef",
+    ".agents/skills/vercel-react-best-practices/rules/rerender-transitions.md": "60f4033909a62df5",
+    ".agents/skills/vercel-react-best-practices/rules/rerender-use-deferred-value.md": "8c3579576a61a949",
+    ".agents/skills/vercel-react-best-practices/rules/rerender-use-ref-transient-values.md": "f1a649af9d1d0b5c",
+    ".agents/skills/vercel-react-best-practices/rules/server-after-nonblocking.md": "d0b8d24a3db9f0f6",
+    ".agents/skills/vercel-react-best-practices/rules/server-auth-actions.md": "a2ca8aa102839251",
+    ".agents/skills/vercel-react-best-practices/rules/server-cache-lru.md": "1924b64561841923",
+    ".agents/skills/vercel-react-best-practices/rules/server-cache-react.md": "fddeea6c870bb3da",
+    ".agents/skills/vercel-react-best-practices/rules/server-dedup-props.md": "c2747424cdac46be",
+    ".agents/skills/vercel-react-best-practices/rules/server-hoist-static-io.md": "5abea4dd882b1366",
+    ".agents/skills/vercel-react-best-practices/rules/server-no-shared-module-state.md": "4d869bf1cd2f1632",
+    ".agents/skills/vercel-react-best-practices/rules/server-parallel-fetching.md": "569a2e9fc04f9606",
+    ".agents/skills/vercel-react-best-practices/rules/server-parallel-nested-fetching.md": "ad5d9656984d4a95",
+    ".agents/skills/vercel-react-best-practices/rules/server-serialization.md": "f4c7d68b29c82381",
+    ".agents/skills/web-design-guidelines/SKILL.md": "f4647ca866a3accf",
+    ".claude/skills/frontend-design": "lien → .agents/skills/frontend-design",
+    ".claude/skills/vercel-react-best-practices": "lien → .agents/skills/vercel-react-best-practices",
+    ".claude/skills/web-design-guidelines": "lien → .agents/skills/web-design-guidelines"
+  },
+  "dossiersReelsIntacts": true
+}
