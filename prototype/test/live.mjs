@@ -287,7 +287,10 @@ const wrap = { isConnected: true, handlers: {}, addEventListener(t, f) { this.ha
 V.gestion.mount({ querySelector(sel) { return sel === '.gs' ? wrap : null; } });
 const click = async (attrs) => { wrap.handlers.click({ target: btn(attrs) }); await tick(); };
 const dyn = () => parts['#gs-dyn'].innerHTML;
-const last = () => srv.log[srv.log.length - 1];
+// last() ignore la recherche automatique des mises à jour (lancée 300 ms après l'affichage de Mes skills) :
+// sur une machine lente, elle arrive après l'action testée.
+const sent = () => srv.log.filter((c) => c.url !== '/api/skills/check');
+const last = () => sent()[sent().length - 1];
 
 /* désinstaller : la case est cochée par défaut */
 await click({ 'data-gs-un': 'acme/tools/alpha' });
@@ -606,7 +609,7 @@ async function liveGestion(edit, extra = {}) {
   };
   const focused = () => doc.activeElement;
   const evW = async (attrs) => { let e = null; try { w.docHandlers.forEach((h) => h({ target: btn(attrs) })); } catch (x) { e = x; } await tick(); return e; };
-  return { srv: s, SA: w.SA, win: w.win, wr, doc, ready, click: clickW, key: keyW, find, focused, ev: evW, dyn: () => wr.parts['#gs-dyn'].innerHTML, last: () => s.log[s.log.length - 1] };
+  return { srv: s, SA: w.SA, win: w.win, wr, doc, ready, click: clickW, key: keyW, find, focused, ev: evW, dyn: () => wr.parts['#gs-dyn'].innerHTML, last: () => { const a = s.log.filter((c) => c.url !== '/api/skills/check'); return a[a.length - 1]; } };
 }
 
 /* ---------- 6. nom de dossier, portée projet, ids uniques ---------- */
