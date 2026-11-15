@@ -116,11 +116,19 @@ try {
     if ($LASTEXITCODE -ne 0) { Say '  Mise \u00e0 jour impossible : la version d\u00e9j\u00e0 pr\u00e9sente est gard\u00e9e.' '  Update failed: the version already there is kept.' }
   }
   elseif (Test-Path $page) {
+    # Copie deja la, que le script ne met pas a jour : copie d'archive sans git, ou copie git sans git utilisable.
     Say '  Skill Advisor est d\u00e9j\u00e0 dans ce dossier : il est gard\u00e9 tel quel.' '  Skill Advisor is already in this folder: it is kept as it is.'
-    # Copie sans git et sans app\server.mjs : ancienne version, le script ne la met pas a jour.
-    if (-not (Test-Path (Join-Path $Dir 'app\server.mjs'))) {
-      Say '  Ce dossier contient une ancienne version, sans l\u2019application. Le script ne la met pas \u00e0 jour.' '  This folder holds an older version, without the application. The script does not update it.'
-      Say '  Pour une nouvelle installation, supprimez ce dossier ou choisissez-en un autre avec -Dir.' '  Delete this folder, or choose another one with -Dir for a fresh installation.'
+    $haveV = ''
+    try { $haveV = [string]((Get-Content -Raw -LiteralPath (Join-Path $Dir 'package.json') | ConvertFrom-Json).version) } catch { $haveV = '' }
+    if ($haveV -match '^[0-9A-Za-z.+-]+$') { Write-Host ((T '  Version pr\u00e9sente : ' '  Version found: ') + $haveV + '.') }
+    if (Test-Path (Join-Path $Dir '.git')) {
+      Say '  Cette copie a \u00e9t\u00e9 install\u00e9e avec git, mais git n\u2019est pas utilis\u00e9 ici. Le script ne la met pas \u00e0 jour.' '  This copy was installed with git, but git is not used here. The script does not update it.'
+      Say '  Pour la mettre \u00e0 jour, installez git, puis relancez le script sans -NoGit.' '  To update it, install git, then run the script again without -NoGit.'
+    }
+    else {
+      Say '  Cette copie vient d\u2019une archive, sans git. Le script ne la met pas \u00e0 jour.' '  This copy comes from an archive, without git. The script does not update it.'
+      Say '  Pour avoir la nouvelle version, supprimez ce dossier, puis relancez le script.' '  To get the new version, delete this folder, then run the script again.'
+      Say '  Ou installez dans un autre dossier avec -Dir. Vos r\u00e9glages et sauvegardes dans .skill-advisor restent.' '  Or install into another folder with -Dir. Your settings and backups in .skill-advisor stay.'
     }
   }
   elseif ((Test-Path $Dir) -and (Get-ChildItem -Force -LiteralPath $Dir | Select-Object -First 1)) {
@@ -190,7 +198,31 @@ try {
 
   # --- 4. Check -----------------------------------------------------------------
   Step 4 'Contr\u00f4le' 'Check'
-  if ($node) {
+  # Application prete (dependances dans node_modules) : tous les tests, npm test. Sinon le test de l'interface seul.
+  if ($ready -and (Test-Path (Join-Path $Dir 'node_modules'))) {
+    Say '  Tests de l\u2019application (npm test). Cela prend environ une minute.' '  Tests of the application (npm test). This takes about one minute.'
+    $out = @()
+    $passed = $false
+    Push-Location $Dir
+    try { $out = @(& $npmExe test); $passed = ($LASTEXITCODE -eq 0) }
+    catch { $passed = $false }
+    finally { Pop-Location }
+    # Bloc "Bilan" de test/run-all.mjs : une ligne par suite. Les lettres accentuees peuvent etre mal decodees
+    # par la console : une ligne qui commence par "r" (reussi) compte comme reussie, les autres comme echecs.
+    $bilan = @()
+    $at = [array]::IndexOf([string[]]$out, '=== Bilan ===')
+    if ($at -ge 0) { $bilan = @($out | Select-Object -Skip ($at + 1) | Where-Object { [string]$_ -ne '' }) }
+    $nOk = @($bilan | Where-Object { [string]$_ -match '^r' }).Count
+    $nKo = $bilan.Count - $nOk
+    if ($passed) { Write-Host ((T '  Tests (npm test) : r\u00e9ussis, ' '  Tests (npm test): passed, ') + $nOk + ' suites.') }
+    else {
+      # Pas de bloc "Bilan" : npm test s'est arrete avant la fin.
+      if (($nOk + $nKo) -eq 0) { Say '  Tests (npm test) : \u00e9chec avant la fin. L\u2019installation continue.' '  Tests (npm test): failed before the end. The installation goes on.' }
+      else { Write-Host ((T '  Tests (npm test) : \u00e9chec, ' '  Tests (npm test): failed, ') + $nKo + (T ' suite(s) sur ' ' suite(s) of ') + ($nOk + $nKo) + (T '. L\u2019installation continue.' '. The installation goes on.')) }
+      Write-Host ((T '  Pour le d\u00e9tail : cd "' '  For the details: cd "') + $Dir + '", ' + (T 'puis ' 'then ') + 'npm.cmd test')
+    }
+  }
+  elseif ($node) {
     Push-Location $Dir
     try { $out = & node prototype/test/smoke.mjs; $passed = ($LASTEXITCODE -eq 0) }
     finally { Pop-Location }
@@ -213,7 +245,8 @@ try {
     Write-Host ((T 'Pour la d\u00e9monstration seule, sans rien \u00e9crire : ' 'For the demonstration only, with nothing written: ') + 'powershell -ExecutionPolicy Bypass -File install.ps1 -Demo')
     Say 'Pour lancer l\u2019application plus tard :' 'To start the application again later:'
     Write-Host ('  cd "' + $Dir + '"')
-    Write-Host '  npm start'
+    # npm.cmd, pas npm : la strategie d'execution par defaut de PowerShell bloque npm.ps1 (constat 38).
+    Write-Host '  npm.cmd start'
     Write-Host ((T 'Manuel : ' 'Manual: ') + $Repo + (T '/blob/main/docs/install/INSTALL.fr.md' '/blob/main/docs/install/INSTALL.md'))
     Write-Host ((T 'Pour tout retirer : r\u00e9activez vos skills d\u00e9sactiv\u00e9s, puis supprimez le dossier ' 'To remove everything: enable your disabled skills, then delete the folder ') + $Dir + (T ' et le dossier ' ' and the folder ') + (Join-Path $HOME '.skill-advisor'))
     if (-not $NoStart) {

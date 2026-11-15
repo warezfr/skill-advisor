@@ -28,6 +28,12 @@
     "sw path path more";
 }
 .ag-mgr .ag-row.is-hidden .ag-n { color: var(--ink-2); }
+/* Libellé de la colonne des interrupteurs. */
+.ag-mgr .ag-colh { margin: 16px 0 0; font: 500 12px/1.4 var(--f-b); color: var(--ink-3); }
+/* Lecteur du dossier partagé : pas d'interrupteur à lui, la ligne « Dossier partagé » le porte. */
+.ag-mgr .ag-sw-na { grid-area: sw; justify-self: center; align-self: center; }
+.ag-mgr .ag-shared { margin-top: 4px; }
+.ag-mgr .ag-shared .ag-row { background: var(--bg-2); }
 .ag-mgr .ag-path { display: flex; flex-wrap: wrap; gap: 2px 12px; }
 .ag-mgr .ag-path .mono { min-width: 0; overflow-wrap: anywhere; }
 .ag-mgr .ag-cnt { font-family: var(--f-b); font-size: 12.5px; color: var(--ink-3); }
@@ -46,8 +52,7 @@
 }
 .ag-mgr .ag-cf-t { margin: 0; font-size: 14px; color: var(--ink); max-width: 64ch; }
 .ag-mgr .ag-cf-w { margin: 8px 0 0; font-size: 13px; color: var(--ink-2); max-width: 64ch; }
-.ag-mgr .ag-cb { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; font-size: 14px; color: var(--ink); cursor: pointer; }
-.ag-mgr .ag-cb input { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); }
+.ag-mgr .ag-cf .ckl { margin-top: 4px; }
 .ag-mgr .ag-cf-a { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 0; }
 
 /* Groupes : autres agents (repliés), agents ajoutés à la main. */

@@ -2,7 +2,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { agentMap } from './registry.mjs';
-import { AGENT_RE, COPY_LIMIT, MAX_ENTRIES, NAME_RE, backupsDir, checkAgentId, checkName, copyTree, disabledDir, exists, fail, fsMessage, homeOf, isSkillEntry, linkDir, lstatOrNull, lockPath, readJson, safeJoin, scanOf, sharedDir, statOrNull, treeHash, writeJsonAtomic } from './util.mjs';
+import { AGENT_RE, COPY_LIMIT, MAX_ENTRIES, NAME_RE, backupsDir, checkAgentId, checkName, copyTree, disabledDir, exists, fail, fsMessage, homeOf, isSkillEntry, linkDir, lockKeyFor, lockOf, lstatOrNull, lockPath, mkdirp, readJson, rmOpts, safeJoin, scanOf, sharedDir, statOrNull, treeHash, writeJsonAtomic } from './util.mjs';
 
 const ID_RE = /^(\d{8}-\d{6})-(.+)$/;
 const COPY_RE = /^copies\/\d{1,6}$/;
@@ -23,13 +23,26 @@ export function checkId(id) {
 
 export const stamp = (d) => d.toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
 
-// Date française, heure locale : « 13/11/2026 15:04 ».
-export function defaultLabel(at) {
+// Date française, heure locale : « 13/11/2026 15:04 ». Ancien nom par défaut d'une sauvegarde.
+export function dateLabel(at) {
   const d = new Date(at);
   if (Number.isNaN(d.getTime())) return '';
   const p = (n) => String(n).padStart(2, '0');
   return p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() + ' ' + p(d.getHours()) + ':' + p(d.getMinutes());
 }
+
+// Nom par défaut : les skills (« safe-notes », « safe-notes et 2 autres »), 80 caractères au plus. La date vient de at.
+export function defaultLabel(names) {
+  const list = (Array.isArray(names) ? names : [names]).filter((n) => typeof n === 'string' && n);
+  if (!list.length) return '';
+  const more = list.length - 1;
+  const tail = more ? ' et ' + more + (more === 1 ? ' autre' : ' autres') : '';
+  const room = 80 - tail.length;
+  return (list[0].length > room ? list[0].slice(0, room - 1) + '…' : list[0]) + tail;
+}
+
+// Libellés des verdicts montrés à l'utilisateur (jamais vert, orange, rouge).
+export const VERDICT_TEXT = { vert: 'Aucun motif connu', 'vert-remarques': 'Remarques', orange: 'À regarder', rouge: 'Motif à risque' };
 
 // Chemin relatif d'une copie : <nom> ou copies/<n>/<nom>.
 export function validCopy(copy, name) {
@@ -66,7 +79,9 @@ export function normalizeMeta(raw, id) {
     });
   }
   const at = typeof raw.at === 'string' ? raw.at : '';
-  const label = typeof raw.label === 'string' && raw.label.trim() ? raw.label.trim().slice(0, 80) : defaultLabel(at);
+  // Sans nom, ou avec la date pour nom (anciennes versions) : les noms des skills.
+  const given = typeof raw.label === 'string' ? raw.label.trim().slice(0, 80) : '';
+  const label = given && given !== dateLabel(at) ? given : defaultLabel(items.map((i) => i.name));
   return {
     version: 2, id, label, note: typeof raw.note === 'string' ? raw.note.slice(0, 500) : '',
     origin: ORIGINS.includes(raw.origin) ? raw.origin : 'remove', at,
@@ -158,7 +173,7 @@ async function writeBackup(home, { origin, label, note, items }) {
         const same = kept.find((k) => k.hash === hash);
         if (same) {
           // Seulement cette copie : copies/<n>/ peut tenir celle d'un autre skill.
-          await fs.rm(at, { recursive: true, force: true });
+          await fs.rm(at, rmOpts());
           if (i > 0) await fs.rmdir(path.dirname(at)).catch(() => {});
           places.push(placeOf({ ...p, copy: same.copy }));
           continue;
@@ -173,11 +188,11 @@ async function writeBackup(home, { origin, label, note, items }) {
       out.push({ name: it.name, src: it.src || '', agents: it.agents || [], places, lock: it.lock || null, skipped, copy: it.name, verdict: scan ? scan.verdict : null });
     }
     const at = new Date().toISOString();
-    const meta = { version: 2, id: r.id, label: label || defaultLabel(at), note: note || '', origin, at, size, items: out };
+    const meta = { version: 2, id: r.id, label: label || defaultLabel(out.map((i) => i.name)), note: note || '', origin, at, size, items: out };
     await writeJsonAtomic(path.join(dir, 'meta.json'), meta);
     return pub(normalizeMeta(meta, r.id));
   } catch (e) {
-    if (dir) await fs.rm(dir, { recursive: true, force: true }).catch(() => {});
+    if (dir) await fs.rm(dir, rmOpts()).catch(() => {});
     // Limite dépassée : message pour l'ensemble quand il y a plusieurs skills.
     if (e.code === 'BACKUP_FAILED' && items.length > 1) {
       throw fail('BACKUP_FAILED', 'Ensemble, ces skills dépassent ' + Math.round(limits.size / 1048576) + ' Mo ou ' + limits.entries + ' éléments. Sauvegarde refusée.');
@@ -198,7 +213,8 @@ export async function createBackup(opts = {}) {
     checkAgentId(p.agent);
   }
   const agents = (opts.agents || []).map(checkAgentId);
-  const lock = opts.lock !== undefined ? opts.lock : await readLockEntry(home, name);
+  // Entrée du verrou trouvée par la règle du nom de dossier (clé « PDF » pour le dossier pdf).
+  const lock = opts.lock !== undefined ? opts.lock : ((await lockOf(home, name)) || {}).entry || null;
   const origin = opts.origin === 'replace' ? 'replace' : 'remove';
   return writeBackup(home, { origin, items: [{ name, src: opts.src || '', agents, places, lock }] });
 }
@@ -262,7 +278,9 @@ export async function createManualBackup(opts = {}) {
     if (RESERVED.has(name)) { failed.push({ name, message: 'Le nom ' + name + ' est réservé aux sauvegardes. Renommez ce skill pour le sauvegarder.' }); continue; }
     const { places, agents } = await skillPlaces(home, map, name);
     if (!places.length) { failed.push({ name, message: 'Skill introuvable : ' + name + '.' }); continue; }
-    const lock = await readLockEntry(home, name);
+    // Clé du verrou : celle dont le paquet tire ce dossier, pas forcément le nom du dossier.
+    const lk = await lockOf(home, name);
+    const lock = lk ? lk.entry : null;
     items.push({ name, src: (lock && typeof lock.source === 'string' && lock.source) || '', agents, places, lock });
   }
   if (!items.length) throw fail('NOT_FOUND', failed.length === 1 ? failed[0].message : 'Aucun des skills choisis n’a été trouvé.');
@@ -277,7 +295,7 @@ export async function createManualBackup(opts = {}) {
 // Plusieurs skills : tout est vérifié avant la première écriture, et tout est défait en cas d'échec.
 export async function restoreBackup(opts = {}) {
   const home = homeOf(opts);
-  if (opts.force !== undefined && opts.force !== null && !Array.isArray(opts.force)) throw fail('BAD_NAME', 'Liste de skills attendue pour force.');
+  if (opts.force !== undefined && opts.force !== null && !Array.isArray(opts.force)) throw fail('BAD_NAME', 'La liste des skills à restaurer quand même est invalide.');
   const force = (opts.force || []).map(checkName);
   const { dir, meta } = await loadMeta(home, opts.id);
   const map = await agentMap({ home });
@@ -296,7 +314,7 @@ export async function restoreBackup(opts = {}) {
       n++;
       plan.push({ name, src, to, agent: p.agent, active: !p.off });
     }
-    if (!n) throw fail('NOT_FOUND', 'Les agents de cette sauvegarde n’existent plus (' + name + ').');
+    if (!n) throw fail('NOT_FOUND', 'Les agents qui avaient le skill ' + name + ' ne sont plus sur cette machine.');
     // Verdict enregistré, puis chaque copie à restaurer vérifiée à nouveau (échec du contrôle : traité comme rouge).
     const srcs = [...new Set(plan.filter((p) => p.name === name).map((p) => p.src))];
     const isRed = (src) => { const r = scanOf(src); return !r || r.verdict === 'rouge'; };
@@ -304,22 +322,24 @@ export async function restoreBackup(opts = {}) {
     locks.push(it);
   }
   if (red.length) {
-    throw fail('ROUGE', (red.length === 1 ? 'Le skill ' + red[0] + ' a le verdict rouge.' : 'Les skills ' + red.join(', ') + ' ont le verdict rouge.')
-      + (red.length === 1 ? ' Confirmez pour le restaurer quand même.' : ' Confirmez pour les restaurer quand même.'), { names: red });
+    throw fail('ROUGE', (red.length === 1 ? 'Le contrôle trouve un motif à risque dans le skill ' + red[0] + '. Confirmez pour le restaurer quand même.'
+      : 'Le contrôle trouve un motif à risque dans les skills ' + red.join(', ') + '. Confirmez pour les restaurer quand même.'), { names: red });
   }
+  // Où se trouve le skill, avec le nom affiché de l'agent, jamais son identifiant.
+  const where = (id) => (id === UNIVERSAL ? 'dans le dossier partagé' : map[id] ? 'pour l’agent ' + map[id].name : 'pour un agent retiré');
   for (const p of plan) {
     if (await exists(p.to)) {
-      throw fail('EXISTS', !p.active ? 'Un skill nommé ' + p.name + ' est déjà désactivé. Supprimez-le avant de restaurer.' : p.agent === UNIVERSAL ? 'Un skill nommé ' + p.name + ' est déjà installé. Supprimez-le avant de restaurer.'
-        : 'Un skill nommé ' + p.name + ' existe déjà pour l’agent ' + p.agent + '. Supprimez-le avant de restaurer.');
+      throw fail('EXISTS', !p.active ? 'Le skill ' + p.name + ' est déjà désactivé ' + where(p.agent) + '. Activez-le ou désinstallez-le avant de restaurer.'
+        : 'Le skill ' + p.name + ' est déjà installé ' + where(p.agent) + '. Désinstallez-le avant de restaurer.');
     }
     if (p.active && (await exists(safeJoin(safeJoin(disabledDir(home), p.agent), p.name)))) {
-      throw fail('EXISTS', 'Un skill nommé ' + p.name + ' est désactivé. Réactivez-le ou supprimez-le avant de restaurer.');
+      throw fail('EXISTS', 'Le skill ' + p.name + ' est désactivé ' + where(p.agent) + '. Activez-le ou désinstallez-le avant de restaurer.');
     }
     // Copie désactivée : refusée si le même skill est actif à sa place (dossier partagé ou dossier de l'agent).
     const a = map[p.agent];
     const live = p.agent === UNIVERSAL ? safeJoin(sharedDir(home), p.name) : a && !a.shared && a.dir ? safeJoin(a.dir, p.name) : null;
     if (!p.active && live && (await exists(live))) {
-      throw fail('EXISTS', 'Un skill nommé ' + p.name + ' est actif ' + (p.agent === UNIVERSAL ? 'dans ~/.agents/skills' : 'pour l’agent ' + p.agent) + '. Supprimez-le avant de restaurer sa copie désactivée.');
+      throw fail('EXISTS', 'Le skill ' + p.name + ' est actif ' + where(p.agent) + '. Désinstallez-le avant de restaurer sa copie désactivée.');
     }
   }
   // Liens à recréer : agents valides et connus, avec leur propre dossier, sans copie à eux, ni copie désactivée.
@@ -336,24 +356,28 @@ export async function restoreBackup(opts = {}) {
   const made = [], wrote = [];
   try {
     for (const p of plan) {
-      await fs.mkdir(path.dirname(p.to), { recursive: true });
+      await mkdirp(path.dirname(p.to));
       made.push(p.to);
-      await fs.cp(p.src, p.to, { recursive: true, errorOnExist: true, force: false });
+      // Les dossiers de la sauvegarde sont privés (0700) : la copie remise a des dossiers ordinaires (0755),
+      // les fichiers gardent leurs droits. Une copie désactivée aussi : elle reviendra telle quelle à l'agent.
+      await copyTree(p.src, p.to, { ordinary: true, limit: Infinity, maxEntries: Infinity });
     }
     for (const l of links) {
       await fs.mkdir(l.dir, { recursive: true });
       await linkDir(l.target, l.at);
       made.push(l.at);
     }
+    // Entrée du verrou remise sous la clé du paquet (nom du front matter), jamais en double sous le nom du dossier.
     for (const it of locks) {
-      if (!it.lock || (await readLockEntry(home, it.name))) continue;
-      await writeLockEntry(home, it.name, it.lock);
-      wrote.push(it.name);
+      if (!it.lock || (await lockOf(home, it.name))) continue;
+      const key = await lockKeyFor(home, it.name, path.join(dir, it.name));
+      await writeLockEntry(home, key, it.lock);
+      wrote.push(key);
     }
   } catch (e) {
     // Restauration annulée : rien de partiel ne reste, entrées de verrouillage comprises.
     for (const n of wrote) await writeLockEntry(home, n, null).catch(() => {});
-    for (const p of made.reverse()) await fs.rm(p, { recursive: true, force: true }).catch(() => {});
+    for (const p of made.reverse()) await fs.rm(p, rmOpts()).catch(() => {});
     throw fail('BACKUP_FAILED', 'La restauration de ' + meta.items.map((i) => i.name).join(', ') + ' a échoué : ' + fsMessage(e) + '.');
   }
   return pub(meta);
@@ -364,5 +388,5 @@ export async function deleteBackup(opts = {}) {
   checkId(opts.id);
   const dir = safeJoin(backupsDir(home), opts.id);
   if (!(await exists(path.join(dir, 'meta.json')))) throw fail('NOT_FOUND', 'Sauvegarde introuvable.');
-  await fs.rm(dir, { recursive: true, force: true });
+  await fs.rm(dir, rmOpts());
 }

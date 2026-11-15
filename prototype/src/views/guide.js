@@ -5,6 +5,12 @@
 
   function here() { return SA.viewId() === 'guide'; }
   function list() { return (SA.state.lastInstall || []).map(SA.item).filter(Boolean); }
+  /* Agents qui ont les skills installés, d'après l'état de la machine ; sinon le compte gardé à l'installation. */
+  function agentCount(l) {
+    var rows = l.map(function (it) { return SA.mineRow(it[0]); }).filter(Boolean);
+    var n = rows.length ? SA.detail.holders(rows).length : 0;
+    return n || SA.state.lastAgents || SA.agentsOn().length;
+  }
   function cur(l) {
     l = l || list();
     return Math.max(0, Math.min(SA.state.guideTab || 0, l.length - 1));
@@ -24,7 +30,7 @@
         '<p class="gd-name mono">' + SA.esc(it[1]) + '</p>' +
         '<p class="gd-desc mono mut">' + SA.esc(it[2]) + '</p>' +
       '</div>' +
-      SA.detail.guideHtml(it[1], k && k.d ? k.d : '', !!(k && k.d)) +
+      SA.detail.guideHtml(it[1], k && k.d ? k.d : '', !!(k && k.d), SA.mineRow(it[0])) +
       '<p class="gd-more" data-st><button type="button" class="lnk" data-detail="' + SA.esc(it[0]) + '">Voir le fichier et les contrôles</button></p>';
   }
 
@@ -98,7 +104,7 @@
 
   SA.views.guide = {
     render: function () {
-      var l = list(), m = SA.agentsOn().length;
+      var l = list();
       if (!l.length) {
         return '<p class="eye" data-st>Étape 05 · Guide</p>' +
           SA.h('Rien n’est encore installé') +
@@ -110,7 +116,7 @@
       }
       var sel = cur(l);
       return '<p class="eye" data-st>Étape 05 · Guide</p>' +
-        SA.h(SA.pl(l.length, 'skill installé', 'skills installés') + ' dans ' + SA.pl(m, 'agent', 'agents')) +
+        SA.h(SA.pl(l.length, 'skill installé', 'skills installés') + ' dans ' + SA.pl(agentCount(l), 'agent', 'agents')) +
         '<p class="lede" data-st>Voici comment vous en servir. Chaque guide reste disponible dans Mes skills, sur la ligne du skill.</p>' +
         '<div class="gd-grid">' +
           '<div class="gd-tabs" role="tablist" aria-orientation="vertical" aria-label="Skills installés" data-st>' +
@@ -144,6 +150,8 @@
           label: 'Nouveau projet', kind: 'default', on: function () {
             var st = SA.state;
             st.goal = null; st.answers = {}; st.qi = 0; st.guideTab = 0; st.recoShown = 0; st.inst = null;
+            /* La présélection automatique de l'ancien projet part ; les choix faits à la main restent. */
+            if (SA.views.resultats && SA.views.resultats.resetAuto) SA.views.resultats.resetAuto();
             SA.go(1, -1);
           }
         },

@@ -1,9 +1,10 @@
-// Aides de test : dossier personnel jetable, skill posé à la main, garde-fous.
+// Aides de test : dossier personnel jetable, skill posé à la main, sources locales, garde-fous.
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import zlib from 'node:zlib';
+import { execFileSync } from 'node:child_process';
 import { Header } from 'tar';
 import { call } from '../lib/worker.mjs';
 
@@ -52,14 +53,91 @@ export async function putShared(home, name, desc, body) {
   return dir;
 }
 
-// Lien relatif ~/.claude/skills/<name> -> <cible>, comme le fait le paquet skills.
+// Lien ~/.claude/skills/<name> -> <cible>, comme le fait le paquet skills :
+// relatif sur mac et Linux, jonction à cible absolue sous Windows (aucun droit spécial requis).
 export async function putLink(home, agentDir, name, target) {
   const dir = path.join(home, agentDir);
   await fs.mkdir(dir, { recursive: true });
   const at = path.join(dir, name);
   assertInHome(home, at);
-  await fs.symlink(path.relative(dir, target), at, 'dir');
+  if (process.platform === 'win32') await fs.symlink(path.resolve(target), at, 'junction');
+  else await fs.symlink(path.relative(dir, target), at, 'dir');
   return at;
+}
+
+// Lien vers un dossier pour un test : jonction sous Windows, lien symbolique ailleurs.
+export async function dirLink(target, at) {
+  if (process.platform === 'win32') await fs.symlink(path.resolve(path.dirname(at), target), at, 'junction');
+  else await fs.symlink(target, at, 'dir');
+}
+
+// Les liens de fichier demandent un droit spécial sous Windows (mode développeur) : sondé une fois.
+let fileLinks = null;
+export async function fileLinksOk() {
+  if (fileLinks !== null) return fileLinks;
+  const d = await fs.mkdtemp(path.join(os.tmpdir(), 'sa-link-'));
+  try {
+    await fs.writeFile(path.join(d, 'a'), 'x');
+    await fs.symlink('a', path.join(d, 'b'), 'file');
+    fileLinks = true;
+  } catch (e) {
+    if (e.code !== 'EPERM' && e.code !== 'EACCES') throw e;
+    fileLinks = false;
+  } finally { await fs.rm(d, { recursive: true, force: true }); }
+  return fileLinks;
+}
+export const NO_FILE_LINK = 'liens de fichier refusés (EPERM) : compte Windows sans le droit de créer des liens symboliques';
+
+// git présent ? Les sources locales des tests passent par lui.
+let gitOk = null;
+export function hasGit() {
+  if (gitOk === null) { try { execFileSync('git', ['--version'], { stdio: 'ignore' }); gitOk = true; } catch { gitOk = false; } }
+  return gitOk;
+}
+
+// Dépôt git local servi à la place de https://gitlab.com/acme/<repo> : la règle insteadOf va dans le
+// ~/.gitconfig du dossier jetable, lu par git dans l'enfant (HOME jetable). Aucun réseau.
+// skills : { dossier: { name?, desc?, body?, files?: { chemin: texte } } }. Chemin avec espace et accent.
+export async function makeRepo(home, repo, skills) {
+  const dir = path.join(home, 'dépôts sources', repo);
+  assertInHome(home, dir);
+  await fs.mkdir(dir, { recursive: true });
+  const env = { ...process.env, HOME: home, USERPROFILE: home, GIT_CONFIG_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0' };
+  const git = (...a) => execFileSync('git', ['-C', dir, '-c', 'user.email=test@example.invalid', '-c', 'user.name=Test', '-c', 'commit.gpgsign=false', '-c', 'core.autocrlf=false', ...a], { env, stdio: 'pipe' });
+  const write = async (map) => {
+    for (const [folder, s] of Object.entries(map)) {
+      const at = path.join(dir, 'skills', folder);
+      if (s === null) { await fs.rm(at, { recursive: true, force: true }); continue; }
+      await fs.mkdir(at, { recursive: true });
+      await fs.writeFile(path.join(at, 'SKILL.md'), skillMd(s.name || folder, s.desc || 'Un skill de test.', s.body));
+      for (const [f, t] of Object.entries(s.files || {})) {
+        await fs.mkdir(path.dirname(path.join(at, f)), { recursive: true });
+        await fs.writeFile(path.join(at, f), t);
+      }
+    }
+  };
+  await write(skills);
+  git('init', '-q');
+  git('add', '-A');
+  git('commit', '-qm', 'v1');
+  const url = 'https://gitlab.com/acme/' + repo;
+  const cfg = path.join(home, '.gitconfig');
+  assertInHome(home, cfg);
+  await fs.appendFile(cfg, '[url "' + dir.split(path.sep).join('/') + '"]\n\tinsteadOf = ' + url + '.git\n');
+  return {
+    source: url, dir,
+    // Nouvelle version du dépôt.
+    async commit(map) { await write(map); git('add', '-A'); git('commit', '-qm', 'suite'); },
+  };
+}
+
+// Adresse https://gitlab.com/acme/<repo> détournée vers un dossier absent : dépôt introuvable, sans réseau.
+export async function missingRepo(home, repo) {
+  const cfg = path.join(home, '.gitconfig');
+  assertInHome(home, cfg);
+  const dir = path.join(home, 'dépôts sources', 'absent-' + repo);
+  await fs.appendFile(cfg, '[url "' + dir.split(path.sep).join('/') + '"]\n\tinsteadOf = https://gitlab.com/acme/' + repo + '.git\n');
+  return 'https://gitlab.com/acme/' + repo;
 }
 
 export async function putLock(home, entries) {

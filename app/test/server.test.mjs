@@ -1,31 +1,45 @@
 // Tests du serveur local (app/server.mjs) et du catalogue (app/lib/catalog.mjs).
 // Lancer : node --test app/test/server.test.mjs   (pas de réseau, pas de vrai dossier personnel)
+// Le programme lancé pour de vrai est testé dans app/test/main.test.mjs.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import http from 'node:http';
 import net from 'node:net';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { once } from 'node:events';
-import { spawn } from 'node:child_process';
 import { Readable } from 'node:stream';
 import * as tar from 'tar';
 import { fileURLToPath } from 'node:url';
 
-import { createServer, browserCommand } from '../server.mjs';
-import { getCatalog, clearCatalogCache } from '../lib/catalog.mjs';
+import { createServer } from '../server.mjs';
+
+// Catalogue chargé à la demande : un défaut de ce module ne bloque pas les tests du serveur.
+let getCatalog, clearCatalogCache;
 
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const TOKEN = 'a'.repeat(64);
 
 // Dossier jetable sous le dossier temporaire du système, jamais le vrai dossier personnel.
+const made = [];
 function throwaway(prefix) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
   const real = fs.realpathSync(dir);
   assert.ok(real.startsWith(fs.realpathSync(os.tmpdir()) + path.sep), 'dossier jetable hors du dossier temporaire');
   assert.notEqual(real, fs.realpathSync(os.homedir()));
+  made.push(real);
   return real;
+}
+
+// Retire les dossiers jetables de cette passe : préfixe sa- et dossier temporaire exigés.
+function cleanup() {
+  const tmp = fs.realpathSync(os.tmpdir());
+  for (const dir of made.splice(0)) {
+    assert.ok(dir.startsWith(tmp + path.sep) && path.basename(dir).startsWith('sa-'), 'refus de supprimer ' + dir);
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 // Agents connus du faux lib : cachés, non détectés et personnalisés compris.
@@ -34,7 +48,7 @@ const KNOWN_AGENTS = ['claude-code', 'cursor', 'zed', 'custom-1'];
 // Faux lib : état en mémoire, journal des appels, erreurs à la demande.
 function fakeLib() {
   const log = [];
-  const st = { mode: 'live', os: 'mac', home: '/fake', agents: [], mine: [], backups: [], settings: { version: 1, custom: [], hidden: [], targets: [] } };
+  const st = { mode: 'live', os: 'mac', home: '/fake', version: '1.0.0', project: null, half: false, agents: [], mine: [], backups: [], settings: { version: 1, custom: [], hidden: [], targets: [] } };
   const err = (code, message) => Object.assign(new Error(message), { code });
   // Le nom "boom-<CODE>" déclenche une erreur avec ce code.
   const maybeThrow = (names = []) => {
@@ -46,15 +60,37 @@ function fakeLib() {
   const lib = {
     log, st,
     delay: 0,
-    async state() { log.push(['state']); return structuredClone(st); },
+    checkDelay: 0,
+    stateDelay: 0,
+    async state() {
+      log.push(['state']);
+      if (lib.stateDelay) await new Promise((r) => setTimeout(r, lib.stateDelay));
+      log.push(['state:end']);
+      return structuredClone(st);
+    },
     async catalog() { log.push(['catalog']); return { skills: {}, source: 'bundled' }; },
+    async searchData() { log.push(['searchData']); return { source: 'bundled', generatedAt: '2026-11-12T17:23:56.759Z', search: null }; },
+    getProject() { return st.project; },
+    async setProject(a) {
+      log.push(['setProject', a]);
+      if (a.dir === '/refuse') throw err('BAD_INPUT', 'Dossier refusé.');
+      st.project = a.dir;
+    },
+    async preview(a) {
+      log.push(['preview', a]);
+      if (a.name === 'absent') throw err('NOT_FOUND', 'Skill introuvable.');
+      return { name: a.name, files: [{ path: 'SKILL.md', status: 'changed', added: 2, removed: 1 }], scan: { verdict: 'vert', findings: [] }, scanOld: { verdict: 'vert' }, same: false };
+    },
+    // Écriture en deux temps : "half" est vrai entre les deux.
     async install(a) {
       log.push(['install:start', a]);
+      st.half = true;
       if (lib.delay) await new Promise((r) => setTimeout(r, lib.delay));
-      maybeThrow(a.items.map((i) => i.skill));
+      try { maybeThrow(a.items.map((i) => i.skill)); } finally { st.half = false; }
       for (const i of a.items) st.mine.push({ id: i.source + '/' + i.skill, name: i.skill });
       log.push(['install:end', a]);
-      return { installed: a.items.map((i) => i.skill), skipped: [], failed: [] };
+      const held = a.items.filter((i) => i.skill === 'risky' && !(a.force || []).includes('risky')).map((i) => ({ name: i.skill, verdict: 'rouge', findings: [] }));
+      return { installed: a.items.map((i) => i.skill).filter((n) => !held.some((h) => h.name === n)), held, conflicts: [], skipped: [], failed: a.items.filter((i) => i.skill === 'casse').map((i) => ({ name: i.skill, message: 'Dépôt introuvable.', detail: 'fatal: repository not found /chemin/secret' })) };
     },
     async remove(a) {
       log.push(['remove', a]); maybeThrow(a.names);
@@ -62,7 +98,14 @@ function fakeLib() {
       return { removed: a.names, backups: [], failed: [] };
     },
     async update(a) { log.push(['update', a]); return { updated: a.names || [], held: [], failed: [] }; },
-    async check() { log.push(['check']); return { outdated: [] }; },
+    outdated: [],
+    async check(a) {
+      log.push(['check', a]);
+      if (lib.checkDelay) await new Promise((r) => setTimeout(r, lib.checkDelay));
+      log.push(['check:end']);
+      return { outdated: lib.outdated.map((name) => ({ name, scanNew: null })) };
+    },
+    async saveCheck(a) { log.push(['saveCheck', a]); },
     async disable(a) { log.push(['disable', a]); maybeThrow(a.names); return { done: a.names, failed: [] }; },
     async enable(a) { log.push(['enable', a]); return { done: a.names, failed: [] }; },
     async restoreBackup(a) {
@@ -82,7 +125,12 @@ function fakeLib() {
     async hideAgent(a) { log.push(['hideAgent', a]); st.settings.hidden.push(a.id); },
     async showAgent(a) { log.push(['showAgent', a]); },
     async setTargets(a) { log.push(['setTargets', a]); st.settings.targets = a.ids; },
-    async removeAgentSkills(a) { log.push(['removeAgentSkills', a]); return { removed: [], backups: [], failed: [] }; },
+    async removeAgentSkills(a) {
+      log.push(['removeAgentSkills', a]);
+      // Agent qui lit le dossier partagé : refus SHARED avec les lecteurs.
+      if (a.agent === 'zed') { const e = err('SHARED', 'Zed lit le dossier partagé. Retirez ces skills pour tous ses lecteurs.'); e.readers = ['zed', 'cursor', 'Bad Id', 7]; throw e; }
+      return { removed: [], backups: [], failed: [] };
+    },
     async createManualBackup(a) {
       log.push(['createManualBackup:start', a]);
       if (lib.delay) await new Promise((r) => setTimeout(r, lib.delay));
@@ -191,6 +239,7 @@ let root, lib, server, port;
 const api = (method, p, opts = {}) => req(port, method, p, { ...opts, headers: { 'x-sa-token': TOKEN, ...(opts.headers || {}) } });
 
 before(async () => {
+  ({ getCatalog, clearCatalogCache } = await import('../lib/catalog.mjs').catch(() => ({})));
   root = throwaway('sa-root-');
   fs.mkdirSync(path.join(root, 'prototype', 'dist'), { recursive: true });
   fs.writeFileSync(path.join(root, 'prototype', 'dist', 'preview.html'),
@@ -201,7 +250,12 @@ before(async () => {
   port = server.address().port;
 });
 
-after(async () => { server.close(); });
+after(async () => {
+  server.closeAllConnections();
+  server.close();
+  await once(server, 'close');
+  cleanup();
+});
 
 // ---------- Sécurité ----------
 
@@ -286,57 +340,84 @@ test('route inconnue : 404', async () => {
 
 // ---------- Page ----------
 
-const COOKIE = 'sa=' + TOKEN + '; HttpOnly; SameSite=Strict; Path=/';
-const GONE = 'Ce lien a déjà servi ou a expiré. Relancez Skill Advisor (npm start) et ouvrez la nouvelle adresse affichée.';
+const LIVE = (t) => '<script>window.SA_LIVE={token:' + (t ? '"' + t + '"' : 'null') + '}</script>';
+const sha = (s) => crypto.createHash('sha256').update(s, 'utf8').digest('base64');
+// Scripts en ligne d'une page, lus sans le code du serveur.
+function inlineScripts(html) {
+  const out = [];
+  const re = /<script(\s[^>]*)?>([\s\S]*?)<\/script/gi;
+  let m;
+  while ((m = re.exec(html))) if (!/\ssrc\s*=/i.test(m[1] || '')) out.push(m[2]);
+  return out;
+}
+const cspHashes = (csp) => (csp.match(/'sha256-[^']+'/g) || []).map((h) => h.slice(8, -1)).sort();
+// Chaque script en ligne de la page reçue a son empreinte dans l'en-tête, et rien d'autre.
+function assertCsp(r) {
+  assert.ok(!r.text.includes('\r'), 'retour chariot dans la page servie');
+  const scripts = inlineScripts(r.text);
+  assert.ok(scripts.length >= 2, 'scripts en ligne absents');
+  assert.deepEqual(cspHashes(r.headers['content-security-policy']), scripts.map(sha).sort());
+}
 
-test('GET / injecte SA_LIVE juste après <head>', async () => {
+test('GET / avec un code neuf : jeton injecté juste après <head>, sans cookie', async () => {
   const r = await req(port, 'GET', '/?c=' + server.newCode());
   assert.equal(r.status, 200);
   assert.match(r.headers['content-type'], /^text\/html/);
-  assert.ok(r.text.includes('<head>\n<script>window.SA_LIVE={token:"' + TOKEN + '"}</script>'), r.text.slice(0, 200));
+  assert.ok(r.text.includes('<head>\n' + LIVE(TOKEN)), r.text.slice(0, 200));
   assert.ok(r.text.includes('window.X=1;'));
-  assert.deepEqual(r.headers['set-cookie'], [COOKIE]);
+  assert.equal(r.headers['set-cookie'], undefined);
   assert.equal(r.headers['cache-control'], 'no-store');
   assert.equal(r.headers['referrer-policy'], 'no-referrer');
   const csp = r.headers['content-security-policy'];
   assert.match(csp, /script-src 'self' 'sha256-/);
   assert.match(csp, /https:\/\/fonts\.googleapis\.com/);
   assert.match(csp, /https:\/\/fonts\.gstatic\.com/);
+  assert.match(csp, /img-src 'self' data:/);
   assert.ok(!/script-src[^;]*unsafe-inline/.test(csp));
   // Les deux scripts en ligne (injecté et existant) ont leur empreinte.
-  assert.equal((csp.match(/'sha256-/g) || []).length, 2);
+  assert.equal(cspHashes(csp).length, 2);
+  assertCsp(r);
 });
 
-test('GET / sans code, code faux ou ancien ?t= : 403 en HTML', async () => {
-  for (const p of ['/', '/?c=' + 'b'.repeat(32), '/?t=' + TOKEN, '/?c=' + TOKEN]) {
-    const r = await req(port, 'GET', p);
-    assert.equal(r.status, 403, p);
+test('GET / sans code, code faux ou ancien ?t= : la page, sans jeton', async () => {
+  for (const p of ['/', '/?c=' + 'b'.repeat(32), '/?t=' + TOKEN, '/?c=' + TOKEN, '/?c=']) {
+    const r = await req(port, 'GET', p, { headers: { cookie: 'sa=' + TOKEN } });
+    assert.equal(r.status, 200, p);
     assert.match(r.headers['content-type'], /^text\/html/);
-    assert.ok(r.text.includes(GONE), p);
-    assert.ok(r.text.includes('lang="fr"'));
-    assert.ok(!r.text.includes('SA_LIVE'));
-    assert.ok(!r.text.includes(TOKEN));
+    assert.ok(r.text.includes('<head>\n' + LIVE(null)), p);
+    assert.ok(r.text.includes('window.X=1;'));
+    assert.ok(!r.text.includes(TOKEN), p);
     assert.equal(r.headers['set-cookie'], undefined);
-    assert.match(r.headers['content-security-policy'], /default-src 'none'/);
+    assertCsp(r);
   }
   // Host étranger : refusé, et le code reste valable.
   const c = server.newCode();
   let r = await req(port, 'GET', '/?c=' + c, { headers: { host: 'evil.example:' + port } });
   assert.equal(r.status, 403);
+  assert.ok(!r.text.includes(TOKEN));
   r = await req(port, 'GET', '/?c=' + c);
   assert.equal(r.status, 200);
+  assert.ok(r.text.includes(LIVE(TOKEN)));
 });
 
-test('code : 32 caractères hexadécimaux, un seul usage', async () => {
-  const c = server.newCode();
-  assert.match(c, /^[0-9a-f]{32}$/);
-  assert.notEqual(server.newCode(), c);
-  let r = await req(port, 'GET', '/?c=' + c);
-  assert.equal(r.status, 200);
-  r = await req(port, 'GET', '/?c=' + c);
-  assert.equal(r.status, 403);
-  assert.ok(r.text.includes(GONE));
-  assert.ok(!r.text.includes(TOKEN));
+test('code : 32 caractères hexadécimaux, un seul usage, signalé une fois', async () => {
+  const used = [];
+  const onUsed = (c) => used.push(c);
+  server.on('codeUsed', onUsed);
+  try {
+    const c = server.newCode();
+    assert.match(c, /^[0-9a-f]{32}$/);
+    assert.notEqual(server.newCode(), c);
+    let r = await req(port, 'GET', '/?c=' + c);
+    assert.equal(r.status, 200);
+    assert.ok(r.text.includes(LIVE(TOKEN)));
+    // Rechargement de la même adresse : la page revient, sans jeton.
+    r = await req(port, 'GET', '/?c=' + c);
+    assert.equal(r.status, 200);
+    assert.ok(r.text.includes(LIVE(null)));
+    assert.ok(!r.text.includes(TOKEN));
+    assert.deepEqual(used, [c]);
+  } finally { server.off('codeUsed', onUsed); }
 });
 
 test('code : expire après 10 minutes (horloge injectée)', async () => {
@@ -349,37 +430,64 @@ test('code : expire après 10 minutes (horloge injectée)', async () => {
     t += 10 * 60 * 1000 - 1;
     let r = await req(sp, 'GET', '/?c=' + a);
     assert.equal(r.status, 200);
+    assert.ok(r.text.includes(LIVE(TOKEN)));
     t += 2;
     r = await req(sp, 'GET', '/?c=' + b);
-    assert.equal(r.status, 403);
-    assert.ok(r.text.includes(GONE));
-  } finally { s.close(); }
+    assert.equal(r.status, 200);
+    assert.ok(r.text.includes(LIVE(null)));
+    assert.ok(!r.text.includes(TOKEN));
+  } finally { s.closeAllConnections(); s.close(); }
 });
 
-test('cookie : rechargement de la page, cookie faux refusé', async () => {
-  const c = server.newCode();
-  let r = await req(port, 'GET', '/?c=' + c);
-  assert.equal(r.status, 200);
-  const cookie = r.headers['set-cookie'][0].split(';')[0];
-  assert.equal(cookie, 'sa=' + TOKEN);
-  // Rechargement : même adresse (code déjà servi) ou adresse nue.
-  for (const p of ['/?c=' + c, '/']) {
-    r = await req(port, 'GET', p, { headers: { cookie: 'autre=1; ' + cookie + '; x=y' } });
-    assert.equal(r.status, 200, p);
-    assert.ok(r.text.includes('window.SA_LIVE={token:"' + TOKEN + '"}'));
-  }
-  // Cookie faux ou ancien : 403 seul, mais un code neuf passe.
-  const stale = 'sa=' + 'b'.repeat(64);
-  for (const h of [stale, 'xsa=' + TOKEN, 'sa=' + TOKEN.slice(1)]) {
-    r = await req(port, 'GET', '/', { headers: { cookie: h } });
-    assert.equal(r.status, 403, h);
-  }
-  r = await req(port, 'GET', '/?c=' + server.newCode(), { headers: { cookie: stale } });
-  assert.equal(r.status, 200);
-  assert.deepEqual(r.headers['set-cookie'], [COOKIE]);
-  // Cookie valide, Host étranger : 403.
-  r = await req(port, 'GET', '/', { headers: { cookie, host: 'evil.example:' + port } });
-  assert.equal(r.status, 403);
+// Navigateurs en snap : le navigateur reçoit /start?k=<clé>, jamais le code ; la clé sert une fois et vit 2 minutes.
+test('GET /start : clé de lancement à usage unique, 2 minutes, renvoi vers le code', async () => {
+  let t = 5_000_000;
+  const s = createServer({ lib: fakeLib(), token: TOKEN, port: 0, root, now: () => t });
+  if (!s.listening) await once(s, 'listening');
+  try {
+    const sp = s.address().port;
+    const code = s.newCode();
+    const k = s.newLaunchKey(code);
+    assert.match(k, /^[0-9a-f]{16}$/);
+    assert.notEqual(s.newLaunchKey(code), k);
+    assert.throws(() => s.newLaunchKey('f'.repeat(32)));
+    // Host étranger : refusé, la clé reste valable.
+    let r = await req(sp, 'GET', '/start?k=' + k, { headers: { host: 'evil.example:' + sp } });
+    assert.equal(r.status, 403);
+    assert.ok(!r.text.includes(code));
+    // Juste avant 2 minutes : renvoi vers le code, sans cache ni référent, sans cookie.
+    t += 2 * 60 * 1000 - 1;
+    r = await req(sp, 'GET', '/start?k=' + k);
+    assert.equal(r.status, 302);
+    assert.equal(r.headers.location, '/?c=' + code);
+    assert.equal(r.headers['cache-control'], 'no-store');
+    assert.equal(r.headers['referrer-policy'], 'no-referrer');
+    assert.equal(r.headers['set-cookie'], undefined);
+    assert.equal(r.text, '');
+    // Deuxième usage : rien.
+    r = await req(sp, 'GET', '/start?k=' + k);
+    assert.equal(r.status, 302);
+    assert.equal(r.headers.location, '/');
+    // Le renvoi ne consomme pas le code : la page le consomme.
+    r = await req(sp, 'GET', '/?c=' + code);
+    assert.ok(r.text.includes(LIVE(TOKEN)));
+    // Clé expirée, inconnue, absente, mal formée : renvoi vers la page sans jeton, jamais le code.
+    const c2 = s.newCode();
+    const old = s.newLaunchKey(c2);
+    t += 2 * 60 * 1000;
+    for (const p of ['/start?k=' + old, '/start?k=' + 'e'.repeat(16), '/start', '/start?k=' + c2, '/start?k=' + old.toUpperCase()]) {
+      r = await req(sp, 'GET', p);
+      assert.equal(r.status, 302, p);
+      assert.equal(r.headers.location, '/', p);
+      assert.ok(!r.text.includes(c2) && !(r.headers.location || '').includes(c2), p);
+    }
+    // Le code lui-même reste valable (10 minutes), pour l'adresse du terminal.
+    r = await req(sp, 'GET', '/?c=' + c2);
+    assert.ok(r.text.includes(LIVE(TOKEN)));
+    // POST /start : inconnu.
+    r = await req(sp, 'POST', '/start?k=' + s.newLaunchKey(s.newCode()));
+    assert.equal(r.status, 404);
+  } finally { s.closeAllConnections(); s.close(); }
 });
 
 test('API : le cookie ou le code ne suffisent pas, l\'en-tête reste exigé', async () => {
@@ -394,6 +502,7 @@ test('API : le cookie ou le code ne suffisent pas, l\'en-tête reste exigé', as
   // Le code n'a pas été consommé par /api.
   r = await req(port, 'GET', '/?c=' + c);
   assert.equal(r.status, 200);
+  assert.ok(r.text.includes(LIVE(TOKEN)));
   r = await api('GET', '/api/state');
   assert.equal(r.status, 200);
   assert.equal(r.headers['set-cookie'], undefined);
@@ -408,26 +517,104 @@ test('interface absente : 500, le code reste valable', async () => {
     let r = await req(s.address().port, 'GET', '/?c=' + c);
     assert.equal(r.status, 500);
     assert.equal(r.headers['set-cookie'], undefined);
+    assert.ok(!r.text.includes(TOKEN));
     fs.mkdirSync(path.join(empty, 'prototype', 'dist'), { recursive: true });
     fs.writeFileSync(path.join(empty, 'prototype', 'dist', 'preview.html'), '<html><head></head><body></body></html>');
     r = await req(s.address().port, 'GET', '/?c=' + c);
     assert.equal(r.status, 200);
-  } finally { s.close(); }
+    assert.ok(r.text.includes(LIVE(TOKEN)));
+  } finally { s.closeAllConnections(); s.close(); }
 });
 
-test('GET / sert la vraie interface quand elle existe', async (t) => {
-  const real = path.join(repo, 'prototype', 'dist', 'preview.html');
-  if (!fs.existsSync(real)) return t.skip('prototype/dist/preview.html absent');
+test('page en CRLF ou CR sur le disque : servie en LF, empreintes justes', async () => {
+  for (const eol of ['\r\n', '\r']) {
+    const dir = throwaway('sa-crlf-');
+    fs.mkdirSync(path.join(dir, 'prototype', 'dist'), { recursive: true });
+    const lf = '<!doctype html>\n<html lang="fr">\n<head>\n<meta charset="utf-8">\n<title>T</title>\n</head>\n<body><p>ok</p>\n<script>\nwindow.X=1;\nwindow.Y="a";\n</script>\n</body></html>\n';
+    fs.writeFileSync(path.join(dir, 'prototype', 'dist', 'preview.html'), lf.replace(/\n/g, eol));
+    const s = createServer({ lib: fakeLib(), token: TOKEN, port: 0, root: dir });
+    if (!s.listening) await once(s, 'listening');
+    try {
+      for (const p of ['/?c=' + s.newCode(), '/']) {
+        const r = await req(s.address().port, 'GET', p);
+        assert.equal(r.status, 200);
+        assertCsp(r);
+        // L'empreinte est celle du script tel que le navigateur le lit : en LF.
+        assert.ok(cspHashes(r.headers['content-security-policy']).includes(sha('\nwindow.X=1;\nwindow.Y="a";\n')), JSON.stringify(eol));
+        assert.equal(r.headers['content-length'], String(Buffer.byteLength(r.text)));
+      }
+    } finally { s.closeAllConnections(); s.close(); }
+  }
+});
+
+// La page vraiment servie : prototype/dist/preview.html, fichier construit.
+const dist = path.join(repo, 'prototype', 'dist', 'preview.html');
+
+test('GET / sert la vraie interface, avec et sans code', async () => {
+  assert.ok(fs.existsSync(dist), 'prototype/dist/preview.html absent : lancez npm run build');
   const s = createServer({ lib: fakeLib(), token: TOKEN, port: 0, root: repo });
+  if (!s.listening) await once(s, 'listening');
+  try {
+    const sp = s.address().port;
+    const withCode = await req(sp, 'GET', '/?c=' + s.newCode());
+    const bare = await req(sp, 'GET', '/');
+    for (const r of [withCode, bare]) {
+      assert.equal(r.status, 200);
+      assert.equal(r.headers['set-cookie'], undefined);
+      // Une interface, pas une page vide.
+      assert.ok(r.text.includes('id="app"') && r.text.includes('id="view"'), 'structure de l\'interface absente');
+      assert.ok(r.text.includes('SA.start'), 'démarrage de l\'interface absent');
+      assertCsp(r);
+    }
+    assert.ok(/<head>\s*<script>window\.SA_LIVE=\{token:"a{64}"\}<\/script>/.test(withCode.text));
+    assert.ok(/<head>\s*<script>window\.SA_LIVE=\{token:null\}<\/script>/.test(bare.text));
+    assert.ok(!bare.text.includes(TOKEN));
+  } finally { s.closeAllConnections(); s.close(); }
+});
+
+test('page construite : le mode réel garde le jeton dans sessionStorage (version 1.0)', () => {
+  // Rempli par prototype/src/live.js, puis npm run build.
+  assert.ok(fs.readFileSync(dist, 'utf8').includes('sessionStorage'), 'mode réel sans sessionStorage : mettez à jour live.js puis lancez npm run build');
+});
+
+test('empreintes justes avec des caractères dont la minuscule change de longueur', async () => {
+  const dir = throwaway('sa-casse-');
+  fs.mkdirSync(path.join(dir, 'prototype', 'dist'), { recursive: true });
+  // « İ » devient deux caractères en minuscule : la fin du script ne doit pas glisser.
+  fs.writeFileSync(path.join(dir, 'prototype', 'dist', 'preview.html'),
+    '<!doctype html>\n<html>\n<head>\n<title>İİİ</title>\n</head>\n<body><p>İstanbul İzmir</p>\n<SCRIPT type="module">\nwindow.Z="İ";\n</SCRIPT>\n<script src="x.js"></script>\n</body></html>\n');
+  const s = createServer({ lib: fakeLib(), token: TOKEN, port: 0, root: dir });
   if (!s.listening) await once(s, 'listening');
   try {
     const r = await req(s.address().port, 'GET', '/?c=' + s.newCode());
     assert.equal(r.status, 200);
-    assert.ok(/<head>\s*<script>window\.SA_LIVE=\{token:"[0-9a-f]{64}"\}<\/script>/.test(r.text));
-  } finally { s.close(); }
+    assertCsp(r);
+    assert.ok(cspHashes(r.headers['content-security-policy']).includes(sha('\nwindow.Z="İ";\n')));
+  } finally { s.closeAllConnections(); s.close(); }
+});
+
+test('vraie interface copiée en CRLF (checkout Windows) : même page, empreintes justes', async () => {
+  assert.ok(fs.existsSync(dist), 'prototype/dist/preview.html absent : lancez npm run build');
+  const lf = fs.readFileSync(dist, 'utf8').replace(/\r\n?/g, '\n');
+  const dir = throwaway('sa-crlf-');
+  fs.mkdirSync(path.join(dir, 'prototype', 'dist'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'prototype', 'dist', 'preview.html'), lf.replace(/\n/g, '\r\n'));
+  const a = createServer({ lib: fakeLib(), token: TOKEN, port: 0, root: dir });
+  const b = createServer({ lib: fakeLib(), token: TOKEN, port: 0, root: repo });
+  for (const s of [a, b]) if (!s.listening) await once(s, 'listening');
+  try {
+    const crlf = await req(a.address().port, 'GET', '/?c=' + a.newCode());
+    const ref = await req(b.address().port, 'GET', '/?c=' + b.newCode());
+    assert.equal(crlf.status, 200);
+    assertCsp(crlf);
+    assert.equal(crlf.text, ref.text);
+    assert.equal(crlf.headers['content-security-policy'], ref.headers['content-security-policy']);
+  } finally { for (const s of [a, b]) { s.closeAllConnections(); s.close(); } }
 });
 
 // ---------- Routes ----------
+
+const last = (name) => lib.log.filter((l) => l[0] === name).at(-1);
 
 test('GET /api/state et /api/catalog', async () => {
   let r = await api('GET', '/api/state');
@@ -442,31 +629,154 @@ test('POST /api/skills/install renvoie le résultat et l\'état', async () => {
   const r = await api('POST', '/api/skills/install', { body: { items: [{ source: 'anthropics/skills', skill: 'pdf' }], agents: ['claude-code'], scope: 'global' } });
   assert.equal(r.status, 200);
   assert.deepEqual(r.json.installed, ['pdf']);
+  assert.deepEqual([r.json.held, r.json.conflicts, r.json.skipped, r.json.failed], [[], [], [], []]);
   assert.ok(r.json.state.mine.some((x) => x.name === 'pdf'));
   const call = lib.log.find((l) => l[0] === 'install:start');
   assert.deepEqual(call[1], { items: [{ source: 'anthropics/skills', skill: 'pdf' }], agents: ['claude-code'], scope: 'global' });
 });
 
-test('install refuse une source ou un nom invalide', async () => {
-  let r = await api('POST', '/api/skills/install', { body: { items: [{ source: 'file:///etc', skill: 'pdf' }], agents: [], scope: 'global' } });
-  assert.equal(r.status, 400);
-  assert.equal(r.json.error, 'BAD_SOURCE');
-  r = await api('POST', '/api/skills/install', { body: { items: [{ source: 'a/b', skill: '../x' }], agents: [], scope: 'global' } });
-  assert.equal(r.status, 400);
-  assert.equal(r.json.error, 'BAD_NAME');
-  r = await api('POST', '/api/skills/install', { body: { items: [{ source: 'https://github.com/a/b', skill: 'x' }], agents: ['Bad Id'], scope: 'global' } });
-  assert.equal(r.status, 400);
-  assert.equal(r.json.error, 'BAD_NAME');
-  assert.match(r.json.message, /agent/);
-  for (const src of ['http://github.com/a/b', 'https://', 'https://exemple.com/a b', '../x', '.git/x', 'a/..', 'https://x.com/' + 'a'.repeat(2000)]) {
-    r = await api('POST', '/api/skills/install', { body: { items: [{ source: src, skill: 'x' }], agents: [], scope: 'global' } });
-    assert.equal(r.status, 400, src);
-    assert.equal(r.json.error, 'BAD_SOURCE', src);
+test('install : replace, force et le dossier partagé sont transmis', async () => {
+  const body = { items: [{ source: 'a/b', skill: 'risky' }], agents: ['shared', 'claude-code'], scope: 'global', replace: ['risky'], force: ['risky'] };
+  let r = await api('POST', '/api/skills/install', { body });
+  assert.equal(r.status, 200);
+  assert.deepEqual(last('install:start')[1], body);
+  assert.deepEqual(r.json.installed, ['risky']);
+  // Sans force : retenu, avec le verdict.
+  r = await api('POST', '/api/skills/install', { body: { ...body, force: undefined, replace: undefined } });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.json.installed, []);
+  assert.deepEqual(r.json.held, [{ name: 'risky', verdict: 'rouge', findings: [] }]);
+  assert.deepEqual(last('install:start')[1], { items: body.items, agents: body.agents, scope: 'global' });
+  for (const bad of [{ replace: ['../x'] }, { force: ['a b'] }, { replace: 'risky' }]) {
+    r = await api('POST', '/api/skills/install', { body: { ...body, ...bad } });
+    assert.equal(r.status, 400, JSON.stringify(bad));
   }
-  r = await api('POST', '/api/skills/install', { body: { items: [{ source: 'a/b', skill: 'x' }], agents: [], scope: 'partout' } });
+});
+
+test('install : un élément refusé va dans failed, les autres continuent', async () => {
+  lib.log.length = 0;
+  const items = [
+    { source: 'anthropics/skills', skill: 'docx' },
+    { source: 'uizze.sh', skill: 'ios-design' },
+    { source: 'a/b', skill: 'nom avec espace' },
+    { source: 'a/b', skill: 'ns:nom' },
+    { source: 'https://exemple.com/depot', skill: 'xlsx' },
+    { skill: 'sans-source' }
+  ];
+  const r = await api('POST', '/api/skills/install', { body: { items, agents: ['claude-code'], scope: 'global' } });
+  assert.equal(r.status, 200, r.text);
+  assert.deepEqual(r.json.installed, ['docx', 'xlsx']);
+  assert.deepEqual(r.json.failed.map((f) => f.name), ['ios-design', 'nom avec espace', 'ns:nom', 'sans-source']);
+  for (const f of r.json.failed) {
+    assert.equal(typeof f.message, 'string');
+    assert.match(f.message, /à la main/);
+    assert.ok(f.message.split(/\s+/).length <= 20, f.message);
+  }
+  assert.ok(r.json.state);
+  // Le lib ne reçoit que les éléments valables.
+  assert.deepEqual(last('install:start')[1].items, [items[0], items[4]]);
+});
+
+test('install : aucun élément valable, 200 sans appeler le lib', async () => {
+  lib.log.length = 0;
+  const bad = ['file:///etc', 'http://github.com/a/b', 'https://', 'https://exemple.com/a b', '../x', '.git/x', 'a/..', 'https://x.com/' + 'a'.repeat(2000)];
+  const r = await api('POST', '/api/skills/install', { body: { items: bad.map((source, i) => ({ source, skill: 'x' + i })).concat([{ source: 'a/b', skill: '../x' }]), agents: [], scope: 'global' } });
+  assert.equal(r.status, 200, r.text);
+  assert.deepEqual([r.json.installed, r.json.held, r.json.conflicts, r.json.skipped], [[], [], [], []]);
+  assert.deepEqual(r.json.failed.map((f) => f.name), [...bad.map((s, i) => 'x' + i), '../x']);
+  assert.ok(r.json.state);
+  assert.equal(lib.log.filter((l) => l[0].startsWith('install')).length, 0);
+});
+
+test('install : le détail brut d\'un échec reste dans le terminal', async () => {
+  const seen = [];
+  const old = console.error;
+  console.error = (...a) => seen.push(a.join(' '));
+  let r;
+  try { r = await api('POST', '/api/skills/install', { body: { items: [{ source: 'a/b', skill: 'casse' }], agents: [], scope: 'global' } }); } finally { console.error = old; }
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.json.failed, [{ name: 'casse', message: 'Dépôt introuvable.' }]);
+  assert.ok(!r.text.includes('/chemin/secret'));
+  assert.ok(seen.some((l) => l.includes('repository not found')), seen.join('|'));
+});
+
+test('install : corps mal formé, 400 pour toute la requête', async () => {
+  lib.log.length = 0;
+  const ok = { items: [{ source: 'a/b', skill: 'x' }], agents: [], scope: 'global' };
+  const cases = [
+    [{ ...ok, agents: ['Bad Id'] }, 'BAD_NAME'],
+    [{ ...ok, scope: 'partout' }, 'BAD_INPUT'],
+    [{ agents: [] }, 'BAD_INPUT'],
+    [{ ...ok, items: [] }, 'BAD_INPUT'],
+    [{ ...ok, items: 'a/b' }, 'BAD_INPUT'],
+    [{ ...ok, items: ['a/b'] }, 'BAD_INPUT'],
+    [{ ...ok, items: [{ source: 'a/b' }] }, 'BAD_INPUT'],
+    [{ ...ok, items: [{ source: 'a/b', skill: 3 }] }, 'BAD_INPUT'],
+    [{ ...ok, agents: undefined }, 'BAD_INPUT']
+  ];
+  for (const [body, code] of cases) {
+    const r = await api('POST', '/api/skills/install', { body });
+    assert.equal(r.status, 400, JSON.stringify(body));
+    assert.equal(r.json.error, code, JSON.stringify(body));
+  }
+  const r = await api('POST', '/api/skills/install', { body: { ...ok, agents: ['Bad Id'] } });
+  assert.match(r.json.message, /agent/);
+  assert.equal(lib.log.filter((l) => l[0].startsWith('install')).length, 0);
+});
+
+test('projet : POST /api/project, et portée projet refusée sans projet', async () => {
+  lib.log.length = 0;
+  const body = { items: [{ source: 'a/b', skill: 'x' }], agents: [], scope: 'project' };
+  let r = await api('POST', '/api/skills/install', { body });
   assert.equal(r.status, 400);
-  r = await api('POST', '/api/skills/install', { body: { agents: [] } });
+  assert.equal(r.json.error, 'BAD_INPUT');
+  assert.match(r.json.message, /projet/);
+  assert.equal(lib.log.filter((l) => l[0].startsWith('install')).length, 0);
+  r = await api('POST', '/api/project', { body: { dir: '/tmp/mon projet' } });
+  assert.equal(r.status, 200);
+  assert.deepEqual(Object.keys(r.json), ['state']);
+  assert.equal(r.json.state.project, '/tmp/mon projet');
+  assert.deepEqual(last('setProject')[1], { dir: '/tmp/mon projet' });
+  r = await api('POST', '/api/skills/install', { body });
+  assert.equal(r.status, 200);
+  assert.equal(last('install:start')[1].scope, 'project');
+  // Refus du lib, corps invalides, puis retrait du projet.
+  r = await api('POST', '/api/project', { body: { dir: '/refuse' } });
   assert.equal(r.status, 400);
+  assert.deepEqual(r.json, { error: 'BAD_INPUT', message: 'Dossier refusé.' });
+  for (const b of [{}, { dir: 3 }, { dir: '' }, { dir: 'a\u0000b' }, { dir: '/' + 'x'.repeat(1024) }, { dir: ['/tmp'] }]) {
+    r = await api('POST', '/api/project', { body: b });
+    assert.equal(r.status, 400, JSON.stringify(b));
+    assert.equal(r.json.error, 'BAD_INPUT');
+  }
+  assert.equal(lib.st.project, '/tmp/mon projet');
+  r = await api('POST', '/api/project', { body: { dir: null } });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.state.project, null);
+  assert.deepEqual(last('setProject')[1], { dir: null });
+});
+
+test('GET /api/skills/preview et /api/search-data', async () => {
+  let r = await api('GET', '/api/skills/preview?name=pdf');
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.json, { name: 'pdf', files: [{ path: 'SKILL.md', status: 'changed', added: 2, removed: 1 }], scan: { verdict: 'vert', findings: [] }, scanOld: { verdict: 'vert' }, same: false });
+  assert.deepEqual(last('preview')[1], { name: 'pdf' });
+  lib.log.length = 0;
+  for (const q of ['', '?name=', '?name=../x', '?name=a%20b', '?x=1']) {
+    r = await api('GET', '/api/skills/preview' + q);
+    assert.equal(r.status, 400, q);
+    assert.equal(r.json.error, 'BAD_NAME', q);
+  }
+  assert.equal(lib.log.filter((l) => l[0] === 'preview').length, 0);
+  r = await api('GET', '/api/skills/preview?name=absent');
+  assert.equal(r.status, 404);
+  r = await req(port, 'GET', '/api/skills/preview?name=pdf');
+  assert.equal(r.status, 403);
+  r = await api('GET', '/api/search-data');
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.json, { source: 'bundled', generatedAt: '2026-11-12T17:23:56.759Z', search: null });
+  r = await req(port, 'GET', '/api/search-data');
+  assert.equal(r.status, 403);
 });
 
 test('remove, update, check, disable, enable', async () => {
@@ -522,8 +832,6 @@ test('sauvegardes : restore avec force, et refus ROUGE en 409 avec les noms', as
 });
 
 // ---------- Sauvegardes, étape 1 ----------
-
-const last = (name) => lib.log.filter((l) => l[0] === name).at(-1);
 
 test('POST /api/backups/create : résultat, état, champs transmis', async () => {
   let r = await api('POST', '/api/backups/create', { body: { names: ['pdf', 'docx'], label: 'Avant ménage', note: 'Ligne 1\nLigne 2' } });
@@ -746,7 +1054,7 @@ test('import : flux qui dépasse la limite, 413 et arrêt de la lecture', async 
     // Exactement la limite : accepté.
     const ok = await req(sp, 'POST', '/api/backups/import', { raw: Buffer.alloc(1024, 7), headers: { 'x-sa-token': TOKEN, 'content-type': 'application/gzip' } });
     assert.equal(ok.status, 200);
-  } finally { s.close(); }
+  } finally { s.closeAllConnections(); s.close(); }
 });
 
 test('sauvegardes : create, apply, import et export passent par la file', async () => {
@@ -797,6 +1105,10 @@ test('agents : custom, delete, hide, show, targets, empty', async () => {
   assert.deepEqual(lib.log.find((l) => l[0] === 'removeAgentSkills')[1], { agent: 'cursor', backup: true });
   r = await api('POST', '/api/agents/targets', { body: { ids: 'cursor' } });
   assert.equal(r.status, 400);
+  // Agent qui lit le dossier partagé : 409 SHARED, avec les lecteurs au bon format seulement.
+  r = await api('POST', '/api/agents/empty', { body: { id: 'zed', backup: true } });
+  assert.equal(r.status, 409);
+  assert.deepEqual(r.json, { error: 'SHARED', message: 'Zed lit le dossier partagé. Retirez ces skills pour tous ses lecteurs.', readers: ['zed', 'cursor'] });
   // Nom ou dossier vide, trop long ou avec un caractère de contrôle.
   for (const body of [{ name: '', dir: '/a' }, { name: 'a\nb', dir: '/a' }, { name: 'a', dir: '/a\u0000' }, { name: 'x'.repeat(65), dir: '/a' }, { name: 'a' }]) {
     r = await api('POST', '/api/agents/custom', { body });
@@ -808,13 +1120,20 @@ test('agents : custom, delete, hide, show, targets, empty', async () => {
 // ---------- Erreurs ----------
 
 test('codes d\'erreur du lib vers HTTP, sans trace', async () => {
-  const cases = [['BAD_NAME', 400], ['BAD_SOURCE', 400], ['NOT_FOUND', 404], ['EXISTS', 409], ['GITHUB_LIMIT', 502], ['CLI_FAILED', 500], ['OUTSIDE_HOME', 500]];
+  const cases = [['BAD_NAME', 400], ['BAD_SOURCE', 400], ['NOT_FOUND', 404], ['EXISTS', 409], ['GITHUB_LIMIT', 502], ['CLI_FAILED', 500], ['OUTSIDE_HOME', 500],
+    ['NETWORK', 502], ['SOURCE_NOT_FOUND', 404], ['SHARED', 409]];
   for (const [code, status] of cases) {
     const r = await api('POST', '/api/skills/disable', { body: { names: ['boom-' + code] } });
     assert.equal(r.status, status, code);
     assert.deepEqual(r.json, { error: code, message: 'Erreur ' + code + '.' });
   }
-  const r = await api('POST', '/api/skills/disable', { body: { names: ['boom-PLAIN'] } });
+  // Erreur imprévue : le détail part dans le terminal (capturé ici), pas dans la réponse.
+  const seen = [];
+  const old = console.error;
+  console.error = (...a) => seen.push(a.join(' '));
+  let r;
+  try { r = await api('POST', '/api/skills/disable', { body: { names: ['boom-PLAIN'] } }); } finally { console.error = old; }
+  assert.ok(seen.some((l) => l.includes('détail interne')), seen.join('|'));
   assert.equal(r.status, 500);
   assert.equal(r.json.error, 'INTERNAL');
   assert.ok(!r.text.includes('/chemin/secret'));
@@ -827,14 +1146,16 @@ test('codes d\'erreur du lib vers HTTP, sans trace', async () => {
 
 // ---------- File d'attente ----------
 
+const pause = (ms) => new Promise((r) => setTimeout(r, ms));
+const installBody = (s) => ({ items: [{ source: 'a/b', skill: s }], agents: [], scope: 'global' });
+
 test('deux POST simultanés passent l\'un après l\'autre', async () => {
   lib.log.length = 0;
   lib.delay = 80;
   try {
-    const body = (s) => ({ items: [{ source: 'a/b', skill: s }], agents: [], scope: 'global' });
     const [a, b] = await Promise.all([
-      api('POST', '/api/skills/install', { body: body('un') }),
-      api('POST', '/api/skills/install', { body: body('deux') })
+      api('POST', '/api/skills/install', { body: installBody('un') }),
+      api('POST', '/api/skills/install', { body: installBody('deux') })
     ]);
     assert.equal(a.status, 200);
     assert.equal(b.status, 200);
@@ -848,6 +1169,214 @@ test('une erreur ne bloque pas la file', async () => {
   assert.equal(r1.status, 500);
   const r2 = await api('POST', '/api/skills/enable', { body: { names: ['pdf'] } });
   assert.equal(r2.status, 200);
+  // Une écriture en échec libère aussi les lectures.
+  lib.delay = 40;
+  try {
+    const [w, s] = await Promise.all([api('POST', '/api/skills/install', { body: installBody('boom-CLI_FAILED') }), pause(10).then(() => api('GET', '/api/state'))]);
+    assert.equal(w.status, 500);
+    assert.equal(s.status, 200);
+    assert.equal(s.json.half, false);
+  } finally { lib.delay = 0; }
+});
+
+test('lecture de l\'état pendant une écriture : jamais un état à moitié écrit', async () => {
+  lib.log.length = 0;
+  lib.delay = 120;
+  try {
+    const w = api('POST', '/api/skills/install', { body: installBody('lent') });
+    await pause(30);
+    assert.equal(lib.st.half, true, 'l\'écriture devrait être en cours');
+    const reads = await Promise.all([api('GET', '/api/state'), api('GET', '/api/state')]);
+    for (const r of reads) {
+      assert.equal(r.status, 200);
+      assert.equal(r.json.half, false);
+      assert.ok(r.json.mine.some((x) => x.name === 'lent'), 'la lecture doit voir l\'état d\'après l\'écriture');
+    }
+    assert.equal((await w).status, 200);
+  } finally { lib.delay = 0; }
+});
+
+// Une écriture en attente ne reste pas bloquée derrière un flot continu de lectures : les lectures venues après elle l'attendent.
+test('écriture en attente : un flot de lectures ne la retient pas', async () => {
+  lib.log.length = 0;
+  lib.stateDelay = 60;
+  // Écriture qui dure : une lecture commencée pendant elle se verrait dans le journal.
+  lib.delay = 40;
+  try {
+    const reads = [];
+    const t0 = Date.now();
+    // Lectures qui se chevauchent pendant 1,2 seconde : sans priorité, il y a toujours une lecture en cours.
+    const flow = (async () => { while (Date.now() - t0 < 1200) { reads.push(api('GET', '/api/state')); await pause(20); } })();
+    await pause(80);
+    const t1 = Date.now();
+    const w = await api('POST', '/api/skills/install', { body: installBody('juste') });
+    const waited = Date.now() - t1;
+    await flow;
+    for (const r of await Promise.all(reads)) { assert.equal(r.status, 200); assert.equal(r.json.half, false); }
+    assert.equal(w.status, 200);
+    assert.ok(waited < 600, 'écriture retenue ' + waited + ' ms par les lectures');
+    // Pendant l'écriture, aucune lecture ne commence.
+    const seq = lib.log.map((l) => l[0]);
+    const s = seq.indexOf('install:start'), e = seq.indexOf('install:end');
+    assert.ok(s > 0 && e > s, seq.join(' '));
+    assert.ok(!seq.slice(s, e).includes('state'), seq.join(' '));
+    // Des lectures ont eu lieu avant et après.
+    assert.ok(seq.slice(0, s).includes('state') && seq.slice(e).includes('state'));
+  } finally { lib.stateDelay = 0; lib.delay = 0; }
+});
+
+// check.json n'est écrit que dans la file des écritures, et jamais quand une écriture a eu lieu pendant la vérification.
+test('check : check.json écrit dans la file, sauf si une écriture a eu lieu pendant la vérification', async () => {
+  const waitLog = async (name) => { for (let i = 0; i < 100 && !lib.log.some((l) => l[0] === name); i++) await pause(10); };
+  lib.outdated = ['pdf'];
+  try {
+    // 1. Seule : la vérification ne demande pas d'écrire ; le serveur écrit ensuite, dans la file.
+    lib.log.length = 0;
+    let r = await api('GET', '/api/skills/check');
+    assert.equal(r.status, 200);
+    assert.deepEqual(r.json, { outdated: [{ name: 'pdf', scanNew: null }] });
+    await waitLog('saveCheck');
+    assert.deepEqual(lib.log.find((l) => l[0] === 'check')[1], { save: false });
+    assert.deepEqual(lib.log.find((l) => l[0] === 'saveCheck')[1], { outdated: ['pdf'] });
+    // 2. Une écriture commence et finit pendant la vérification : rien d'écrit.
+    lib.log.length = 0;
+    lib.checkDelay = 200;
+    const c = api('GET', '/api/skills/check');
+    await pause(20);
+    assert.equal((await api('POST', '/api/skills/install', { body: installBody('pendant') })).status, 200);
+    assert.equal((await c).status, 200);
+    await pause(60);
+    assert.ok(!lib.log.some((l) => l[0] === 'saveCheck'), JSON.stringify(lib.log.map((l) => l[0])));
+    // 3. Une écriture en cours au début de la vérification, finie après : rien d'écrit non plus.
+    lib.log.length = 0;
+    lib.checkDelay = 0;
+    lib.delay = 150;
+    const w = api('POST', '/api/skills/install', { body: installBody('avant') });
+    await pause(20);
+    r = await api('GET', '/api/skills/check');
+    assert.equal(r.status, 200);
+    assert.equal((await w).status, 200);
+    await pause(60);
+    assert.ok(!lib.log.some((l) => l[0] === 'saveCheck'), JSON.stringify(lib.log.map((l) => l[0])));
+    // 4. Vérification seule, puis lecture de l'état : check.json écrit, la lecture répond.
+    lib.log.length = 0;
+    lib.delay = 0;
+    lib.checkDelay = 0;
+    r = await api('GET', '/api/skills/check');
+    await waitLog('saveCheck');
+    const state = await api('GET', '/api/state');
+    assert.equal(state.status, 200);
+    assert.ok(lib.log.some((l) => l[0] === 'saveCheck'));
+  } finally { lib.outdated = []; lib.checkDelay = 0; lib.delay = 0; }
+});
+
+test('lecture de l\'état : attend l\'écriture en cours, pas toute la file', async () => {
+  lib.log.length = 0;
+  lib.delay = 80;
+  lib.stateDelay = 30;
+  try {
+    const writes = ['f1', 'f2', 'f3'].map((s) => api('POST', '/api/skills/install', { body: installBody(s) }));
+    await pause(20);
+    const read = await api('GET', '/api/state');
+    assert.equal(read.status, 200);
+    assert.equal(read.json.half, false);
+    const names = read.json.mine.map((x) => x.name);
+    // Vu après la première écriture, avant la deuxième : celle-ci attend la fin de la lecture.
+    assert.ok(names.includes('f1') && !names.includes('f2') && !names.includes('f3'), names.join(','));
+    for (const w of await Promise.all(writes)) assert.equal(w.status, 200);
+    const seq = lib.log.map((l) => l[0] + (l[0].startsWith('install') ? ':' + l[1].items[0].skill : ''));
+    // La lecture venue du client suit l'état rendu avec la première écriture.
+    const i = seq.indexOf('state', seq.indexOf('install:end:f1') + 2);
+    assert.ok(i > 0 && i < seq.indexOf('install:start:f2'), seq.join(' '));
+    assert.ok(seq.indexOf('state:end', i) < seq.indexOf('install:start:f2'), seq.join(' '));
+  } finally { lib.delay = 0; lib.stateDelay = 0; }
+});
+
+test('check, preview et search-data n\'attendent pas la file et ne la bloquent pas', async () => {
+  lib.log.length = 0;
+  // Une vérification lente ne retient pas une installation.
+  lib.checkDelay = 400;
+  try {
+    const t0 = Date.now();
+    const check = api('GET', '/api/skills/check');
+    await pause(20);
+    const w = await api('POST', '/api/skills/install', { body: installBody('vite') });
+    assert.equal(w.status, 200);
+    assert.ok(Date.now() - t0 < 300, 'installation retenue par la vérification');
+    assert.ok(!lib.log.some((l) => l[0] === 'check:end'), 'la vérification devrait encore tourner');
+    assert.equal((await check).status, 200);
+  } finally { lib.checkDelay = 0; }
+  // Une écriture lente ne retient ni check, ni preview, ni search-data.
+  lib.delay = 400;
+  try {
+    const w = api('POST', '/api/skills/install', { body: installBody('long') });
+    await pause(20);
+    const t0 = Date.now();
+    const quick = await Promise.all([api('GET', '/api/skills/check'), api('GET', '/api/skills/preview?name=pdf'), api('GET', '/api/search-data'), api('GET', '/api/catalog')]);
+    for (const r of quick) assert.equal(r.status, 200);
+    assert.ok(Date.now() - t0 < 300, 'lecture retenue par une écriture');
+    assert.ok(!lib.log.some((l) => l[0] === 'install:end' && l[1].items[0].skill === 'long'));
+    assert.equal((await w).status, 200);
+  } finally { lib.delay = 0; }
+});
+
+// ---------- Client parti ----------
+
+// Envoie des en-têtes et un début de corps, puis coupe la connexion.
+function abortUpload(pathname, type, announced) {
+  return new Promise((resolve) => {
+    const s = net.connect(port, '127.0.0.1');
+    s.on('error', () => {});
+    s.on('close', resolve);
+    s.write('POST ' + pathname + ' HTTP/1.1\r\nHost: 127.0.0.1:' + port + '\r\nX-SA-Token: ' + TOKEN +
+      '\r\nContent-Type: ' + type + '\r\nContent-Length: ' + announced + '\r\n\r\n{"id":"c', () => setTimeout(() => s.destroy(), 30));
+  });
+}
+
+test('onglet fermé ou envoi annulé : aucune trace dans le terminal, le serveur continue', async () => {
+  lib.log.length = 0;
+  const seen = [];
+  const old = console.error;
+  console.error = (...a) => seen.push(a.join(' '));
+  try {
+    await abortUpload('/api/agents/hide', 'application/json', 500);
+    await abortUpload('/api/backups/import', 'application/gzip', 5000);
+    await pause(150);
+  } finally { console.error = old; }
+  assert.deepEqual(seen, []);
+  assert.equal(lib.log.filter((l) => l[0] === 'hideAgent' || l[0] === 'importBackup').length, 0);
+  const r = await api('GET', '/api/state');
+  assert.equal(r.status, 200);
+  // Une vraie erreur interne reste écrite dans le terminal.
+  console.error = (...a) => seen.push(a.join(' '));
+  try { await api('POST', '/api/skills/disable', { body: { names: ['boom-PLAIN'] } }); } finally { console.error = old; }
+  assert.equal(seen.length, 1);
+  assert.match(seen[0], /détail interne/);
+});
+
+test('téléchargement d\'une sauvegarde annulé : aucune trace', async () => {
+  const seen = [];
+  const old = console.error;
+  console.error = (...a) => seen.push(a.join(' '));
+  // Flux sans fin : le client part au milieu.
+  const endless = fakeLib();
+  endless.exportBackup = async () => new Readable({ read() { setTimeout(() => this.push(Buffer.alloc(65536, 1)), 2); } });
+  const s = createServer({ lib: endless, token: TOKEN, port: 0, root });
+  if (!s.listening) await once(s, 'listening');
+  try {
+    await new Promise((resolve) => {
+      const c = net.connect(s.address().port, '127.0.0.1');
+      c.on('error', () => {});
+      c.on('close', resolve);
+      c.once('data', () => c.destroy());
+      c.write('GET /api/backups/export?id=flux HTTP/1.1\r\nHost: 127.0.0.1:' + s.address().port + '\r\nX-SA-Token: ' + TOKEN + '\r\n\r\n');
+    });
+    await pause(150);
+    // La file n'est pas restée bloquée.
+    const r = await req(s.address().port, 'POST', '/api/agents/hide', { headers: { 'x-sa-token': TOKEN }, body: { id: 'cursor' } });
+    assert.equal(r.status, 200);
+  } finally { console.error = old; s.closeAllConnections(); s.close(); }
+  assert.deepEqual(seen, []);
 });
 
 // ---------- Catalogue ----------
@@ -935,99 +1464,5 @@ test('catalogue : la variable CATALOG_URL sert d\'adresse par défaut', async ()
   } finally {
     if (old === undefined) delete process.env.CATALOG_URL; else process.env.CATALOG_URL = old;
     s.close(); clearCatalogCache();
-  }
-});
-
-// ---------- Programme ----------
-
-test('ouverture du navigateur : commande et arguments, sans shell', () => {
-  const url = 'http://127.0.0.1:5000/?c=' + 'c'.repeat(32);
-  assert.deepEqual(browserCommand(url, 'darwin'), ['open', [url]]);
-  assert.deepEqual(browserCommand(url, 'win32'), ['rundll32', ['url.dll,FileProtocolHandler', url]]);
-  assert.deepEqual(browserCommand(url, 'linux'), ['xdg-open', [url]]);
-});
-
-// Environnement d'enfant : dossier personnel jetable, aucune variable qui pointe ailleurs.
-function childEnv(home) {
-  const env = {};
-  for (const [k, v] of Object.entries(process.env)) {
-    if (/_HOME$|^XDG_|^CLAUDE_CONFIG_DIR$|^APPDATA$|^LOCALAPPDATA$|^CATALOG_URL$/.test(k)) continue;
-    env[k] = v;
-  }
-  return { ...env, HOME: home, USERPROFILE: home, APPDATA: path.join(home, 'AppData', 'Roaming'), DISABLE_TELEMETRY: '1' };
-}
-
-// Vérifie, avant tout lancement, que chaque dossier d'agent vu par "skills" est dans le dossier jetable.
-async function assertAgentsInside(home) {
-  const code = 'import("skills").then(async (m) => { const a = await m.getSupportedAgents(); process.stdout.write(JSON.stringify(a.map((x) => x.globalSkillsDir).filter(Boolean))); })';
-  const p = spawn(process.execPath, ['--input-type=module', '-e', code], { cwd: repo, env: childEnv(home), stdio: ['ignore', 'pipe', 'pipe'] });
-  let out = '';
-  p.stdout.on('data', (c) => { out += c; });
-  const [exit] = await once(p, 'exit');
-  assert.equal(exit, 0, 'impossible de lire les agents');
-  const dirs = JSON.parse(out);
-  assert.ok(dirs.length > 0);
-  for (const d of dirs) {
-    assert.ok(path.resolve(d).startsWith(home + path.sep), 'dossier d\'agent hors du dossier jetable : ' + d);
-  }
-}
-
-const sliceA = fs.existsSync(path.join(repo, 'app', 'lib', 'inventory.mjs'));
-test('node app/server.mjs --no-open --port 0 --home <jetable>', { todo: sliceA ? false : 'app/lib/inventory.mjs absent' }, async () => {
-  const home = throwaway('sa-home-');
-  await assertAgentsInside(home);
-  const p = spawn(process.execPath, [path.join(repo, 'app', 'server.mjs'), '--no-open', '--port', '0', '--home', home],
-    { cwd: repo, env: childEnv(home), stdio: ['ignore', 'pipe', 'pipe'] });
-  try {
-    let out = '';
-    const line = await new Promise((resolve, reject) => {
-      const timer = setTimeout(() => reject(new Error('pas de ligne prête : ' + out)), 10000);
-      p.stdout.on('data', (c) => {
-        out += c;
-        const i = out.indexOf('\n');
-        if (i >= 0) { clearTimeout(timer); resolve(out.slice(0, i)); }
-      });
-      p.on('exit', (c) => { clearTimeout(timer); reject(new Error('arrêt du serveur, code ' + c)); });
-    });
-    const m = /^Skill Advisor: http:\/\/127\.0\.0\.1:(\d+)\/\?c=([0-9a-f]{32})$/.exec(line);
-    assert.ok(m, 'ligne prête inattendue : ' + line);
-    // Le jeton de session ne sort jamais dans la ligne.
-    assert.ok(!/[0-9a-f]{64}/.test(line));
-    const cport = Number(m[1]);
-    const g = await req(cport, 'GET', '/?c=' + m[2]);
-    assert.equal(g.status, 200);
-    const t = /window\.SA_LIVE=\{token:"([0-9a-f]{64})"\}/.exec(g.text);
-    assert.ok(t, 'jeton absent de la page');
-    const again = await req(cport, 'GET', '/?c=' + m[2]);
-    assert.equal(again.status, 403);
-    const r = await req(cport, 'GET', '/api/state', { headers: { 'x-sa-token': t[1] } });
-    if (r.status === 200) {
-      assert.equal(r.json.mode, 'live');
-    } else {
-      assert.equal(r.status, 500);
-      assert.equal(typeof r.json.error, 'string');
-      assert.equal(typeof r.json.message, 'string');
-      assert.ok(!/\n\s+at /.test(r.text));
-    }
-    const f = await req(cport, 'GET', '/api/state', { headers: { 'x-sa-token': 'b'.repeat(64) } });
-    assert.equal(f.status, 403);
-    // Branchement réel des routes de sauvegarde, cas d'échec seulement : rien n'est écrit hors du dossier jetable.
-    const h = { 'x-sa-token': t[1] };
-    const absent = '20260101-000000-absent';
-    const checks = [
-      ['GET', '/api/backups/export?id=' + absent, {}, 404, 'NOT_FOUND'],
-      ['POST', '/api/backups/import', { raw: Buffer.from('pas une archive'), headers: { ...h, 'content-type': 'application/gzip' } }, 400, 'BAD_ARCHIVE'],
-      ['POST', '/api/backups/apply', { body: { id: absent, agents: ['claude-code'], conflict: 'skip' } }, 404, 'NOT_FOUND'],
-      ['POST', '/api/backups/create', { body: { names: ['absent-skill'] } }, 404, 'NOT_FOUND']
-    ];
-    for (const [method, p, o, status, code] of checks) {
-      const x = await req(cport, method, p, { ...o, headers: { ...h, ...(o.headers || {}) } });
-      assert.equal(x.status, status, p + ' ' + x.text);
-      assert.equal(x.json.error, code, p);
-      assert.equal(typeof x.json.message, 'string');
-      assert.ok(!x.json.message.includes(home), 'chemin dans le message : ' + p);
-    }
-  } finally {
-    p.kill();
   }
 });

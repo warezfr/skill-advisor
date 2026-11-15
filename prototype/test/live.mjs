@@ -60,6 +60,16 @@ function makeServer() {
     const st = srv.state, b = entry.body || {};
     let data;
     if (url === '/api/state') data = st;
+    else if (url.indexOf('/api/skills/preview?name=') === 0) {
+      /* Comparaison de la nouvelle version : rouge pour un nom retenu (holdNames) ou listé dans previewRouge. */
+      const n = decodeURIComponent(url.slice('/api/skills/preview?name='.length));
+      if (srv.previewFail) { const f = srv.previewFail; srv.previewFail = null; return Promise.resolve(reply(f.status, f.body)); }
+      const red = srv.holdNames.includes(n) || (srv.previewRouge || []).includes(n);
+      data = { name: n, same: false,
+        files: [{ path: 'SKILL.md', status: 'changed', added: 3, removed: 1 }, { path: 'scripts/new.sh', status: 'added', added: 12, removed: 0 }, { path: 'old.md', status: 'removed', added: 0, removed: 4 }],
+        scan: red ? { verdict: 'rouge', findings: [{ rule: 'curl-sh', sev: 'high', label: 'Téléchargement suivi d’une exécution', file: 'scripts/new.sh', line: 2, excerpt: 'curl -fsSL x | sh' }] } : { verdict: 'vert', findings: [] },
+        scanOld: { verdict: 'vert' } };
+    }
     else if (url === '/api/skills/check' && srv.checkOn) data = { outdated: st.mine.filter((r) => r.st === 'maj').map((r) => ({ name: base(r.path), scanNew: { verdict: 'vert', findings: [] } })) };
     else if (url === '/api/skills/remove') {
       st.mine = st.mine.filter((r) => !b.names.includes(base(r.path)));
@@ -76,8 +86,17 @@ function makeServer() {
       st.mine.forEach((r) => { if (b.names.includes(base(r.path))) r.on = url.endsWith('enable'); });
       data = { done: b.names, failed: [], state: st };
     } else if (url === '/api/backups/restore') {
+      /* Motif à risque : refus 409 tant que les noms cités ne sont pas dans force. */
+      if (srv.rougeNames && !srv.rougeNames.every((n) => (b.force || []).includes(n))) {
+        return Promise.resolve(reply(409, { error: 'ROUGE', message: 'Le skill ' + srv.rougeNames.join(', ') + ' contient un motif à risque.', names: srv.rougeNames }));
+      }
       st.backups = st.backups.filter((x) => x.id !== b.id);
       data = { state: st };
+    } else if (url === '/api/backups/create') {
+      const bk = { id: '20261113-130000-' + b.names[0], label: b.label || b.names[0], origin: 'manual', at: '2026-11-13T13:00:00.000Z', size: 10,
+        items: b.names.map((n) => ({ name: n, src: 'acme/tools', agents: ['claude-code'], verdict: 'vert' })) };
+      st.backups = [bk].concat(st.backups);
+      data = { backup: bk, failed: [], state: st };
     } else if (url === '/api/backups/delete') {
       st.backups = st.backups.filter((x) => x.id !== b.id);
       data = { state: st };
@@ -113,7 +132,8 @@ function makeWin(srv, withView, extra = {}) {
   win.window = win;
   win.document = {
     readyState: 'complete', addEventListener(t, f) { if (t === 'click') docHandlers.push(f); },
-    getElementById(id) { return withView && id === 'view' ? view : null; },
+    activeElement: null,
+    getElementById(id) { if (win.__ids && win.__ids[id]) return win.__ids[id]; return withView && id === 'view' ? view : null; },
     querySelector() { return null; }, querySelectorAll() { return []; },
     documentElement: { getAttribute() { return null; }, setAttribute() {} }
   };
@@ -145,7 +165,25 @@ function makeWin(srv, withView, extra = {}) {
   const srv = makeServer();
   srv.failNext = { status: 403, body: { error: 'forbidden' } };
   const { SA, view } = makeWin(srv, true);
-  ok(await SA.live.ready === false && /Accès refusé/.test(view.innerHTML), 'forbidden without message: French text');
+  /* Contrat 1.0 : « Session expirée. Relancez Skill Advisor (npm start), puis ouvrez la nouvelle adresse. », sans conseil de rechargement. */
+  ok(await SA.live.ready === false && /Session expirée/.test(view.innerHTML) && /ouvrez la nouvelle adresse/.test(view.innerHTML) && !/Rechargez/.test(view.innerHTML),
+    'forbidden without message: French text: ' + view.innerHTML.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim());
+}
+{
+  /* Refus SHARED : les lecteurs envoyés par le serveur arrivent sur l'erreur, textes seulement, 100 au plus. */
+  const srv = makeServer();
+  const { SA } = makeWin(srv, false);
+  await SA.live.ready;
+  const many = [42, null, { id: 'x' }, 'cursor'].concat(Array.from({ length: 150 }, (_, i) => 'agent-' + i));
+  srv.failNext = { status: 409, body: { error: 'SHARED', message: 'Cursor lit le dossier partagé.', readers: many } };
+  let e = null;
+  try { await SA.live.call('POST', '/api/agents/empty', { id: 'cursor', backup: true }); } catch (x) { e = x; }
+  ok(e && e.code === 'SHARED' && e.status === 409 && /dossier partagé/.test(e.message), 'SHARED refusal: code, status and message kept: ' + (e && e.code));
+  ok(e && Array.isArray(e.readers) && e.readers.length === 100 && e.readers[0] === 'cursor' && e.readers.every((x) => typeof x === 'string'), 'SHARED refusal: readers copied, strings only, at most 100: ' + (e && e.readers && e.readers.length));
+  srv.failNext = { status: 409, body: { error: 'SHARED', message: 'Refus.', readers: 'cursor' } };
+  e = null;
+  try { await SA.live.call('POST', '/api/agents/empty', { id: 'cursor', backup: true }); } catch (x) { e = x; }
+  ok(e && e.readers === undefined, 'SHARED refusal: readers that are not a list are ignored');
 }
 {
   const srv = makeServer();
@@ -198,7 +236,7 @@ function makeWin(srv, withView, extra = {}) {
 
 /* ======================================================= 2. lecture de l'état */
 const srv = makeServer();
-const { SA, docHandlers } = makeWin(srv, false);
+const { SA, docHandlers, win: mainWin } = makeWin(srv, false);
 const V = SA.views;
 ok(await SA.live.ready === true, 'ready resolves true');
 SA.go = () => true; SA.setRoute = () => true;
@@ -291,11 +329,37 @@ ok(last().url === '/api/skills/update' && JSON.stringify(last().body) === JSON.s
 srv.state.mine.find((r) => r.name === 'beta').st = 'maj';
 delete srv.state.mine.find((r) => r.name === 'beta').diff;
 await SA.live.refresh();
-let drawer = '';
-SA.openDrawer = (html) => { drawer = html; };
-V.gestion.openDiff('acme/tools/beta');
-ok(/après (son )?téléchargement/.test(drawer), 'diff drawer without diff explains the later check');
-clean('diff drawer live', drawer);
+/* Contrat 1.0 : le tiroir lit GET /api/skills/preview (remplace l'ancien texte « contrôlée après son téléchargement »). */
+{
+  const dk = drawerKit(mainWin, SA);
+  V.gestion.openDiff('acme/tools/beta');
+  ok(/télécharge la nouvelle version/.test(dk.html) && /data-gs-later/.test(dk.html) && !/data-gs-apply/.test(dk.html), 'Ce qui change: loading state, no update button yet');
+  await tick();
+  const pvCall = srv.log.filter((e) => e.url.indexOf('/api/skills/preview') === 0).pop();
+  ok(pvCall && pvCall.method === 'GET' && pvCall.url === '/api/skills/preview?name=beta' && pvCall.token === TOKEN, 'Ce qui change: GET /api/skills/preview with the folder name: ' + JSON.stringify(pvCall));
+  const pt = txt(dk.pvHTML);
+  ok(/SKILL\.md/.test(pt) && /Modifié/.test(pt) && /scripts\/new\.sh/.test(pt) && /Ajouté/.test(pt) && /old\.md/.test(pt) && /Retiré/.test(pt), 'Ce qui change: files added, removed, changed: ' + pt.slice(0, 300));
+  ok(/\+3/.test(pt) && /−1/.test(pt) && /15 lignes ajoutées, 5 retirées/.test(pt), 'Ce qui change: line counts per file and in total: ' + pt.slice(0, 400));
+  ok(/Aucun motif connu/.test(pt) && /Version installée : Aucun motif connu/.test(pt), 'Ce qui change: verdict of the new version, then of the installed one');
+  ok(/data-gs-apply="acme\/tools\/beta"/.test(dk.pvHTML) && !/data-gs-force/.test(dk.pvHTML) && />Mettre à jour</.test(dk.pvHTML), 'Ce qui change: plain update button for a clean version');
+  clean('diff drawer live', dk.text());
+  /* Échec de la comparaison : message, Réessayer, aucun bouton de mise à jour. */
+  srv.previewFail = { status: 502, body: { error: 'NETWORK', message: 'GitHub ne répond pas.' } };
+  V.gestion.openDiff('acme/tools/beta');
+  await tick();
+  ok(/Comparaison impossible/.test(dk.pvHTML) && /GitHub ne répond pas\./.test(dk.pvHTML) && /data-gs-pv-retry/.test(dk.pvHTML) && !/data-gs-apply/.test(dk.pvHTML), 'Ce qui change: error state with retry, no update button: ' + txt(dk.pvHTML));
+  const nPv = srv.log.length;
+  docHandlers.forEach((h) => h({ target: btn({ 'data-gs-pv-retry': 'acme/tools/beta' }) }));
+  await tick();
+  ok(srv.log.slice(nPv).some((e) => e.url === '/api/skills/preview?name=beta') && /SKILL\.md/.test(dk.pvHTML), 'Ce qui change: retry fetches the comparison again');
+  /* Nouvelle version à risque : le bouton le dit et force. */
+  srv.previewRouge = ['beta'];
+  V.gestion.openDiff('acme/tools/beta');
+  await tick();
+  ok(/Motif à risque/.test(dk.pvHTML) && /Téléchargement suivi d’une exécution/.test(dk.pvHTML), 'Ce qui change: risky verdict with its findings');
+  ok(/data-gs-force[^>]*>Mettre à jour malgré l’avertissement</.test(dk.pvHTML), 'Ce qui change: forced update button for a risky version');
+  srv.previewRouge = [];
+}
 
 /* activer, désactiver */
 await click({ 'data-gs-on': 'acme/tools/beta' });
@@ -382,6 +446,9 @@ clean('confirmation done', V.confirmation.render());
 
 /* une installation qui échoue sur un skill, portée projet */
 const pick2 = SA.search.items.filter((it) => !SA.mineRow(it[0]) && !pick.includes(it)).slice(0, 2);
+/* Contrat 1.0 : une installation de projet demande State.project (sinon la page la bloque). */
+srv.state.project = '/work/proj';
+await SA.live.refresh();
 SA.state.inst = null; SA.state.cart = []; SA.state.scope = 'projet';
 pick2.forEach((it) => SA.cart.add(it[0]));
 srv.installReply = (b) => ({ installed: [b.items[0].skill], skipped: [], failed: [{ name: b.items[1].skill, message: 'Dépôt introuvable sur GitHub.' }], state: srv.state });
@@ -436,14 +503,81 @@ ok(srv.log.filter((e) => e.method === 'POST').length > 10 && srv.log.every((e) =
 /* ======================================================= 5. corrections de relecture : une fenêtre neuve par cas */
 /* La recherche automatique des mises à jour (300 ms après le montage) ne part pas : chaque test la lance lui-même. */
 const quietTimer = (f, ms, ...a) => (ms >= 300 ? 0 : setTimeout(f, ms, ...a));
-/* Faux conteneur : refuse, comme le navigateur, un sélecteur d'attribut mal formé, et garde chaque sélecteur reçu. */
-function strictWrap() {
-  const parts = {}, sels = [];
+/* ---------- mini DOM : le HTML rendu est relu pour retrouver les éléments, et le focus est suivi ---------- */
+const VOID = new Set(['input', 'br', 'img', 'hr', 'meta', 'link']);
+function unesc(v) { return v.replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&'); }
+function parseHTML(html, doc) {
+  const nodes = [], stack = [];
+  const re = /<(\/?)([a-zA-Z0-9]+)((?:\s+[\w:-]+(?:="[^"]*")?)*)\s*\/?>/g;
+  let m;
+  while ((m = re.exec(html))) {
+    const tag = m[2].toLowerCase();
+    if (m[1]) { while (stack.length && stack.pop().tag !== tag) { /* fermeture */ } continue; }
+    const attrs = {};
+    m[3].replace(/([\w:-]+)(?:="([^"]*)")?/g, (_, k, v) => { attrs[k] = v === undefined ? '' : unesc(v); return ''; });
+    const n = node(tag, attrs, stack[stack.length - 1] || null, doc);
+    nodes.push(n);
+    if (!VOID.has(tag)) stack.push(n);
+  }
+  return nodes;
+}
+function node(tag, attrs, parent, doc) {
+  return {
+    tag, attrs, parent, hidden: 'hidden' in attrs, disabled: 'disabled' in attrs, id: attrs.id || '',
+    get attributes() { return Object.keys(this.attrs).map((name) => ({ name, value: this.attrs[name] })); },
+    getAttribute(k) { return k in this.attrs ? this.attrs[k] : null; },
+    hasAttribute(k) { return k in this.attrs; },
+    setAttribute(k, v) { this.attrs[k] = String(v); }, removeAttribute(k) { delete this.attrs[k]; },
+    matches(sel) { return matchSel(this, sel); },
+    closest(sel) { for (let n = this; n; n = n.parent) if (matchSel(n, sel)) return n; return null; },
+    focus() { doc.activeElement = this; }, scrollIntoView() {}
+  };
+}
+function matchSel(n, sel) {
+  if (!n || !n.attrs) return false;
+  if (sel[0] === '#') return n.attrs.id === sel.slice(1);
+  if (sel[0] === '.') return (' ' + (n.attrs.class || '') + ' ').indexOf(' ' + sel.slice(1) + ' ') > -1;
+  const a = sel.match(/^\[([\w-]+)(?:="((?:[^"\\]|\\.)*)")?\]$/);
+  if (a) return a[1] in n.attrs && (a[2] === undefined || n.attrs[a[1]] === a[2]);
+  return n.tag === sel;
+}
+/* Faux conteneur : refuse, comme le navigateur, un sélecteur d'attribut mal formé, et garde chaque sélecteur reçu.
+   Les zones redessinées (#gs-dyn, #gs-tools, #gs-filters) sont relues : leurs éléments sont trouvés et prennent le focus. */
+const STUBS = new Set(['#gs-sub', '#gs-chk', '#gs-tools', '#gs-filters', '#gs-dyn', '#gs-all', '#gs-check', '#gs-live', 'h1', '#gs-q']);
+function strictWrap(doc) {
+  const parts = {}, sels = [], cache = { html: null, nodes: [] };
   const okSel = (sel) => !/\[/.test(sel) || /^(\[[\w-]+(="(?:[^"\\]|\\.)*")?\])+$/.test(sel);
-  const w = { isConnected: true, handlers: {}, sels, parts, addEventListener(t, f) { this.handlers[t] = f; }, contains() { return true; },
-    querySelector(sel) { sels.push(sel); if (!okSel(sel)) throw new SyntaxError('invalid selector ' + sel); return (parts[sel] = parts[sel] || stub()); },
-    querySelectorAll(sel) { sels.push(sel); if (!okSel(sel)) throw new SyntaxError('invalid selector ' + sel); return []; } };
+  const part = (sel) => {
+    if (!parts[sel]) { const st = stub(); st.id = sel[0] === '#' ? sel.slice(1) : ''; st.attributes = st.id ? [{ name: 'id', value: st.id }] : []; st.getAttribute = (k) => (k === 'id' ? st.id : null); st.closest = () => null; if (doc) st.focus = () => { doc.activeElement = st; }; parts[sel] = st; }
+    return parts[sel];
+  };
+  const dom = () => {
+    const html = ['#gs-tools', '#gs-filters', '#gs-dyn'].map((k) => (parts[k] ? parts[k].innerHTML : '')).join('');
+    if (html !== cache.html) { cache.html = html; cache.nodes = parseHTML(html, doc || {}); }
+    return cache.nodes;
+  };
+  const w = { isConnected: true, handlers: {}, sels, parts, dom, addEventListener(t, f) { this.handlers[t] = f; },
+    /* Faux bouton ou zone fixe : dans la vue. Élément relu : seulement s'il est encore dans le rendu courant. */
+    contains(n) { return !!n && (!('tag' in n) || dom().includes(n)); },
+    querySelector(sel) {
+      sels.push(sel);
+      if (!okSel(sel)) throw new SyntaxError('invalid selector ' + sel);
+      if (STUBS.has(sel) || !doc) return part(sel);
+      return dom().find((n) => matchSel(n, sel)) || null;
+    },
+    querySelectorAll(sel) { sels.push(sel); if (!okSel(sel)) throw new SyntaxError('invalid selector ' + sel); return doc ? dom().filter((n) => matchSel(n, sel)) : []; } };
   return w;
+}
+/* Tiroir simulé : garde le HTML ouvert et fournit la zone #gs-pv que « Ce qui change » réécrit après la réponse. */
+function drawerKit(win, SA) {
+  const k = { html: '', pvId: null, pvHTML: '' };
+  SA.openDrawer = (html) => { k.html = html; SA.drawerOpen = true; const m = html.match(/id="gs-pv"[^>]*?data-id="([^"]*)"/); k.pvId = m ? unesc(m[1]) : null; k.pvHTML = ''; };
+  SA.closeDrawer = () => { SA.drawerOpen = false; };
+  win.__ids = win.__ids || {};
+  win.__ids['gs-pv'] = { getAttribute: (a) => (a === 'data-id' ? k.pvId : null), contains: () => false, querySelector: () => null, focus() {},
+    set innerHTML(v) { k.pvHTML = v; }, get innerHTML() { return k.pvHTML; } };
+  k.text = () => k.html + k.pvHTML;
+  return k;
 }
 async function liveGestion(edit, extra = {}) {
   const s = makeServer();
@@ -452,11 +586,27 @@ async function liveGestion(edit, extra = {}) {
   const ready = await w.SA.live.ready;
   w.SA.go = () => true; w.SA.setRoute = () => true;
   w.SA.state.route = 'gestion';
-  const wr = strictWrap();
+  const doc = w.win.document;
+  const wr = strictWrap(doc);
   w.SA.views.gestion.mount({ querySelector(sel) { return sel === '.gs' ? wr : null; } });
-  const clickW = async (attrs) => { let e = null; try { wr.handlers.click({ target: btn(attrs) }); } catch (x) { e = x; } await tick(); return e; };
+  /* Premier rendu : le contenu de #gs-dyn, comme le navigateur l'aurait. */
+  wr.querySelector('#gs-dyn').innerHTML = (w.SA.views.gestion.render().match(/<div id="gs-dyn" data-st>([\s\S]*)<\/div><\/div>$/) || [])[1] || '';
+  /* Un clic sur un élément rendu : il prend le focus d'abord, comme dans le navigateur. Sinon, un faux bouton. */
+  const find = (attrs) => { const k = Object.keys(attrs); return wr.dom().find((n) => k.every((a) => n.attrs[a] === attrs[a])) || null; };
+  const clickW = async (attrs) => {
+    let e = null;
+    const n = find(attrs);
+    if (n) doc.activeElement = n;
+    try { wr.handlers.click({ target: n || btn(attrs) }); } catch (x) { e = x; }
+    await tick(); return e;
+  };
+  const keyW = async (key, target) => {
+    const ev = { key, target: target || doc.activeElement || {}, defaultPrevented: false, preventDefault() { this.defaultPrevented = true; }, stopPropagation() {} };
+    wr.handlers.keydown(ev); await tick(); return ev;
+  };
+  const focused = () => doc.activeElement;
   const evW = async (attrs) => { let e = null; try { w.docHandlers.forEach((h) => h({ target: btn(attrs) })); } catch (x) { e = x; } await tick(); return e; };
-  return { srv: s, SA: w.SA, win: w.win, wr, ready, click: clickW, ev: evW, dyn: () => wr.parts['#gs-dyn'].innerHTML, last: () => s.log[s.log.length - 1] };
+  return { srv: s, SA: w.SA, win: w.win, wr, doc, ready, click: clickW, key: keyW, find, focused, ev: evW, dyn: () => wr.parts['#gs-dyn'].innerHTML, last: () => s.log[s.log.length - 1] };
 }
 
 /* ---------- 6. nom de dossier, portée projet, ids uniques ---------- */
@@ -516,15 +666,23 @@ async function liveGestion(edit, extra = {}) {
 {
   const t = await liveGestion((st, s) => { s.holdNames = ['beta']; });
   const { SA } = t;
-  await t.click({ 'data-gs-all': '' });
+  const e5 = await t.click({ 'data-gs-all': '' });
+  ok(!e5, '5: update all does not throw: ' + (e5 && e5.stack));
   ok(JSON.stringify(t.last().body) === '{"names":["beta"]}', '5: first update not forced');
   ok(SA.state.held && SA.state.held.beta === true, '5: held name kept on SA.state.held: ' + JSON.stringify(SA.state.held));
-  let drawer = '';
-  SA.openDrawer = (html) => { drawer = html; };
+  ok(!/0 skill mis à jour/.test(t.dyn()) && /beta demande votre lecture/.test(t.dyn()), '5: nothing updated: no « 0 skill mis à jour », only the held name: ' + t.dyn().slice(0, 300));
+  /* Plus que des mises à jour retenues : « Tout mettre à jour » n'a rien à faire, il disparaît et ne renvoie rien. */
+  ok(t.wr.parts['#gs-all'].hidden === true, '5: update-all hidden when only held updates remain');
+  const nHeld = t.srv.log.length;
+  await t.click({ 'data-gs-all': '' });
+  ok(!t.srv.log.slice(nHeld).some((e) => e.url === '/api/skills/update'), '5: update-all does not resend a held update');
+  const dk = drawerKit(t.win, SA);
   SA.views.gestion.openDiff('acme/tools/beta');
-  ok(/La nouvelle version ajoute un motif à risque/.test(drawer), '5: drawer says the new version adds a risky pattern');
-  ok(/Mettre à jour malgré tout/.test(drawer), '5: drawer offers the forced update');
-  clean('5: held drawer', drawer);
+  ok(/La nouvelle version ajoute un motif à risque/.test(dk.html), '5: drawer says the new version adds a risky pattern');
+  await tick();
+  /* Contrat 1.0 : libellé « Mettre à jour malgré l’avertissement » (au lieu de « malgré tout »), après la comparaison. */
+  ok(/data-gs-force[^>]*>Mettre à jour malgré l’avertissement</.test(dk.pvHTML), '5: drawer offers the forced update: ' + txt(dk.pvHTML).slice(0, 200));
+  clean('5: held drawer', dk.text());
   await t.ev({ 'data-gs-apply': 'acme/tools/beta' });
   ok(JSON.stringify(t.last().body) === '{"names":["beta"],"force":["beta"]}', '5: forced update sent: ' + JSON.stringify(t.last().body));
   ok(!(SA.state.held || {}).beta, '5: held entry cleared once updated');
@@ -553,6 +711,106 @@ async function liveGestion(edit, extra = {}) {
   ok(/Réponse inattendue du serveur local/.test(t.dyn()) && !/is not a function|TypeError/.test(t.dyn()), '10: malformed reply: French text, no raw JS error');
 }
 
+/* ---------- 13. constat 61 : la recherche automatique des mises à jour ne bloque pas la page ---------- */
+/* Minuterie pilotée : les attentes de 300 ms et plus restent en file, le test les déclenche. */
+function heldTimers() {
+  const q = [];
+  let n = 0;
+  return {
+    q,
+    set: (f, ms, ...a) => (ms >= 300 ? (q.push({ id: 'h' + (++n), f, ms }), 'h' + n) : setTimeout(f, ms, ...a)),
+    clear: (id) => { if (typeof id === 'string') { const i = q.findIndex((x) => x.id === id); if (i > -1) q.splice(i, 1); } else clearTimeout(id); },
+    fire: (ms) => { const i = q.findIndex((x) => x.ms === ms); if (i < 0) return false; const x = q.splice(i, 1)[0]; x.f(); return true; }
+  };
+}
+{
+  /* Serveur qui ne répond pas : la page reste utilisable, la progression est en tête de liste, l'attente s'arrête à 20 s. */
+  const T = heldTimers();
+  const t = await liveGestion((st, s) => { s.checkOn = true; }, { setTimeout: T.set, clearTimeout: T.clear });
+  const head = () => t.wr.parts['#gs-chk'] ? t.wr.parts['#gs-chk'].textContent : '';
+  t.srv.hang = {};
+  const h0 = t.srv.hang;
+  ok(T.fire(300), '13: automatic check planned at first visit');
+  await tick();
+  ok(t.srv.log.some((e) => e.url === '/api/skills/check'), '13: automatic check sent');
+  ok(/Recherche des mises à jour/.test(head()), '13: progress shown at the head of the list: ' + head());
+  ok(!/Recherche des mises à jour/.test(t.dyn()), '13: progress not in the message area');
+  ok(t.wr.parts['#gs-check'].disabled === true, '13: the check button waits for the running check');
+  ok(!(t.wr.parts['#gs-all'] || {}).disabled, '13: « Tout mettre à jour » stays usable');
+  ok(!/data-gs-on="acme\/tools\/beta"[^>]*disabled/.test(t.dyn()), '13: row switches stay usable during the check');
+  const n = t.srv.log.length;
+  await t.click({ 'data-gs-on': 'acme/tools/beta' });
+  ok(t.srv.log.length === n + 1 && t.last().url === '/api/skills/disable', '13: another action runs during the check: ' + t.last().url);
+  ok(/désactivé/.test(t.dyn()), '13: its result is shown: ' + txt(t.dyn()).slice(0, 160));
+  ok(T.fire(20000), '13: a 20 s limit is set for the automatic check');
+  await tick();
+  ok(/20 secondes/.test(head()) && /Rechercher les mises à jour/.test(head()) && !/—/.test(head()), '13: after 20 s, a French note at the head of the list: ' + head());
+  ok(t.wr.parts['#gs-check'].disabled === false, '13: after 20 s, the check button is usable again');
+  const msgBefore = t.dyn();
+  if (h0.release) h0.release();
+  await tick();
+  ok(t.dyn() === msgBefore && /20 secondes/.test(head()), '13: a reply after the limit changes nothing on screen');
+  ok(!t.srv.log.slice(n + 1).some((e) => e.url === '/api/state'), '13: a reply after the limit does not reload the state');
+}
+{
+  /* Réponse à temps : l'état est relu sans remonter la vue, une confirmation ouverte reste ouverte. */
+  const T = heldTimers();
+  const t = await liveGestion((st, s) => { s.checkOn = true; }, { setTimeout: T.set, clearTimeout: T.clear });
+  const head = () => t.wr.parts['#gs-chk'] ? t.wr.parts['#gs-chk'].textContent : '';
+  let reps = 0;
+  t.SA._started = true;
+  t.SA.repaint = () => { reps++; };
+  await t.click({ 'data-gs-un': 'local/gamma' });
+  ok(/data-gs-un-ok="local\/gamma"/.test(t.dyn()), '13: uninstall confirmation open');
+  ok(T.fire(300), '13: automatic check planned');
+  await tick(12);
+  ok(t.srv.log.some((e) => e.url === '/api/state' && e.method === 'GET'), '13: state reloaded after the check');
+  ok(reps === 0, '13: the view is not mounted again (a confirmation would close): ' + reps);
+  ok(/data-gs-un-ok/.test(t.dyn()), '13: the open confirmation is still there');
+  ok(/1 mise à jour trouvée\./.test(head()), '13: result at the head of the list: ' + head());
+  ok(!T.q.some((x) => x.ms === 20000), '13: the 20 s limit is cleared once the reply arrived');
+}
+{
+  /* Réponse arrivée sur un autre écran : celui-ci est redessiné avec les nouveaux comptes. */
+  const T = heldTimers();
+  const t = await liveGestion((st, s) => { s.checkOn = true; }, { setTimeout: T.set, clearTimeout: T.clear });
+  let reps = 0;
+  t.SA._started = true;
+  t.SA.repaint = () => { reps++; };
+  t.srv.hang = {};
+  const h0 = t.srv.hang;
+  T.fire(300);
+  await tick();
+  t.SA.state.route = 'accueil';
+  h0.release();
+  await tick(12);
+  ok(reps === 1, '13: reply on another screen: that screen is repainted once: ' + reps);
+  t.SA.state.route = 'gestion';
+}
+{
+  /* Échec de la recherche automatique : note en tête de liste, pas d'alerte qui prend le focus. */
+  const T = heldTimers();
+  const t = await liveGestion((st, s) => { s.checkOn = true; }, { setTimeout: T.set, clearTimeout: T.clear });
+  const head = () => t.wr.parts['#gs-chk'] ? t.wr.parts['#gs-chk'].textContent : '';
+  t.srv.failUrl = { url: '/api/skills/check', status: 502, body: { error: 'NETWORK', message: 'Pas de connexion à GitHub.' } };
+  T.fire(300);
+  await tick();
+  ok(/Pas de connexion à GitHub\./.test(head()), '13: failure told at the head of the list: ' + head());
+  ok(!/gs-err/.test(t.dyn()), '13: no alert in the message area for the automatic check');
+}
+{
+  /* Constat 48 : aucun reste de prototype dans Mes skills en mode réel (liste et grille). */
+  const t = await liveGestion();
+  const LEFT = /prototype|à confirmer|provisoire|ne répare pas|Restaurer depuis un fichier|reste à établir/i;
+  const list = t.SA.views.gestion.render();
+  ok(!LEFT.test(list), '48: live list without prototype leftovers: ' + (list.match(LEFT) || [''])[0]);
+  t.SA.state.g.view = 'grille';
+  const grid = t.SA.views.gestion.render();
+  ok(!LEFT.test(grid) && /gs-foot/.test(grid), '48: live grid without prototype leftovers: ' + (grid.match(LEFT) || [''])[0]);
+  ok(!/<button[^>]*disabled[^>]*>Restaurer depuis/.test(list + grid), '48: no dead button');
+  t.SA.state.g.view = 'liste';
+}
+
 /* ---------- 11. id de ligne avec guillemet ou barre oblique inverse ---------- */
 {
   const ID = 'local/we"ird\\';
@@ -575,5 +833,143 @@ async function liveGestion(edit, extra = {}) {
   ok(t.srv.log.every((e) => e.token === TOKEN), '7: token still sent from SA_LIVE');
 }
 
+/* ---------- 12. version 1.0 : confirmation en ligne entière, focus, Échap, sélection visible, restauration à risque ---------- */
+const where = (n) => (n ? (n.tag + ' ' + Object.keys(n.attrs).filter((k) => /^data-|^id$|^class$/.test(k)).map((k) => k + '=' + n.attrs[k]).join(' ')) : String(n));
+{
+  const t = await liveGestion();
+  const { SA } = t;
+  /* Constats 2 et 3 : la confirmation s'ouvre dans une ligne entière sous le skill, hors de la cellule des gestes. */
+  await t.click({ 'data-gs-un': 'acme/tools/alpha' });
+  const okB = t.find({ 'data-gs-un-ok': 'acme/tools/alpha' }), noB = t.find({ 'data-gs-un-no': 'acme/tools/alpha' });
+  const xr = okB && okB.closest('tr');
+  ok(xr && xr.matches('.gs-xr') && xr.getAttribute('data-id') === 'acme/tools/alpha', '12: row confirm sits in a full-width row under the skill: ' + where(xr));
+  const xtd = okB && okB.closest('td');
+  ok(xtd && xtd.getAttribute('colspan') === '7' && !xtd.matches('.gs-c-act'), '12: confirm cell spans the 7 columns, not the actions cell');
+  ok(noB && t.focused() === noB, '12: focus on « Annuler » of the confirm: ' + where(t.focused()));
+  ok(/<label class="cfm-k"><button[^>]*data-gs-keep[^>]*>[\s\S]*?<\/button><span>Garder une sauvegarde<\/span><\/label>/.test(t.dyn()), '12: backup box is the product checkbox, its text inside the label');
+  /* Constat 55 : Échap annule et rend le focus au bouton d'origine. */
+  const esc1 = await t.key('Escape');
+  ok(esc1.defaultPrevented && !t.find({ 'data-gs-un-ok': 'acme/tools/alpha' }), '12: Escape closes the row confirm');
+  ok(t.focused() && t.focused().getAttribute('data-gs-un') === 'acme/tools/alpha' && t.wr.contains(t.focused()), '12: Escape gives the focus back to « Désinstaller »: ' + where(t.focused()));
+  /* Constat 55 : le focus reste sur l'interrupteur après activer ou désactiver. */
+  await t.click({ 'data-gs-on': 'acme/tools/beta' });
+  ok(t.last().url === '/api/skills/disable', '12: switch calls disable');
+  ok(t.focused() && t.focused().getAttribute('data-gs-on') === 'acme/tools/beta' && t.wr.contains(t.focused()), '12: focus stays on the switch after disable: ' + where(t.focused()));
+  ok(/1 skill désactivé/.test(t.wr.parts['#gs-live'].textContent), '12: result announced in the status zone: ' + t.wr.parts['#gs-live'].textContent);
+  await t.click({ 'data-gs-on': 'acme/tools/beta' });
+  ok(t.last().url === '/api/skills/enable' && t.focused() && t.focused().getAttribute('data-gs-on') === 'acme/tools/beta', '12: focus stays on the switch after enable: ' + where(t.focused()));
+  /* Formulaire « Sauvegarder » : ligne entière, focus sur le nom, Entrée valide, focus sur le message. */
+  await t.click({ 'data-gs-save': 'acme/tools/beta' });
+  const lab = t.find({ id: 'gs-save-l' });
+  ok(lab && lab.closest('tr') && lab.closest('tr').matches('.gs-xr') && t.focused() === lab, '12: save form in a full-width row, focus on the name field: ' + where(t.focused()));
+  const ent = await t.key('Enter', lab);
+  ok(ent.defaultPrevented && t.last().url === '/api/backups/create' && JSON.stringify(t.last().body) === '{"names":["beta"]}', '12: Enter in the name field sends the backup: ' + JSON.stringify(t.last()));
+  ok(t.focused() && t.focused().matches('.gs-msg') && t.wr.contains(t.focused()), '12: focus on the result message, not on body: ' + where(t.focused()));
+  /* Désinstaller puis confirmer : focus sur le message. */
+  await t.click({ 'data-gs-un': 'local/gamma' });
+  await t.click({ 'data-gs-un-ok': 'local/gamma' });
+  ok(t.last().url === '/api/skills/remove' && t.focused() && t.focused().matches('.gs-msg'), '12: after uninstall, focus on the message: ' + where(t.focused()));
+}
+{
+  /* Échap tapé dans un champ : il agit sur le champ (ou son formulaire) seulement, jamais sur une confirmation de ligne. */
+  const t = await liveGestion((st, s) => { s.rougeNames = ['old']; });
+  const field = (id) => ({ id, localName: 'input', tagName: 'INPUT', type: id === 'gs-q' ? 'search' : 'text', value: 'al', attrs: { id },
+    getAttribute(k) { return k === 'id' ? id : null; }, hasAttribute(k) { return k === 'id'; }, closest() { return null; }, matches(sel) { return sel === '#' + id; }, focus() {} });
+  const esc = (target) => { const ev = { key: 'Escape', target, defaultPrevented: false, stopped: false, preventDefault() { this.defaultPrevented = true; }, stopPropagation() { this.stopped = true; } }; t.wr.handlers.keydown(ev); return ev; };
+  await t.click({ 'data-gs-un': 'acme/tools/alpha' });
+  let ev = esc(field('gs-q')); await tick();
+  ok(t.find({ 'data-gs-un-ok': 'acme/tools/alpha' }), '12: Escape in the search field leaves the row confirm open');
+  ok(!ev.defaultPrevented && !ev.stopped, '12: Escape in the search field goes on to the core, which clears the field: ' + JSON.stringify([ev.defaultPrevented, ev.stopped]));
+  ev = esc(field('gs-sort')); await tick();
+  ok(t.find({ 'data-gs-un-ok': 'acme/tools/alpha' }) && !ev.stopped, '12: Escape in the sort list leaves the row confirm open');
+  ev = esc(t.find({ 'data-gs-un-no': 'acme/tools/alpha' })); await tick();
+  ok(ev.defaultPrevented && !t.find({ 'data-gs-un-ok': 'acme/tools/alpha' }), '12: Escape on the confirm itself still closes it');
+  /* Question « Restaurer malgré tout » : Échap dans la recherche la laisse ouverte. */
+  await t.click({ 'data-gs-restore': '0' });
+  ok(/data-gs-rg-ok/.test(t.dyn()), '12: ROUGE question open');
+  ev = esc(field('gs-q')); await tick();
+  ok(/data-gs-rg-ok/.test(t.dyn()) && !ev.stopped, '12: Escape in the search field leaves the ROUGE question open');
+  await t.click({ 'data-gs-rg-no': '' });
+  /* Formulaire « Sauvegarder » : Échap dans le nom ou la note ferme ce formulaire, rien d'autre. */
+  await t.click({ 'data-gs-save': 'acme/tools/beta' });
+  ok(t.find({ id: 'gs-save-l' }), '12: save form open');
+  ev = esc(t.find({ id: 'gs-save-n' }) || field('gs-save-n')); await tick();
+  ok(ev.defaultPrevented && !t.find({ id: 'gs-save-l' }), '12: Escape in the note field closes the save form');
+}
+{
+  /* Constat 78 : les actions groupées ne visent que les lignes affichées, et la confirmation les compte et les nomme. */
+  const t = await liveGestion();
+  const { SA } = t;
+  await t.click({ 'data-gs-sel': 'all' });
+  ok(Object.keys(SA.state.g.sel).length === 3, '12: select all selects the 3 shown rows');
+  SA.state.g.q = 'beta';
+  await t.click({ 'data-gs-f': 'tous' });
+  ok(/1<\/span> sélectionné/.test(t.dyn()) && /2 autres masqués par le filtre, non concernés/.test(t.dyn()), '12: bar counts the visible selection and the hidden one: ' + txt(t.dyn()).slice(0, 200));
+  await t.click({ 'data-gs-bulk': 'off' });
+  ok(t.last().url === '/api/skills/disable' && JSON.stringify(t.last().body) === '{"names":["beta"]}', '12: bulk disable sends the visible row only: ' + JSON.stringify(t.last().body));
+  await t.click({ 'data-gs-bulk': 'un' });
+  ok(/Désinstaller 1 skill : beta \?/.test(txt(t.dyn())), '12: bulk confirm counts and names the skills: ' + txt(t.dyn()).slice(0, 200));
+  ok(t.focused() && t.focused().getAttribute('data-gs-bulk') === 'un-no', '12: focus on « Annuler » of the bulk confirm: ' + where(t.focused()));
+  await t.key('Escape');
+  ok(!/data-gs-bulk="un-ok"/.test(t.dyn()) && t.focused() && t.focused().getAttribute('data-gs-bulk') === 'un', '12: Escape cancels the bulk confirm, focus back on « Désinstaller »: ' + where(t.focused()));
+  await t.click({ 'data-gs-bulk': 'un' });
+  await t.click({ 'data-gs-bulk': 'un-ok' });
+  ok(t.last().url === '/api/skills/remove' && JSON.stringify(t.last().body.names) === '["beta"]', '12: bulk uninstall sends the visible row only: ' + JSON.stringify(t.last().body));
+}
+{
+  /* Constats 32 et 47 : restaurer depuis Mes skills une sauvegarde à risque pose la question, puis renvoie avec force. */
+  const t = await liveGestion((st, s) => { s.rougeNames = ['old']; });
+  await t.click({ 'data-gs-restore': '0' });
+  ok(t.last().url === '/api/backups/restore' && JSON.stringify(t.last().body) === '{"id":"20261112-101010-old"}', '12: first restore is not forced');
+  ok(/Ce skill porte un motif à risque\. Restaurer malgré tout \?/.test(t.dyn()) && /data-gs-rg-ok/.test(t.dyn()) && !/note-bad/.test(t.dyn()), '12: ROUGE refusal asks a real question, not an error: ' + txt(t.dyn()).slice(0, 300));
+  ok(t.focused() && t.focused().hasAttribute('data-gs-rg-no'), '12: focus on « Annuler » of the question: ' + where(t.focused()));
+  await t.key('Escape');
+  ok(!/data-gs-rg-ok/.test(t.dyn()) && t.focused() && t.focused().hasAttribute('data-gs-restore'), '12: Escape cancels, focus back on « Restaurer la plus récente »: ' + where(t.focused()));
+  await t.click({ 'data-gs-restore': '0' });
+  const e = await t.click({ 'data-gs-rg-ok': '' });
+  ok(!e, '12: confirm does not throw: ' + (e && e.stack));
+  ok(JSON.stringify(t.last().body) === '{"id":"20261112-101010-old","force":["old"]}', '12: confirm resends with force: ' + JSON.stringify(t.last().body));
+  ok(/restaurée/.test(t.dyn()) && t.focused() && t.focused().matches('.gs-msg'), '12: success message, focused: ' + where(t.focused()));
+}
+{
+  /* Constats 16 et 35 : aucun reste de prototype, en mode réel comme en démonstration. */
+  const t = await liveGestion();
+  const LEFT = /Restaurer depuis un fichier|Format provisoire|pas encore|à confirmer|data-gs-export|prototype/i;
+  const h = t.SA.views.gestion.render();
+  ok(!LEFT.test(h), '12: live list without leftovers: ' + (h.match(LEFT) || [''])[0]);
+  t.SA.state.g.view = 'grille';
+  const gh = t.SA.views.gestion.render();
+  ok(!LEFT.test(gh), '12: live grid without leftovers: ' + (gh.match(LEFT) || [''])[0]);
+  ok(/data-go-route="sauvegardes"/.test(h) && /exportez la sauvegarde depuis l’écran Sauvegardes/.test(h), '12: moving machines points to the Sauvegardes screen');
+}
+
+/* ---------- 13. constats 54 et 56 : contraste des bords de champ et du texte indicatif, dans les deux thèmes ---------- */
+{
+  const shell = fs.readFileSync(path.join(root, 'src', 'shell.css'), 'utf8');
+  const v2 = fs.readFileSync(path.join(root, 'src', 'views', 'v2.css'), 'utf8');
+  const tok = (block, name) => { const m = block.match(new RegExp('--' + name + ':\\s*(#[0-9A-Fa-f]{6})')); return m && m[1]; };
+  const lum = (hex) => { const c = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255).map((v) => (v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)); return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]; };
+  const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
+  const light = shell.slice(0, shell.indexOf('prefers-color-scheme')), dark = shell.slice(shell.indexOf('prefers-color-scheme'));
+  ok(/\.fld \{[^}]*border: 1px solid var\(--ink-3\)/.test(v2), '54: field border uses --ink-3');
+  ok(/\.fld::placeholder \{ color: var\(--ink-3\); opacity: 1; \}/.test(v2), '56: placeholder uses --ink-3 at full opacity');
+  for (const [label, b] of [['clair', light], ['sombre', dark]]) {
+    const r = ratio(tok(b, 'ink-3'), tok(b, 'bg'));
+    ok(r >= 4.5, '54/56: --ink-3 on --bg ' + label + ' = ' + r.toFixed(2) + ' (3:1 for borders, 4.5:1 for text)');
+  }
+}
+/* Constats 16 et 35 en démonstration aussi : aucun bouton mort, aucune note de prototype. */
+{
+  const ctx3 = vm.createContext({ matchMedia: null, setTimeout, clearTimeout, console, document: { readyState: 'complete', addEventListener() {}, getElementById() { return null; }, querySelector() { return null; }, querySelectorAll() { return []; }, documentElement: { getAttribute() { return null; }, setAttribute() {} } } });
+  ctx3.window = ctx3;
+  for (const f of files) vm.runInContext(fs.readFileSync(path.join(root, 'src', f), 'utf8'), ctx3, { filename: f });
+  ctx3.SA.initState({ route: 'gestion' });
+  const LEFT = /Restaurer depuis un fichier|Format provisoire|pas encore|à confirmer|data-gs-export/;
+  const h = ctx3.SA.views.gestion.render();
+  ok(!LEFT.test(h), '13: demo list without leftovers: ' + (h.match(LEFT) || [''])[0]);
+  ctx3.SA.state.g.view = 'grille';
+  ok(!LEFT.test(ctx3.SA.views.gestion.render()), '13: demo grid without leftovers');
+  ok(!/>À relire<\/button>|>Avertissement</.test(h) && /Motif à risque/.test(h), '13: demo badges use the verdict names of the contract');
+}
 console.log(`${checks} checks, ${fails} failure(s)`);
 process.exit(fails ? 1 : 0);

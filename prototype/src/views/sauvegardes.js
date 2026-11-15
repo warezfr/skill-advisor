@@ -11,7 +11,7 @@
   var AGENT = /^[a-z0-9][a-z0-9-]{0,63}$/;
   var MAX = 200 * 1024 * 1024;
   var FILE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,200}\.tar\.gz$/;
-  var LOCAL = 'Il demande l’application locale : lancez Skill Advisor sur votre machine avec npm start. La machine d’exemple ne lit ni n’écrit aucun fichier.';
+  var LOCAL = 'Il demande l’application locale : lancez Skill Advisor sur votre machine avec ' + (SA.npmStart ? SA.npmStart() : 'npm start') + '. La machine d’exemple ne lit ni n’écrit aucun fichier.';
   var REASON = {
     identical: 'déjà identique',
     exists: 'existe déjà, la version présente reste',
@@ -43,10 +43,16 @@
     var p = function (n) { return (n < 10 ? '0' : '') + n; };
     return 'le ' + p(d.getDate()) + '/' + p(d.getMonth() + 1) + '/' + d.getFullYear() + ' à ' + p(d.getHours()) + ':' + p(d.getMinutes());
   }
+  /* Verdicts nommés comme partout : jamais le nom interne. */
   function verdictBdg(v) {
     if (v === 'rouge') return '<span class="bdg bad">Motif à risque</span>';
-    if (v === 'orange') return '<span class="bdg tr">Avertissement</span>';
+    if (v === 'orange') return '<span class="bdg tr">À regarder</span>';
     return '';
+  }
+  /* Case à cocher du produit : un bouton role="checkbox" dans un label, le texte coche aussi. */
+  function box(attr, value, on, text, cls) {
+    return '<label class="ckl' + (cls ? ' ' + cls : '') + '"><button type="button" class="cb" role="checkbox" aria-checked="' + !!on + '" ' + attr + '="' + esc(value) + '">' +
+      SA.icon('check') + '</button>' + text + '</label>';
   }
   function errText(e) {
     if (e && e.code && e.message) return e.message;
@@ -115,7 +121,7 @@
     if (k > -1) raws().splice(k, 1);
     return { ok: true, text: b.label + ' restaurée : ' + SA.pl(b.items.length, 'skill remis', 'skills remis') + ' à leur place.' };
   }
-  SA.backup = { fromRows: fromRows, restoreDemo: restoreDemo, cut: cut };
+  SA.backup = { fromRows: fromRows, restoreDemo: restoreDemo, cut: cut, forceNames: function (b, said) { return forceNames(b, said); } };
 
   /* ------------------------------------------------------------ appels */
   function repaint(focus) {
@@ -125,7 +131,7 @@
   function run(label, fn, done) {
     var s = st();
     if (s.busy) return Promise.resolve(false);
-    s.busy = label; s.err = ''; s.msg = ''; s.warns = []; s.wt = ''; s.res = null; s.rg = null;
+    s.busy = label; s.err = ''; s.msg = ''; s.warns = []; s.wt = ''; s.res = null; s.seen = null; s.rg = null;
     repaint();
     var ok = false;
     /* Réussi ou non, et même si done() lève : le verrou est rendu et l'écran redessiné. */
@@ -140,7 +146,7 @@
   function say(msg, err) {
     var s = st();
     if (s.busy) return Promise.resolve(false);
-    s.msg = msg || ''; s.err = err || ''; s.warns = []; s.wt = ''; s.res = null;
+    s.msg = msg || ''; s.err = err || ''; s.warns = []; s.wt = ''; s.res = null; s.seen = null;
     repaint(err ? 'err' : 'msg');
     return Promise.resolve(!err);
   }
@@ -242,7 +248,23 @@
   }
   function agentName(id) {
     var a = agentsAll().filter(function (x) { return x.id === id; })[0];
-    return a ? a.name : id;
+    return a ? a.name + (a.universal ? ' (dossier partagé)' : '') : id;
+  }
+  /* Dossier partagé ~/.agents/skills : les agents universels le lisent. Ils forment une seule cible, jamais cochée un par un. */
+  function universals() { return agentsAll().filter(function (x) { return x.universal && !x.custom; }); }
+  function readers() { return universals().filter(function (x) { return x.detected; }); }
+  function isUni(id) { return universals().some(function (x) { return x.id === id; }); }
+  function sharedOn() { var a = ap(); return !!a && Object.keys(a.agents).some(function (k) { return a.agents[k] === true && isUni(k); }); }
+  /* Cocher le dossier partagé : un seul lecteur suffit, le serveur traite tout id universel comme ce dossier. */
+  function setShared(on) {
+    var a = ap();
+    if (!a) return;
+    Object.keys(a.agents).forEach(function (k) { if (isUni(k)) delete a.agents[k]; });
+    if (on) { var r = readers()[0] || universals()[0]; if (r) a.agents[r.id] = true; }
+    paintShared();
+  }
+  function namesList(l) {
+    return l.length < 2 ? l.join('') : l.slice(0, -1).join(', ') + ' et ' + l[l.length - 1];
   }
   function ap() { return st().ap; }
 
@@ -253,6 +275,9 @@
     b.items.forEach(function (i) { names[i.name] = true; });
     agentsAll().forEach(function (a) { known[a.id] = a; });
     targets().forEach(function (k) { if (known[k] && (known[k].detected || known[k].custom)) ags[k] = true; });
+    /* Plusieurs lecteurs du dossier partagé parmi les cibles : une seule cible, le dossier. */
+    var uni = Object.keys(ags).filter(function (k) { return known[k].universal && !known[k].custom; });
+    uni.slice(1).forEach(function (k) { delete ags[k]; });
     st().ap = { id: b.id, names: names, agents: ags, conflict: 'skip', force: bag(), q: '', result: null, warns: [], err: '', busy: false };
     st().del = null; st().rg = null;
     bindDoc();
@@ -268,15 +293,19 @@
   function setForce(name, on) { var a = ap(); if (a) a.force[name] = !!on; }
   function setConflict(c) { var a = ap(); if (a && (c === 'skip' || c === 'replace')) { a.conflict = c; paintShared(); } }
 
-  /* « Remplacer » touche ~/.agents/skills dès qu'un agent choisi le lit ou y pointe par un lien :
-     tout agent connu, sauf ceux ajoutés à la main (ils reçoivent une copie). */
+  /* Avant d'appliquer : un agent connu choisi (pas ajouté à la main) fait passer le skill par ~/.agents/skills,
+     donc chaque lecteur détecté de ce dossier le verra aussi. « Remplacer » remplace ce dossier pour tous. */
   var SHARED = 'Le dossier partagé ~/.agents/skills sera remplacé : tous les agents qui le lisent recevront cette version.';
   function sharedHTML() {
     var a = ap();
-    if (!a || a.conflict !== 'replace') return '';
+    if (!a) return '';
     var all = agentsAll(), chosen = bag(), linked = bag();
     Object.keys(a.agents).forEach(function (k) { if (a.agents[k] === true) chosen[k] = true; });
     if (!all.some(function (x) { return chosen[x.id] === true && !x.custom; })) return '';
+    var rd = readers().map(function (x) { return x.name; });
+    var via = rd.length ? '<p class="sv-via">Les skills passent par le dossier partagé <span class="mono">~/.agents/skills</span>. ' +
+      esc(namesList(rd)) + (rd.length > 1 ? ' les liront' : ' les lira') + ' aussi.</p>' : '';
+    if (a.conflict !== 'replace') return via;
     /* Agents qui ont déjà un des skills choisis : leur lien pointe vers le dossier partagé. */
     /* Les éléments portent le nom du dossier : dernier segment de path, sinon le nom de la ligne. Lignes de projet ignorées. */
     (SA.state.mine || []).forEach(function (r) {
@@ -287,7 +316,7 @@
     var names = all.filter(function (x) {
       return x.detected && !x.custom && (x.universal || chosen[x.id] === true || linked[x.id] === true);
     }).map(function (x) { return esc(x.name); });
-    return '<p class="sv-shared">' + esc(SHARED) + '</p>' +
+    return via + '<p class="sv-shared">' + esc(SHARED) + '</p>' +
       (names.length ? '<p class="mut sv-hint">Agents détectés concernés : ' + names.join(', ') + '.</p>' : '');
   }
   function setQuery(q) {
@@ -299,12 +328,19 @@
   }
 
   function agentBox(a) {
-    var on = ap().agents[a.id] === true;
-    return '<li><label class="sv-cb"><input type="checkbox" data-sv-ap-agent="' + esc(a.id) + '"' + (on ? ' checked' : '') + '><span>' + esc(a.name) + '</span></label></li>';
+    return '<li>' + box('data-sv-ap-agent', a.id, ap().agents[a.id] === true, '<span>' + esc(a.name) + '</span>') + '</li>';
+  }
+  /* Le dossier partagé, une seule case ; ses lecteurs détectés sont nommés dessous. */
+  function sharedBoxHTML() {
+    if (!universals().length) return '';
+    var rd = readers().map(function (x) { return x.name; });
+    return '<p class="sv-gh">Dossier partagé</p><ul class="sv-cks"><li>' +
+      box('data-sv-ap-shared', 'shared', sharedOn(), '<span>Dossier partagé <span class="mono">~/.agents/skills</span></span>') +
+      '<p class="mut sv-hint sv-rd">' + (rd.length ? 'Lu par ' + esc(namesList(rd)) + '.' : 'Aucun agent détecté ne lit ce dossier.') + '</p></li></ul>';
   }
   function othersHTML() {
     var a = ap(), q = a.q.trim().toLowerCase();
-    var others = agentsAll().filter(function (x) { return !x.custom && !x.detected; });
+    var others = agentsAll().filter(function (x) { return !x.custom && !x.detected && !x.universal; });
     var shown = others.filter(function (x) {
       return a.agents[x.id] === true || (q && (x.name.toLowerCase().indexOf(q) > -1 || x.id.indexOf(q) > -1));
     });
@@ -314,26 +350,30 @@
   }
   function formHTML(b) {
     var a = ap(), all = agentsAll();
-    var det = all.filter(function (x) { return x.detected && !x.custom; }), cus = all.filter(function (x) { return x.custom; });
+    var det = all.filter(function (x) { return x.detected && !x.custom && !x.universal; }), cus = all.filter(function (x) { return x.custom; });
     return '<section class="dt-sec"><h3 class="h2">Skills à appliquer</h3><ul class="sv-cks">' + b.items.map(function (i) {
-        return '<li><label class="sv-cb"><input type="checkbox" data-sv-ap-item="' + esc(i.name) + '"' + (a.names[i.name] === true ? ' checked' : '') + '><span class="mono">' + esc(i.name) + '</span>' + verdictBdg(i.verdict) + '</label>' +
+        return '<li>' + box('data-sv-ap-item', i.name, a.names[i.name] === true, '<span class="mono">' + esc(i.name) + '</span>') + verdictBdg(i.verdict) +
           (i.verdict === 'rouge'
-            ? '<label class="sv-cb sv-force"><input type="checkbox" data-sv-ap-force="' + esc(i.name) + '"' + (a.force[i.name] === true ? ' checked' : '') + '><span>Appliquer malgré l’avertissement</span></label>'
+            ? box('data-sv-ap-force', i.name, a.force[i.name] === true, '<span>Appliquer malgré l’avertissement</span>', 'sv-force')
             : '') + '</li>';
       }).join('') + '</ul></section>' +
       '<section class="dt-sec"><h3 class="h2">Agents</h3>' +
-        (det.length ? '<p class="sv-gh">Détectés sur cette machine</p><ul class="sv-cks">' + det.map(agentBox).join('') + '</ul>' : '<p class="mut sv-hint">Aucun agent détecté.</p>') +
+        (det.length ? '<p class="sv-gh">Détectés sur cette machine</p><ul class="sv-cks">' + det.map(agentBox).join('') + '</ul>'
+          : universals().length ? '' : '<p class="mut sv-hint">Aucun agent détecté.</p>') +
+        sharedBoxHTML() +
         '<p class="sv-gh">Autres agents</p>' +
         '<label class="vh" for="sv-ap-q">Chercher un autre agent</label>' +
         '<input id="sv-ap-q" class="fld sv-q" type="search" autocomplete="off" spellcheck="false" placeholder="Chercher un agent" value="' + esc(a.q) + '">' +
         '<div id="sv-ap-others">' + othersHTML() + '</div>' +
         (cus.length ? '<p class="sv-gh">Ajoutés à la main</p><ul class="sv-cks">' + cus.map(agentBox).join('') + '</ul>' : '') +
       '</section>' +
-      '<section class="dt-sec"><h3 class="h2">Si le skill existe déjà</h3><div class="sv-cks" role="radiogroup" aria-label="Si le skill existe déjà">' +
-        '<label class="sv-cb"><input type="radio" name="sv-ap-conflict" data-sv-ap-conflict="skip"' + (a.conflict === 'skip' ? ' checked' : '') + '><span>Passer : la version présente reste</span></label>' +
-        '<label class="sv-cb"><input type="radio" name="sv-ap-conflict" data-sv-ap-conflict="replace"' + (a.conflict === 'replace' ? ' checked' : '') + '><span>Remplacer (une sauvegarde de la version présente est faite)</span></label>' +
-      '</div><div id="sv-ap-shared" aria-live="polite">' + sharedHTML() + '</div>' +
-      '<p class="mut sv-hint">Skill Advisor passe toujours un skill identique.</p></section>' +
+      '<section class="dt-sec"><h3 class="h2" id="sv-ap-cf-t">Si le skill existe déjà</h3>' +
+        '<div class="seg sv-seg" role="group" aria-labelledby="sv-ap-cf-t">' +
+          '<button type="button" data-sv-ap-conflict="skip" aria-pressed="' + (a.conflict === 'skip') + '">Passer</button>' +
+          '<button type="button" data-sv-ap-conflict="replace" aria-pressed="' + (a.conflict === 'replace') + '">Remplacer</button></div>' +
+        '<p class="mut sv-hint">Passer : la version présente reste. Remplacer : Skill Advisor sauvegarde d’abord la version présente.</p>' +
+        '<div id="sv-ap-shared" aria-live="polite">' + sharedHTML() + '</div>' +
+        '<p class="mut sv-hint">Skill Advisor passe toujours un skill identique.</p></section>' +
       (a.err ? '<div class="note note-bad sv-ap-err" role="alert" id="sv-ap-err" tabindex="-1"><p class="sub">' + esc(a.err) + '</p></div>' : '') +
       '<p class="dt-cta"><button type="button" class="btn primary" data-sv-ap-go' + (a.busy ? ' disabled' : '') + '>' + (a.busy ? 'Application en cours…' : 'Appliquer') + '</button>' +
       '<button type="button" class="btn" data-sv-ap-cancel' + (a.busy ? ' disabled' : '') + '>Annuler</button></p>';
@@ -354,6 +394,32 @@
         (p.t ? '<span class="sv-res-t' + (p.k === 'bad' ? ' sv-fail' : ' mut') + '">' + esc(p.t) + '</span>' : '') + '</li>';
     }).join('') + '</ul>';
   }
+  /* Après l'application : chaque agent qui voit le skill, lu dans l'état revenu, y compris les lecteurs du
+     dossier partagé qui n'étaient pas choisis. Lignes de projet ignorées. */
+  function seenRows(names, chosen) {
+    var byId = bag();
+    agentsAll().forEach(function (x) { byId[x.id] = x; });
+    return names.map(function (n) {
+      var ids = [];
+      (SA.state.mine || []).forEach(function (r) {
+        if (!r || r.kind === 'plugin' || r.scope === 'project') return;
+        var dir = r.path ? String(r.path).split(/[\\/]/).filter(Boolean).pop() : r.name;
+        if (dir !== n) return;
+        Object.keys(r.ag || {}).forEach(function (k) { if (r.ag[k] === 'ok' && ids.indexOf(k) < 0) ids.push(k); });
+      });
+      /* Dossier partagé coché : ses lecteurs ont été choisis ensemble, aucun n'est « non choisi ». */
+      var shared = chosen.some(function (k) { return byId[k] && byId[k].universal; });
+      var extra = shared ? [] : ids.filter(function (k) { return chosen.indexOf(k) < 0 && byId[k] && byId[k].universal; });
+      return { name: n, all: ids.map(function (k) { return byId[k] ? byId[k].name : k; }), extra: extra.map(function (k) { return byId[k].name; }) };
+    }).filter(function (x) { return x.all.length; });
+  }
+  function seenHTML(l) {
+    if (!l || !l.length) return '';
+    return '<h4 class="sv-gh">Agents qui voient maintenant ces skills</h4><ul class="ledger sv-seen">' + l.map(function (x) {
+      return '<li><span class="mono sv-res-n">' + esc(x.name) + '</span><span class="sv-seen-a">' + esc(x.all.join(', ')) + '</span>' +
+        (x.extra.length ? '<span class="sv-res-t mut">' + esc(namesList(x.extra)) + (x.extra.length > 1 ? ' le lisent' : ' le lit') + ' par le dossier partagé, sans avoir été ' + (x.extra.length > 1 ? 'choisis' : 'choisi') + '.</span>' : '') + '</li>';
+    }).join('') + '</ul>';
+  }
   function warnsHTML(title, l) {
     return '<div class="note note-warn sv-warns"><p class="note-t">' + esc(title) + '</p><ul class="sv-wl">' +
       l.map(function (w) { return '<li>' + esc(w) + '</li>'; }).join('') + '</ul></div>';
@@ -364,6 +430,7 @@
     return '<section class="dt-sec"><h3 class="h2" id="sv-ap-res" tabindex="-1">Résultat</h3>' +
       '<p class="sub">' + SA.pl(r.applied.length, 'application faite', 'applications faites') + ', ' + SA.pl(r.skipped.length, 'passée', 'passées') + ', ' + SA.pl(r.failed.length, 'échec', 'échecs') + '.</p>' +
       (rows.length ? resList(rows) : '') +
+      seenHTML(a.seen) +
       (a.warns.length ? warnsHTML('À relire', a.warns) : '') +
       (nb ?'<p class="sub">' + (nb > 1 ? 'Skill Advisor a fait ' + nb + ' sauvegardes de la version présente. Elles figurent' : 'Skill Advisor a fait 1 sauvegarde de la version présente. Elle figure') + ' dans la liste, « avant remplacement ».</p>' : '') +
       '</section><p class="dt-cta"><button type="button" class="btn primary" data-sv-ap-close>Fermer</button></p>';
@@ -441,10 +508,13 @@
       a.busy = false;
       a.result = r;
       a.warns = warns;
+      var put = names.filter(function (n) { return r.applied.some(function (x) { return x.name === n; }); });
+      a.seen = seenRows(put, agents);
       s.busy = ''; s.err = '';
       /* Le bilan par skill reste sur l'écran une fois le tiroir fermé, échecs compris. */
       s.warns = warns.slice(); s.wt = 'À relire après l’application';
       s.res = resRows(r, Object.keys(a.names));
+      s.seen = a.seen;
       s.msg = b.label + ' : ' + SA.pl(r.applied.length, 'application faite', 'applications faites') + ', ' + SA.pl(r.skipped.length, 'passée', 'passées') + ', ' + SA.pl(r.failed.length, 'échec', 'échecs') + '.';
       if (SA.sync) SA.sync();
       repaint();
@@ -457,7 +527,7 @@
     a.busy = true; a.err = '';
     /* Verrou de l'écran pendant l'appel ; le bilan précédent ne reste pas affiché. */
     s.busy = 'Application en cours…';
-    s.msg = ''; s.err = ''; s.warns = []; s.wt = ''; s.res = null; s.del = null; s.rg = null;
+    s.msg = ''; s.err = ''; s.warns = []; s.wt = ''; s.res = null; s.seen = null; s.del = null; s.rg = null;
     repaint();
     paintDrawer();
     return Promise.resolve().then(function () { return SA.live.call('POST', '/api/backups/apply', body); }).then(function (res) {
@@ -507,6 +577,11 @@
     var id = ap().id;
     setTimeout(function () { closed(id); }, 0);
   }
+  function flip(b, set) {
+    var on = b.getAttribute('aria-checked') !== 'true';
+    b.setAttribute('aria-checked', String(on));
+    set(on);
+  }
   var bound = false;
   function bindDoc() {
     if (bound || !document.addEventListener) return;
@@ -527,13 +602,19 @@
         closed(a.id);
       }
     });
-    document.addEventListener('change', function (e) {
-      var t = e.target;
-      if (!t || !t.hasAttribute || !ap()) return;
-      if (t.hasAttribute('data-sv-ap-item')) setItem(t.getAttribute('data-sv-ap-item'), t.checked);
-      else if (t.hasAttribute('data-sv-ap-agent')) setAgent(t.getAttribute('data-sv-ap-agent'), t.checked);
-      else if (t.hasAttribute('data-sv-ap-force')) setForce(t.getAttribute('data-sv-ap-force'), t.checked);
-      else if (t.hasAttribute('data-sv-ap-conflict') && t.checked) setConflict(t.getAttribute('data-sv-ap-conflict'));
+    /* Cases et choix du tiroir : l'état change sur place, le focus reste sur le bouton. */
+    document.addEventListener('click', function (e) {
+      var t = e.target && e.target.closest ? e.target : null, b;
+      if (!t || !ap() || ap().busy) return;
+      if ((b = t.closest('[data-sv-ap-item]'))) { flip(b, function (on) { setItem(b.getAttribute('data-sv-ap-item'), on); }); return; }
+      if ((b = t.closest('[data-sv-ap-agent]'))) { flip(b, function (on) { setAgent(b.getAttribute('data-sv-ap-agent'), on); }); return; }
+      if ((b = t.closest('[data-sv-ap-force]'))) { flip(b, function (on) { setForce(b.getAttribute('data-sv-ap-force'), on); }); return; }
+      if ((b = t.closest('[data-sv-ap-shared]'))) { flip(b, setShared); return; }
+      if ((b = t.closest('[data-sv-ap-conflict]'))) {
+        setConflict(b.getAttribute('data-sv-ap-conflict'));
+        var g = b.closest('.seg'), bs = g && g.querySelectorAll ? g.querySelectorAll('[data-sv-ap-conflict]') : [];
+        for (var i = 0; i < bs.length; i++) bs[i].setAttribute('aria-pressed', String(bs[i] === b));
+      }
     });
     document.addEventListener('input', function (e) {
       if (e.target && e.target.id === 'sv-ap-q') setQuery(e.target.value);
@@ -546,37 +627,41 @@
     var red = b.items.filter(function (i) { return i.verdict === 'rouge'; }).length;
     var orange = b.items.filter(function (i) { return i.verdict === 'orange'; }).length;
     var meta = [when(b.at), SA.pl(b.items.length, 'skill', 'skills'), b.size ? SA.size(b.size) : ''].filter(Boolean);
-    var act = s.del === b.id
-      ? '<span class="gs-ask">Supprimer cette sauvegarde ? Vous ne pourrez pas la récupérer.</span>' +
-        '<button type="button" class="btn danger" data-sv-del-ok data-fk="del-ok"' + dis + '>Supprimer</button>' +
-        '<button type="button" class="btn quiet" data-sv-del-no data-fk="del-no"' + dis + '>Annuler</button>'
+    var ask = s.del === b.id
+      ? '<div class="cfm sv-cf" role="group" aria-label="Supprimer ' + esc(b.label) + '"><p class="cfm-t">Supprimer cette sauvegarde ? Vous ne pourrez pas la récupérer.</p>' +
+        '<p class="cfm-a"><button type="button" class="btn danger" data-sv-del-ok data-fk="del-ok"' + dis + '>Supprimer</button>' +
+        '<button type="button" class="btn quiet" data-sv-del-no data-fk="del-no"' + dis + '>Annuler</button></p></div>'
       : s.rg === b.id
-      ? '<span class="gs-ask">Ce skill porte un motif à risque. Restaurer malgré tout ?</span>' +
-        '<button type="button" class="btn danger" data-sv-rg-ok data-fk="rg-ok"' + dis + '>Restaurer malgré tout</button>' +
-        '<button type="button" class="btn quiet" data-sv-rg-no data-fk="rg-no"' + dis + '>Annuler</button>'
-      : '<button type="button" class="btn" data-sv-restore="' + id + '" data-fk="restore:' + id + '"' + dis + '>Restaurer</button>' +
-        '<button type="button" class="btn" data-sv-apply="' + id + '" data-fk="apply:' + id + '"' + dis + '>Appliquer à d’autres agents</button>' +
-        '<button type="button" class="btn quiet" data-sv-export="' + id + '" data-fk="export:' + id + '"' + dis + '>Exporter</button>' +
-        '<button type="button" class="btn quiet" data-sv-del="' + id + '" data-fk="del:' + id + '"' + dis + '>Supprimer</button>';
+      ? '<div class="cfm sv-cf" role="group" aria-label="Restaurer ' + esc(b.label) + '"><p class="cfm-t">Ce skill porte un motif à risque. Restaurer malgré tout ?</p>' +
+        '<p class="cfm-a"><button type="button" class="btn danger" data-sv-rg-ok data-fk="rg-ok"' + dis + '>Restaurer malgré tout</button>' +
+        '<button type="button" class="btn quiet" data-sv-rg-no data-fk="rg-no"' + dis + '>Annuler</button></p></div>'
+      : '';
+    /* Pendant une question, les gestes de la ligne restent en place mais inactifs. */
+    var off = ask ? ' disabled' : dis;
+    var act = '<button type="button" class="btn" data-sv-restore="' + id + '" data-fk="restore:' + id + '"' + off + '>Restaurer</button>' +
+        '<button type="button" class="btn" data-sv-apply="' + id + '" data-fk="apply:' + id + '"' + off + '>Appliquer à d’autres agents</button>' +
+        '<button type="button" class="btn quiet" data-sv-export="' + id + '" data-fk="export:' + id + '"' + off + '>Exporter</button>' +
+        '<button type="button" class="btn quiet" data-sv-del="' + id + '" data-fk="del:' + id + '"' + off + '>Supprimer</button>';
     return '<li class="sv-row" data-st>' +
       '<div class="sv-main">' +
         '<p class="sv-l1"><span class="sv-label">' + esc(b.label) + '</span><span class="bdg no">' + esc(SA.ORIGIN[b.origin]) + '</span>' +
           (red ? '<span class="bdg bad">' + SA.pl(red, 'motif à risque', 'motifs à risque') + '</span>' : '') +
-          (orange ? '<span class="bdg tr">' + SA.pl(orange, 'avertissement', 'avertissements') + '</span>' : '') + '</p>' +
+          (orange ? '<span class="bdg tr">' + SA.pl(orange, 'skill à regarder', 'skills à regarder') + '</span>' : '') + '</p>' +
         '<p class="sv-meta mut">' + meta.map(function (m) { return '<span>' + esc(m) + '</span>'; }).join('') + '</p>' +
         (b.note ? '<p class="sv-note">' + esc(b.note) + '</p>' : '') +
         '<ul class="sv-items" aria-label="Skills de la sauvegarde">' + b.items.map(function (i) {
-          return '<li><span class="mono">' + esc(i.name) + '</span>' + (i.verdict === 'rouge' || i.verdict === 'orange' ? '<span class="vh"> : ' + (i.verdict === 'rouge' ? 'motif à risque' : 'avertissement') + '</span>' : '') + '</li>';
+          return '<li><span class="mono">' + esc(i.name) + '</span>' + (i.verdict === 'rouge' || i.verdict === 'orange' ? '<span class="vh"> : ' + (i.verdict === 'rouge' ? 'motif à risque' : 'à regarder') + '</span>' : '') + '</li>';
         }).join('') + '</ul>' +
       '</div>' +
       '<div class="sv-act" role="group" aria-label="Actions pour ' + esc(b.label) + '">' + act + '</div>' +
+      ask +
     '</li>';
   }
 
   function render() {
     var s = st(), l = list(), n = l.length;
     return '<div class="sv">' +
-      '<p class="eye" data-st>Gestion</p>' +
+      '<p class="eye" data-st>Sauvegardes</p>' +
       SA.h1(n ? SA.pl(n, 'sauvegarde', 'sauvegardes') : 'Aucune sauvegarde') +
       '<p class="lede" data-st>Une sauvegarde garde une copie de skills tels qu’ils étaient. Restaurez-la à sa place, appliquez-la à d’autres agents, ou exportez-la vers une autre machine.</p>' +
       '<div class="sv-bar" data-st>' +
@@ -587,7 +672,7 @@
       (s.busy ? '<p class="gs-msg" role="status">' + esc(s.busy) + '</p>'
         : s.msg ? '<p class="gs-msg" role="status" tabindex="-1" data-fk="msg">' + esc(s.msg) + '</p>' : '') +
       (s.err ? '<div class="note note-bad sv-err" role="alert" tabindex="-1" data-fk="err"><p class="note-t">L’opération n’a pas abouti</p><p class="sub">' + esc(s.err) + '</p></div>' : '') +
-      (!s.busy && s.res && s.res.length ? resList(s.res) : '') +
+      (!s.busy && s.res && s.res.length ? resList(s.res) + seenHTML(s.seen) : '') +
       (s.warns.length ? warnsHTML(s.wt || 'À relire après l’import', s.warns) : '') +
       (n ? '<ul class="ledger sv-list">' + l.map(rowHTML).join('') + '</ul>'
         : '<div class="empty" data-st><p class="sub">Aucune sauvegarde pour l’instant. Désinstallez un skill avec « Garder une sauvegarde », ou sauvegardez-en depuis Mes skills.</p></div>') +

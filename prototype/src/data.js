@@ -504,6 +504,14 @@
     }
   };
 
+  /* Étape 1 : les 17 objectifs en une seule grille, rangés sous quatre titres courts. Les trois plus courants d'abord. */
+  SA.data.goalGroups = [
+    { t: 'Les plus courants', ids: ['site', 'app', 'data'] },
+    { t: 'Écrire du code', ids: ['frontend', 'mobile', 'backend', 'database', 'ia', 'desktop-jeu'] },
+    { t: 'Qualité et production', ids: ['tests', 'devops', 'securite', 'methode'] },
+    { t: 'Contenu et vente', ids: ['ux', 'documents', 'marketing', 'ecommerce'] }
+  ];
+
   SA.data.agents = [
     { id: 'claude', name: 'Claude Code', st: 'ok', sig: ['cmd', 'cfg'], cmd: 'claude', rel: '.claude/skills' },
     { id: 'gemini', name: 'Gemini CLI', st: 'ok', sig: ['cmd', 'cfg'], cmd: 'gemini', rel: '.gemini/skills' },

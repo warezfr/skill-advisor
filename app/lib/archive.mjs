@@ -4,8 +4,8 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import * as tar from 'tar';
-import { RESERVED, VERDICTS, defaultLabel, loadMeta, normalizeMeta, placeOf, pub, stamp, validCopy } from './backups.mjs';
-import { AGENT_RE, COPY_LIMIT, MAX_ENTRIES, NAME_RE, backupsDir, copyTree, fail, fsMessage, homeOf, isTrackedSource, safeJoin, scanOf, sweepTmp, tmpDir } from './util.mjs';
+import { RESERVED, VERDICTS, VERDICT_TEXT, defaultLabel, loadMeta, normalizeMeta, placeOf, pub, stamp, validCopy } from './backups.mjs';
+import { AGENT_RE, COPY_LIMIT, MAX_ENTRIES, NAME_RE, backupsDir, copyTree, fail, fsMessage, homeOf, isTrackedSource, renameRetry, rmOpts, safeJoin, scanOf, sweepTmp, tmpDir } from './util.mjs';
 
 export const FORMAT = 'skill-advisor/backup/1';
 export const MANIFEST = 'skill-advisor-backup.json';
@@ -44,7 +44,7 @@ export async function exportBackup(opts = {}) {
     if (e.code === 'BACKUP_FAILED') throw fail('BACKUP_FAILED', 'La sauvegarde dépasse ' + Math.round(archiveLimits.size / 1048576) + ' Mo. Export refusé.');
     throw fail('BACKUP_FAILED', 'L’export de la sauvegarde a échoué : ' + fsMessage(e) + '.');
   } finally {
-    await fs.rm(stage, { recursive: true, force: true }).catch(() => {});
+    await fs.rm(stage, rmOpts()).catch(() => {});
   }
 }
 
@@ -97,10 +97,12 @@ function extract(data, root) {
         if (!parts.length) throw bad('Archive refusée : fichier sans nom.');
         fsSync.mkdirSync(path.dirname(at), { recursive: true });
         const chunks = [];
+        // Droits : exécutable si l'archive le dit (scripts du skill), sinon lecture seule pour les autres.
+        const mode = (entry.mode & 0o111) ? 0o755 : 0o644;
         entry.on('data', (c) => chunks.push(c));
         entry.on('end', () => {
           if (err) return;
-          try { fsSync.writeFileSync(at, Buffer.concat(chunks), { flag: 'wx', mode: 0o644 }); } catch (e) { stop(bad('Archive refusée : fichier en double ou mal placé (' + parts.join('/').slice(0, 80) + ').')); }
+          try { fsSync.writeFileSync(at, Buffer.concat(chunks), { flag: 'wx', mode }); } catch (e) { stop(bad('Archive refusée : fichier en double ou mal placé (' + parts.join('/').slice(0, 80) + ').')); }
         });
       } catch (e) {
         stop(e.code === 'BAD_ARCHIVE' ? e : bad('Archive refusée : ' + fsMessage(e) + '.'));
@@ -209,8 +211,10 @@ async function readManifest(root) {
     let lock = cleanLock(it.lock);
     if (lock && src && lock.source !== src) lock = null;
     if (it.lock !== null && it.lock !== undefined && !lock) {
-      warnings.push('Skill Advisor importe le skill ' + name + ' sans son entrée de verrouillage : il ne peut pas vérifier sa source.');
+      warnings.push('Skill Advisor importe le skill ' + name + ' sans sa source : il ne peut pas la vérifier. Ce skill ne sera pas mis à jour.');
     }
+    // Source gardée : l'archive décide d'où viendront les mises à jour. L'utilisateur doit le savoir.
+    if (lock) warnings.push('Les mises à jour du skill ' + name + ' viendront de ' + lock.source + '. Vérifiez que vous faites confiance à cette source.');
     items.push({
       name, src,
       agents: Array.isArray(it.agents) ? [...new Set(it.agents.filter((a) => typeof a === 'string' && AGENT_RE.test(a)))] : [],
@@ -257,7 +261,7 @@ export async function importBackup(opts = {}) {
         moved.add(copy);
         const to = path.join(fresh, ...copy.split('/'));
         await fs.mkdir(path.dirname(to), { recursive: true });
-        await fs.rename(path.join(root, ...copy.split('/')), to);
+        await renameRetry(path.join(root, ...copy.split('/')), to);
       }
     }
     // Contrôle statique de chaque skill, à nouveau. Le verdict est celui de la copie principale.
@@ -265,13 +269,14 @@ export async function importBackup(opts = {}) {
     for (const it of man.items) {
       const scan = scanOf(path.join(fresh, it.name));
       const verdict = scan ? scan.verdict : null;
-      if (verdict === 'rouge') warnings.push('Le skill ' + it.name + ' a le verdict rouge. Ne l’appliquez que si vous lui faites confiance.');
-      else if (it.before && verdict !== it.before) warnings.push('Le verdict du skill ' + it.name + ' a changé : ' + (verdict || 'inconnu') + ' au lieu de ' + it.before + '.');
+      const say = (v) => '« ' + (VERDICT_TEXT[v] || 'Contrôle impossible') + ' »';
+      if (verdict === 'rouge') warnings.push('Le contrôle trouve un motif à risque dans le skill ' + it.name + '. Ne l’appliquez que si vous lui faites confiance.');
+      else if (it.before && verdict !== it.before) warnings.push('Le contrôle du skill ' + it.name + ' a changé : ' + say(verdict) + ' au lieu de ' + say(it.before) + '.');
       // Les autres copies vont aussi dans des dossiers d'agents à la restauration : chacune est vérifiée.
       for (const copy of new Set(it.places.map((p) => p.copy).filter((c) => c !== it.name))) {
         const s = scanOf(path.join(fresh, ...copy.split('/')));
         if (!s) warnings.push('Skill Advisor n’a pas pu vérifier une autre copie du skill ' + it.name + '.');
-        else if (s.verdict === 'rouge') warnings.push('Une autre copie du skill ' + it.name + ' a le verdict rouge. Ne la restaurez que si vous lui faites confiance.');
+        else if (s.verdict === 'rouge') warnings.push('Le contrôle trouve un motif à risque dans une autre copie du skill ' + it.name + '. Ne la restaurez que si vous lui faites confiance.');
       }
       const { before, ...rest } = it;
       items.push({ ...rest, verdict });
@@ -283,14 +288,16 @@ export async function importBackup(opts = {}) {
     let t = Date.now();
     for (let tries = 0; ; tries++) {
       const id = stamp(new Date(t)) + '-' + items[0].name;
-      const meta = { version: 2, id, label: man.label || defaultLabel(at), note: man.note, origin: 'import', at, size, items };
+      const meta = { version: 2, id, label: man.label || defaultLabel(items.map((i) => i.name)), note: man.note, origin: 'import', at, size, items };
       const dest = safeJoin(root2, id);
-      if (!(await fs.lstat(dest).catch(() => null))) {
+      const taken = async () => !!(await fs.lstat(dest).catch(() => null));
+      if (!(await taken())) {
         await fs.writeFile(path.join(fresh, 'meta.json'), JSON.stringify(meta, null, 2) + '\n');
         try {
-          await fs.rename(fresh, dest);
+          // Sous Windows, EPERM peut venir d'un antivirus : nouvel essai, sauf si le nom est pris entre-temps.
+          await renameRetry(fresh, dest, { stop: taken });
           return { backup: pub(normalizeMeta(meta, id)), warnings };
-        } catch (e) { if (!['EEXIST', 'ENOTEMPTY', 'EPERM'].includes(e.code) || tries > 50) throw e; }
+        } catch (e) { if (!(await taken()) || tries > 50) throw e; }
       }
       t += 1000;
     }
@@ -298,6 +305,6 @@ export async function importBackup(opts = {}) {
     if (e.code === 'BAD_ARCHIVE' || e.code === 'BACKUP_FAILED') throw e;
     throw fail('BACKUP_FAILED', 'L’import de la sauvegarde a échoué : ' + fsMessage(e) + '.');
   } finally {
-    await fs.rm(stage, { recursive: true, force: true }).catch(() => {});
+    await fs.rm(stage, rmOpts()).catch(() => {});
   }
 }

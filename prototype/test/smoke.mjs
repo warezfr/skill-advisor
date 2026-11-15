@@ -116,7 +116,10 @@ set({ route: 'wizard' });
 const obHtml = check('objectif/none', V.objectif);
 if (obHtml) {
   for (const g of goals) { const n = (obHtml.match(new RegExp('data-goal="' + g + '"', 'g')) || []).length; if (n !== 1) fail(`objectif: goal ${g} shown ${n} times`); }
-  if (!/Autres projets/.test(obHtml)) fail('objectif: no "Autres projets" heading');
+  // constat 68 : une seule grille, rangée sous 3 ou 4 titres courts (le titre « Autres projets » a disparu avec les grandes lignes)
+  const heads = [...obHtml.matchAll(/<h2 class="ob-gh"[^>]*>([^<]+)<\/h2>/g)].map((x) => x[1]);
+  if (heads.length < 3 || heads.length > 4) fail('objectif: expected 3 or 4 group headings, got ' + heads.join(' | '));
+  if (/class="ob-row"/.test(obHtml)) fail('objectif: full-width rows are back');
   const shownOrder = [...obHtml.matchAll(/data-goal="([^"]+)"/g)].map((x) => x[1]);
   if (shownOrder.slice(0, 3).join() !== OLD.join()) fail('objectif: the first three rows are not site, app, data');
   const order = V.objectif.order ? V.objectif.order() : [];
@@ -161,15 +164,23 @@ function* combos(qs, i = 0, acc = {}) {
 }
 const recoStats = {};
 for (const g of goals) {
-  let n = 0, min = Infinity, thin = 0;
+  let n = 0, min = Infinity, thin = 0, offTop = 0;
   for (const a of combos(D.goals[g].qs)) {
     const r = SA.reco.rank(g, a); n++;
     min = Math.min(min, r.length);
     if (r.length < 12) fail(`reco/${g} fewer than 12 for ${JSON.stringify(a)}: ${r.length}`);
     if (r.slice(0, 12).filter((x) => x.why.length).length < 6) thin++;
     for (const x of r.slice(0, 12)) if (x.it[6] == null) fail(`reco/${g} proposes an unrated skill: ${x.id}`);
+    // constat 90 : ordre du classement. Les skills d'une autre option à la fin ; sinon points × 12 + note, puis installations.
+    for (let i = 1; i < r.length; i++) {
+      const p = r[i - 1], q = r[i], po = p.off.length > 0, qo = q.off.length > 0;
+      const kp = p.rel * 12 + p.it[6], kq = q.rel * 12 + q.it[6];
+      if (po && !qo) { fail(`reco/${g} ${JSON.stringify(a)}: ${q.id} comes after a skill tied to another option`); break; }
+      if (po === qo && (kp < kq || (kp === kq && p.it[3] < q.it[3]))) { fail(`reco/${g} ${JSON.stringify(a)}: order broken between ${p.id} and ${q.id}`); break; }
+    }
+    if (r.slice(0, 3).some((x) => x.off.length)) offTop++;
   }
-  recoStats[g] = `${n} combinaisons, minimum ${min} propositions, ${thin} où moins de 6 des 12 premières répondent à une réponse précise`;
+  recoStats[g] = `${n} combinaisons, minimum ${min} propositions, ${thin} où moins de 6 des 12 premières répondent à une réponse précise, ${offTop} avec une autre option dans les 3 premières`;
 }
 if (SA.reco.rank('app', { os: 'ios' }).some((r) => /axios/.test(r.it[1]) && r.why.includes('iOS'))) fail('reco: "ios" matched inside "axios"');
 
@@ -182,6 +193,10 @@ for (const g of goals) {
   const html = check(`resultats/${g}/pret`, V.resultats);
   if (html && (html.match(/class="rs-row/g) || []).length < 10) fail(`resultats/${g} shows fewer than 10 rows`);
   if (SA.cart.count() !== 3) fail(`resultats/${g} preselects ${SA.cart.count()} skills, expected 3`);
+  for (const id of SA.cart.list()) {
+    const r = SA.reco.rank(g, fullAnswers(g)).find((x) => x.id === id);
+    if (!r || r.off.length || SA.reco.manual(id)) fail(`resultats/${g} preselects ${id}, tied to another option or not installable`);
+  }
   if (html && !/Pourquoi pour vous/.test(html)) fail(`resultats/${g} has no "pourquoi pour vous"`);
   set({ ...common, dbReady: true, cart: top(g, 5), recoShown: 36 }); check(`resultats/${g}/plus`, V.resultats);
   set({ ...common, dbReady: true, pv: pv({ net: 'off' }) }); check(`resultats/${g}/hors-ligne`, V.resultats);

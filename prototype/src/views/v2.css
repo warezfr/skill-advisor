@@ -71,13 +71,27 @@ h1.d.d-s { font-size: clamp(1.5rem, 2.2vw, 1.875rem); letter-spacing: -0.025em; 
 .empty .sub { max-width: 60ch; }
 .empty-a { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 
+/* Bord des champs à 3:1 au moins, texte indicatif à 4,5:1 au moins, dans les deux thèmes. */
 .fld {
   min-height: 44px; box-sizing: border-box; padding: 0 12px;
-  border: 1px solid var(--line-2); border-radius: var(--r1);
+  border: 1px solid var(--ink-3); border-radius: var(--r1);
   background: var(--bg); color: var(--ink); font: 400 14px/1.2 var(--f-b);
   transition: border-color var(--t1) var(--ease);
 }
-.fld:hover { border-color: var(--ink-3); }
+.fld:hover { border-color: var(--ink-2); }
+.fld::placeholder { color: var(--ink-3); opacity: 1; }
+/* Segment choisi : un bord visible, pas seulement un fond un peu plus clair. */
+.seg > button[aria-pressed="true"] { border-color: var(--ink-3); }
+
+/* Confirmation d'un geste destructif : un seul composant pour la ligne, la sélection, la sauvegarde et l'agent. */
+.cfm { box-sizing: border-box; padding: 12px 16px; border-left: 2px solid var(--bad); border-radius: 0 var(--r1) var(--r1) 0; background: var(--bg-2); text-align: left; white-space: normal; }
+.cfm-t { margin: 0; font-size: 14px; line-height: 1.5; color: var(--ink); max-width: 64ch; overflow-wrap: break-word; }
+.cfm-w { margin: 8px 0 0; font-size: 13px; line-height: 1.5; color: var(--ink-2); max-width: 64ch; }
+.cfm-a { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 0; }
+/* Case à cocher du produit avec son texte : un clic sur le texte coche aussi (label autour du bouton). */
+.ckl, .cfm-k { display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; color: var(--ink); cursor: pointer; }
+.ckl > .cb, .cfm-k > .cb { margin-left: -12px; }
+.ckl > span, .cfm-k > span { overflow-wrap: break-word; }
 .fld:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-color: var(--ink); }
 select.fld { padding-right: 8px; }
 
@@ -220,6 +234,9 @@ select.fld { padding-right: 8px; }
 /* ---------- Mes skills : vue dense ---------- */
 .gs [hidden] { display: none; }
 .gs-sub { margin: 0 0 20px; font-size: 14px; }
+/* Recherche automatique des mises à jour : une ligne sous le sous-titre, absente quand elle est vide. */
+.gs-chk { margin: -12px 0 20px; font-size: 13px; color: var(--ink-3); }
+.gs-chk:empty { display: none; }
 .gs-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
 .gs-qbox { position: relative; flex: 1 1 160px; max-width: 300px; }
 .gs-q { width: 100%; padding-right: 40px; }
@@ -238,7 +255,8 @@ select.fld { padding-right: 8px; }
 .gs-bulk .btn { min-height: 40px; }
 .gs-gapbar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 8px 0 0; font-size: 14px; }
 
-.gs-tablewrap { margin-top: 12px; overflow-x: auto; }
+/* La table se règle sur sa propre largeur (requête de conteneur), pas sur celle de la fenêtre. */
+.gs-tablewrap { margin-top: 12px; overflow-x: auto; container-type: inline-size; }
 .gs-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: 14px; }
 .gs-grid { table-layout: auto; min-width: 860px; }
 .gs-grid .gs-src { white-space: normal; }
@@ -251,19 +269,31 @@ select.fld { padding-right: 8px; }
 .gs-c-cb { width: 44px; padding-right: 0 !important; }
 .gs-c-cb .cb { margin-left: -12px; }
 .gs-c-n { padding-top: 6px !important; padding-bottom: 6px !important; }
-.gs-name { display: block; max-width: 100%; padding: 0; border: 0; background: none; text-align: left; font-size: 14px; font-weight: 500; color: var(--ink); overflow-wrap: anywhere; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 4px; transition: text-decoration-color var(--t1) var(--ease); }
+.gs-name { display: block; max-width: 100%; padding: 0; border: 0; background: none; text-align: left; font-size: 14px; font-weight: 500; color: var(--ink); overflow-wrap: break-word; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 4px; transition: text-decoration-color var(--t1) var(--ease); }
 .gs-name:hover { text-decoration-color: var(--ink-3); }
 .gs-src { display: block; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; line-height: 18px; }
 .gs-r.is-off .gs-name, .gs-r.is-off .gs-c-ctx, .gs-r.is-off .gs-dots { opacity: .5; }
-.gs-c-st { width: 200px; }
-.gs-c-st .bdg { margin: 2px 4px 2px 0; }
+.gs-pj { display: block; margin-top: 2px; font-size: 12.5px; line-height: 18px; white-space: normal; }
+/* Colonnes secondaires étroites : leurs badges et leurs gestes passent à la ligne, jamais au milieu d'un mot. */
+.gs-c-st { width: 148px; }
+.gs-c-st .bdg { margin: 2px 4px 2px 0; white-space: nowrap; }
 .gs-c-ag { width: 96px; }
-.gs-c-ctx { width: 76px; text-align: right !important; font-size: 13px; }
+.gs-c-ctx { width: 72px; text-align: right !important; font-size: 13px; }
 .gs-over { color: var(--warn); font-weight: 500; }
 .gs-c-on { width: 64px; }
-.gs-na { font-size: 12.5px; white-space: nowrap; }
-.gs-c-act { width: 268px; text-align: right !important; white-space: nowrap; padding-right: 0 !important; }
-.gs-a { min-height: 44px; padding: 0 5px; border: 0; background: none; color: var(--ink-2); font: 500 13px/20px var(--f-b); text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 4px; transition: color var(--t1) var(--ease), text-decoration-color var(--t1) var(--ease); }
+.gs-na { font-size: 12.5px; white-space: normal; }
+.gs-c-act { width: 228px; padding-right: 0 !important; }
+.gs-acts { display: flex; flex-wrap: wrap; justify-content: flex-end; column-gap: 2px; }
+/* Ligne entière sous un skill : confirmation de désinstallation ou formulaire « Sauvegarder », toujours visibles. */
+.gs-r.has-x > td, .gs-r.has-x > th { border-bottom-color: transparent; }
+.gs-xr > td { padding: 0 0 12px 44px !important; border-bottom: 1px solid var(--line); }
+.gs-xr .gs-save { margin-top: 0; }
+.gs-xr .cfm, .gs-xr .gs-save { max-width: 720px; }
+.gs-bulk.cfm { border-left: 2px solid var(--bad); }
+.gs-bulk.cfm .cfm-t { margin: 0 auto 0 0; }
+.gs-bulk.cfm .cfm-a { margin: 0; }
+.gs-rg { margin-top: 12px; }
+.gs-a { min-height: 44px; padding: 0 5px; border: 0; background: none; color: var(--ink-2); font: 500 13px/20px var(--f-b); white-space: nowrap; text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 4px; transition: color var(--t1) var(--ease), text-decoration-color var(--t1) var(--ease); }
 .gs-a:hover { color: var(--ink); text-decoration-color: var(--ink-3); }
 .gs-a-up { color: var(--accent); }
 .gs-a-up:hover { color: var(--accent); text-decoration-color: currentColor; }
@@ -299,6 +329,13 @@ select.fld { padding-right: 8px; }
 .gs-why strong { font-weight: 500; color: var(--ink); }
 .gs-file { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin: 20px 0 0; font-size: 13px; }
 
+/* « Ce qui change » : chemin, état du fichier, lignes ajoutées et retirées, alignés en colonnes. */
+.gs-files li { display: grid; grid-template-columns: minmax(0, 1fr) auto 6rem; align-items: baseline; gap: 4px 12px; }
+.gs-files .mono:first-child { overflow-wrap: anywhere; }
+.gs-fs { font-size: 13px; color: var(--ink-2); }
+.gs-fs-added { color: var(--ok); }
+.gs-fs-removed { color: var(--bad); }
+.gs-fn2 { text-align: right; }
 .gs-add { color: var(--ok); }
 .gs-del { color: var(--bad); }
 .gs-diff, .gs-export { white-space: pre-wrap; overflow-wrap: anywhere; }
@@ -308,11 +345,23 @@ select.fld { padding-right: 8px; }
 .gs-lc { color: var(--code-dim); }
 .gs-export { max-height: 420px; overflow: auto; font-size: 12px; }
 
-/* Fenêtre étroite : la colonne des agents se replie (la grille la remplace) et les gestes passent sur deux lignes. */
-@media (max-width: 1100px) {
+/* Table étroite : la colonne des agents se replie (la grille la remplace), la colonne Skill garde 220 px au moins. */
+@container (max-width: 1000px) {
   .gs-table:not(.gs-grid) .gs-c-ag { display: none; }
-  .gs-c-st { width: 136px; }
-  .gs-c-act { width: 168px; white-space: normal; }
+}
+@container (max-width: 780px) {
+  .gs-c-st { width: 120px; }
+  .gs-c-act { width: 168px; }
   .gs-a { min-height: 32px; }
+}
+/* Plus étroit : la colonne Contexte se replie (le total reste dans le sous-titre), les gestes s'empilent. */
+@container (max-width: 700px) {
+  .gs-table:not(.gs-grid) .gs-c-ctx { display: none; }
+  .gs-c-st { width: 112px; }
+  .gs-c-act { width: 132px; }
+}
+/* Téléphone : la table garde sa largeur utile et défile ; la confirmation, à gauche, reste visible. */
+@container (max-width: 580px) {
+  .gs-table:not(.gs-grid) { min-width: 580px; }
 }
 @media (max-width: 900px) { .gs-all { margin-left: 0; } }

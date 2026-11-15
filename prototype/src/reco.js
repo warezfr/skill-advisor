@@ -3,7 +3,8 @@
    Une réponse « compte » pour un skill si un de ses mots-clés est dans le nom (3 points), dans la description
    de l'auteur (2 points), ou si le skill est dans une catégorie liée à la réponse (2 points).
    Les mots-clés sont comparés mot entier : « ios » ne correspond pas à « axios ».
-   Un mot-clé précédé de « = » n'est cherché que dans le nom : il est trop courant pour une description. */
+   Un mot-clé précédé de « = » n'est cherché que dans le nom : il est trop courant pour une description.
+   Options qui s'excluent (EXCL) : un skill nommé d'après une autre option que celle choisie passe après tous les autres. */
 (function () {
   window.SA = window.SA || {};
   var SA = window.SA;
@@ -368,6 +369,38 @@
     }
   };
 
+  /* Questions à choix unique dont les options s'excluent : goal → { question: { opts: [options rivales], ok: { option: [options compatibles] } } }.
+     Une option absente de opts (« Je ne sais pas », « Plusieurs », « HTML simple ») n'écarte rien. */
+  var EXCL = {
+    site: { tech: { opts: ['next', 'astro', 'wordpress'] } },
+    app: {
+      os: { opts: ['ios', 'android', 'windows', 'macos', 'linux'], ok: { ios: ['macos'], macos: ['ios'] } },
+      tech: { opts: ['swiftui', 'rn', 'flutter', 'kotlin', 'electron'] }
+    },
+    data: { tool: { opts: ['python', 'r'] } },
+    frontend: { fw: { opts: ['react', 'next', 'vue'], ok: { next: ['react'] } } },
+    mobile: { os: { opts: ['ios', 'android'] }, tech: { opts: ['swift', 'rn', 'flutter'] } },
+    backend: { lang: { opts: ['node', 'go', 'rust', 'python', 'java'] } },
+    database: { engine: { opts: ['postgres', 'mongo'] } },
+    ia: { sdk: { opts: ['claude', 'aisdk', 'adk', 'cloudflare'] } },
+    tests: { code: { opts: ['go', 'rust'] } },
+    devops: { cloud: { opts: ['azure', 'aws', 'cloudflare', 'vercel'] } },
+    securite: { stack: { opts: ['firebase', 'convex', 'betterauth', 'gcloud', 'azure'] } },
+    documents: { format: { opts: ['docx', 'pptx', 'xlsx', 'pdf'] } },
+    ux: { tech: { opts: ['react', 'rn', 'three'] } },
+    ecommerce: { platform: { opts: ['shopify', 'stripe', 'wordpress'] } },
+    'desktop-jeu': { engine: { opts: ['three', 'godot', 'unity', 'web'], ok: { three: ['web'], web: ['three'] } } }
+  };
+
+  /* Ce que l'application sait installer (contrat, règles 3 et 4) : le reste s'installe à la main. */
+  var NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+  var SRC_RE = /^[\w.-]+\/[\w.-]+$/;
+  function sourceOk(src) {
+    src = String(src || '');
+    if (SRC_RE.test(src)) return !src.split('/').some(function (s) { return s.charAt(0) === '.'; });
+    return src.length <= 2000 && /^https:\/\/[^\/\s?#@:]+/i.test(src);
+  }
+
   function db() { return SA.search || { items: [], cats: [], details: {} }; }
 
   var reCache = {};
@@ -379,9 +412,11 @@
     return reCache[kw];
   }
 
-  var idx = null, catIx = null;
+  var idx = null, catIx = null, builtFor = null;
   function build() {
-    if (idx) return;
+    /* La base peut être remplacée par la version en ligne : l'index suit. */
+    if (idx && builtFor === db()) return;
+    builtFor = db();
     idx = {}; catIx = {};
     var d = db();
     d.cats.forEach(function (c, i) { catIx[c.id] = i; });
@@ -413,11 +448,59 @@
     return out;
   }
 
+  function bare(k) { return k.charAt(0) === '=' ? k.slice(1) : k; }
+  /* Mots-clés d'une règle trouvés dans le nom seul du skill (sans la source : « vercel-labs » ne dit rien du sujet). */
+  function nameHits(rule, nm) {
+    return (rule.kw || []).map(bare).filter(function (k) { return re(k).test(nm); });
+  }
+
+  /* Options rivales qui nomment le skill : libellés des options, vide si le skill répond à la réponse choisie.
+     Un mot-clé déjà porté par une autre réponse choisie (SQL en source et en outil) n'écarte rien. */
+  function offOf(goal, m, answers, it) {
+    var ex = EXCL[goal], out = [];
+    if (!ex) return out;
+    var nm = String(it[1]).toLowerCase();
+    var chosenKw = Object.create(null);
+    Object.keys(m).forEach(function (qid) {
+      if (qid === 'base') return;
+      var a = answers[qid];
+      (Array.isArray(a) ? a : a == null ? [] : [a]).forEach(function (v) {
+        ((m[qid][v] || {}).kw || []).forEach(function (k) { chosenKw[bare(k)] = qid; });
+      });
+    });
+    Object.keys(ex).forEach(function (qid) {
+      var v = answers[qid], q = ex[qid];
+      if (typeof v !== 'string' || q.opts.indexOf(v) < 0 || !m[qid] || !m[qid][v]) return;
+      /* Le nom répond à la réponse choisie : le skill reste à sa place, même s'il cite aussi une autre option. */
+      if (nameHits(m[qid][v], nm).length) return;
+      var ok = (q.ok || {})[v] || [];
+      q.opts.forEach(function (w) {
+        if (w === v || ok.indexOf(w) > -1 || !m[qid][w]) return;
+        var hits = nameHits(m[qid][w], nm).filter(function (k) { return !(k in chosenKw); });
+        if (hits.length) out.push(optLabel(goal, qid, w));
+      });
+    });
+    return out;
+  }
+
+  /* Raison en une phrase quand l'application ne sait pas installer cette entrée, sinon ''. */
+  function manual(id) {
+    build();
+    var it = idx[id];
+    if (!it) return '';
+    if (!sourceOk(it[2])) return 'Sa source n’est pas un dépôt GitHub : installez-le depuis sa page skills.sh.';
+    if (!NAME_RE.test(String(it[1]))) return 'Son nom contient des caractères refusés : installez-le depuis sa page skills.sh.';
+    return '';
+  }
+
   SA.reco = {
     map: MAP,
+    /* goal → questions dont les options s'excluent */
+    excl: Object.keys(EXCL).reduce(function (o, g) { o[g] = Object.keys(EXCL[g]); return o; }, {}),
+    manual: manual,
     item: function (id) { build(); return idx[id] || null; },
 
-    /* → [{ id, it, rel, why: [libellés des réponses reconnues], base: libellé de catégorie ou '' }] */
+    /* → [{ id, it, rel, why: [libellés des réponses reconnues], base: libellé de catégorie ou '', off: [libellés d'options rivales] }] */
     rank: function (goal, answers) {
       build();
       var m = MAP[goal];
@@ -448,11 +531,13 @@
           if (it[4].indexOf(baseIx[i]) > -1) { rel += 1; base = d.cats[baseIx[i]].label; break; }
         }
         if (!rel) return;
-        out.push({ id: it[0], it: it, rel: rel, why: why, base: base });
+        out.push({ id: it[0], it: it, rel: rel, why: why, base: base, off: offOf(goal, m, answers, it) });
       });
-      /* Une réponse reconnue de plus pèse environ 30 points de note. */
+      /* Les skills d'une autre option passent après tous les autres.
+         Ensuite, une réponse reconnue de plus pèse environ 30 points de note. */
       out.sort(function (a, b) {
-        return (b.rel * 12 + b.it[6]) - (a.rel * 12 + a.it[6]) || b.it[3] - a.it[3];
+        return (a.off.length ? 1 : 0) - (b.off.length ? 1 : 0) ||
+          (b.rel * 12 + b.it[6]) - (a.rel * 12 + a.it[6]) || b.it[3] - a.it[3];
       });
       return out;
     }

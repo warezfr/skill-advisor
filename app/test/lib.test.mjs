@@ -1,16 +1,16 @@
-// Tests du socle machine. Aucun réseau, sauf SA_NET=1.
+// Tests du socle machine. Aucun réseau, sauf SA_NET=1 (voir aussi install.test.mjs).
 import { test, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { checkName, checkSource, checkAgentId, safeJoin, childEnv, isTrackedSource } from '../lib/util.mjs';
+import { checkName, checkSource, checkAgentId, safeJoin, childEnv, isTrackedSource, copyTree, mkdirp, platform, prepareSaDir, writeJsonAtomic } from '../lib/util.mjs';
 import { call, mapError, parseOutdated } from '../lib/worker.mjs';
 import { TOP_AGENTS, listAgents } from '../lib/registry.mjs';
 import { readSettings, addCustomAgent, removeCustomAgent, hideAgent, showAgent, setTargets } from '../lib/settings.mjs';
 import { listBackups, createBackup, restoreBackup, deleteBackup } from '../lib/backups.mjs';
 import { getState } from '../lib/inventory.mjs';
 import * as actions from '../lib/actions.mjs';
-import { makeHome, demoHome, assertSafeHome, assertInHome, putShared, putLink, putLock, readLock, rmHome, lexists, skillMd } from './helpers.mjs';
+import { makeHome, demoHome, assertSafeHome, assertInHome, putShared, putLink, putLock, readLock, rmHome, lexists, skillMd, fileLinksOk, NO_FILE_LINK, dirLink } from './helpers.mjs';
 
 const homes = [];
 async function home(demo = true) { const h = demo ? await demoHome() : await makeHome(); homes.push(h); return h; }
@@ -67,14 +67,38 @@ test('worker : agents dans le dossier jetable, erreurs, délai', async () => {
   assert.match(r.stdout, /1\.8\.1/);
 });
 
-test('worker : limites GitHub et sortie de check', () => {
-  const e = mapError('SKILLS_GIT_CLONE_FAILED', '[SKILLS_GIT_CLONE_FAILED] Failed to clone https://github.com/a/b');
-  assert.equal(e.code, 'GITHUB_LIMIT');
-  assert.match(e.message, /GitHub limite/);
-  assert.match(e.message, /git/);
-  assert.equal(mapError(undefined, 'GitHub API returned 403 rate limit').code, 'GITHUB_LIMIT');
+// Contrat 1.0 : les causes sont distinguées (un échec de clone n'est plus une limite GitHub).
+test('worker : causes d’échec et sortie de check', () => {
+  const limit = mapError(undefined, 'GitHub API returned 403 rate limit');
+  assert.equal(limit.code, 'GITHUB_LIMIT');
+  assert.match(limit.message, /GitHub limite/);
   assert.equal(mapError(undefined, 'HTTP 429 from api.github.com').code, 'GITHUB_LIMIT');
-  assert.equal(mapError('SKILLS_NO_MATCHING_SKILLS', 'No matching skills').code, 'CLI_FAILED');
+  assert.equal(mapError(undefined, 'API rate limit exceeded for 1.2.3.4').code, 'GITHUB_LIMIT');
+  // Pas de réseau, hôte introuvable : NETWORK, sans « limite » ni « installez git ».
+  for (const raw of ['Failed to clone https://github.com/a/b: fatal: unable to access \'https://github.com/a/b.git/\': Could not resolve host: github.com',
+    'getaddrinfo ENOTFOUND github.com', 'connect ECONNREFUSED 127.0.0.1:443', 'fetch failed']) {
+    const e = mapError('SKILLS_GIT_CLONE_FAILED', raw);
+    assert.equal(e.code, 'NETWORK', raw);
+    assert.doesNotMatch(e.message, /limite|installez git/i);
+    assert.equal(e.detail, raw);
+  }
+  assert.equal(mapError('SKILLS_GIT_CLONE_TIMEOUT', 'Clone timed out after 300s').code, 'NETWORK');
+  // Dépôt introuvable ou privé : SOURCE_NOT_FOUND, message français sans texte de la CLI.
+  for (const [code, raw] of [['SKILLS_GIT_AUTH_FAILED', 'Authentication failed for https://github.com/a/depot-inexistant-zz.git. - For private repos, ensure you have access'],
+    ['SKILLS_GIT_CLONE_FAILED', 'fatal: \'/x/repo.git\' does not appear to be a git repository'], ['SKILLS_NO_MATCHING_SKILLS', 'No matching skills found for: x']]) {
+    const e = mapError(code, raw);
+    assert.equal(e.code, 'SOURCE_NOT_FOUND', raw);
+    assert.match(e.message, /introuvable/);
+    assert.doesNotMatch(e.message, /Authentication|fatal|ssh|gh auth/);
+  }
+  // Un fichier local manquant n'est pas un dépôt absent ; un 404 HTTP de git n'est pas une panne de réseau.
+  assert.equal(mapError('SKILLS_INSTALL_FAILED', 'Failed to install x: ENOENT: no such file or directory, open \'/a/b\'').code, 'CLI_FAILED');
+  assert.equal(mapError('SKILLS_GIT_CLONE_FAILED', 'fatal: unable to access \'https://gitlab.com/a/b.git/\': The requested URL returned error: 404').code, 'SOURCE_NOT_FOUND');
+  // Autre cause : CLI_FAILED, message français, texte brut dans detail seulement.
+  const other = mapError('SKILLS_LOCK_WRITE_FAILED', 'Failed to write lock: EACCES');
+  assert.equal(other.code, 'CLI_FAILED');
+  assert.doesNotMatch(other.message, /Failed|EACCES/);
+  assert.match(other.detail, /EACCES/);
   const out = '\x1b[38;5;250m↑ demo-skill has an update\x1b[0m\n↑ autre.skill has an update\nChecking…\n';
   assert.deepEqual(parseOutdated(out), ['demo-skill', 'autre.skill']);
   // Nom illisible dans la sortie de la CLI : ignoré, sans faire échouer check.
@@ -102,7 +126,10 @@ test('registre : 78 agents, les principaux d’abord', async () => {
   assert.equal(by.cursor.count, 1);
   assert.equal(by['claude-code'].top, true);
   assert.equal(by['claude-code'].globalDir, path.join(h, '.claude', 'skills'));
-  for (const a of list) for (const k of ['id', 'name', 'detected', 'top', 'universal', 'globalDir', 'custom', 'hidden', 'target', 'count']) assert.ok(k in a, k);
+  for (const a of list) for (const k of ['id', 'name', 'detected', 'top', 'universal', 'globalDir', 'projectDir', 'custom', 'hidden', 'target', 'count']) assert.ok(k in a, k);
+  // Dossier de projet : celui que donne le paquet (projectSkillsDir), relatif au projet.
+  assert.equal(by['claude-code'].projectDir, '.claude/skills');
+  assert.equal(by.cursor.projectDir, '.agents/skills');
 });
 
 test('réglages : agent personnalisé, masquer, cibles', async () => {
@@ -116,13 +143,18 @@ test('réglages : agent personnalisé, masquer, cibles', async () => {
   await assert.rejects(addCustomAgent({ home: h, name: 'a\nb', dir }), codeOf('BAD_NAME'));
   const ag = await addCustomAgent({ home: h, name: 'Mon agent', dir });
   assert.equal(ag.id, 'custom-1');
-  const ag2 = await addCustomAgent({ home: h, name: 'Deuxième', dir });
+  // Contrat 1.0 : le même dossier réel ne peut pas servir deux fois.
+  await assert.rejects(addCustomAgent({ home: h, name: 'Deuxième', dir }), codeOf('EXISTS'));
+  const dir2 = path.join(h, 'autre-agent', 'skills');
+  await fs.mkdir(dir2, { recursive: true });
+  const ag2 = await addCustomAgent({ home: h, name: 'Deuxième', dir: dir2 });
   assert.equal(ag2.id, 'custom-2');
   let list = await listAgents({ home: h });
   assert.equal(list.length, 80);
   assert.deepEqual(list.slice(-2).map((a) => a.id), ['custom-1', 'custom-2']);
   assert.equal(list.at(-2).custom, true);
   assert.equal(list.at(-2).globalDir, dir);
+  assert.equal(list.at(-1).globalDir, dir2);
   await hideAgent({ home: h, id: 'codex' });
   await hideAgent({ home: h, id: 'codex' });
   assert.deepEqual((await readSettings({ home: h })).hidden, ['codex']);
@@ -192,7 +224,34 @@ test('getState : lignes, sources, statuts par agent', async () => {
   assert.equal(by['web-design-guidelines'].real, true);
   assert.equal(typeof by['web-design-guidelines'].note, 'number');
   assert.deepEqual(by['orphan-skill'].ag, { 'claude-code': 'ko' });
-  for (const r of st.mine) for (const k of ['id', 'name', 'src', 'real', 'st', 'on', 'ag', 'chars', 'warn', 'note', 'scan', 'path', 'scope']) assert.ok(k in r, r.name + ' ' + k);
+  for (const r of st.mine) for (const k of ['id', 'name', 'src', 'real', 'st', 'on', 'ag', 'chars', 'desc', 'warn', 'note', 'scan', 'path', 'scope']) assert.ok(k in r, r.name + ' ' + k);
+  // Description du front matter (constat 77) ; lien cassé : rien à lire.
+  assert.equal(demo.desc, 'Démonstration pour les tests.');
+  assert.equal(by['orphan-skill'].desc, null);
+  // Catalogue : source et date, sans téléchargement.
+  assert.equal(st.catalog.source, 'bundled');
+  assert.match(String(st.catalog.generatedAt), /^\d{4}-\d\d-\d\d/);
+});
+
+// Agent disparu (retiré des réglages ou du paquet) : ses skills désactivés restent visibles, désactivés.
+test('getState : skill désactivé pour un agent qui n’existe plus, montré désactivé', async () => {
+  const h = await home();
+  for (const [agent, name] of [['agent-disparu', 'vieux-skill'], ['custom-9', 'perso-skill']]) {
+    const d = path.join(h, '.skill-advisor', 'disabled', agent, name);
+    assertInHome(h, d);
+    await fs.mkdir(d, { recursive: true });
+    await fs.writeFile(path.join(d, 'SKILL.md'), skillMd(name, 'Désactivé ailleurs.'));
+  }
+  const st = await getState({ home: h, cwd: await cwdOf(h) });
+  const by = Object.fromEntries(st.mine.map((r) => [r.name, r]));
+  for (const name of ['vieux-skill', 'perso-skill']) {
+    assert.ok(by[name], name + ' visible');
+    assert.equal(by[name].on, false);
+    assert.deepEqual(by[name].ag, {});
+    assert.equal(by[name].desc, 'Désactivé ailleurs.');
+  }
+  // Le skill de démonstration n'est pas touché.
+  assert.equal(by['demo-skill'].on, true);
 });
 
 test('getState : mise à jour connue par check.json, skills de projet', async () => {
@@ -350,19 +409,58 @@ test('remove d’un skill entièrement désactivé, avec sauvegarde', async () =
   assert.ok(!(await getState({ home: h, cwd: await cwdOf(h) })).mine.some((r) => r.name === 'demo-skill'));
 });
 
+// Contrat 1.0 : vider un lecteur du dossier partagé est refusé (SHARED) avec la liste de ses lecteurs.
 test('removeAgentSkills sur un agent qui lit le dossier partagé', async () => {
   const h = await home();
-  const res = await actions.removeAgentSkills({ home: h, agent: 'cursor', backup: false });
   const shared = path.join(h, '.agents', 'skills', 'demo-skill');
-  // Le dossier partagé reste lu par d'autres agents : rien n'est supprimé.
-  assert.deepEqual(res.removed, []);
-  assert.equal(res.failed.length, 1);
-  assert.equal(res.failed[0].name, 'demo-skill');
-  assert.match(res.failed[0].message, /gemini-cli/);
-  assert.match(res.failed[0].message, /claude-code/);
-  assert.deepEqual(Object.keys(res.failed[0]).sort(), ['message', 'name']);
+  await assert.rejects(actions.removeAgentSkills({ home: h, agent: 'cursor', backup: false }), (e) => {
+    assert.equal(e.code, 'SHARED');
+    assert.deepEqual([...e.readers].sort(), ['cursor', 'gemini-cli']);
+    assert.match(e.message, /Cursor lit le dossier partagé/);
+    return true;
+  });
+  await assert.rejects(actions.removeAgentSkills({ home: h, agent: 'shared', backup: false }), codeOf('SHARED'));
+  // Lecteur non détecté (Codex) : readers ne tient que les lecteurs détectés ; message en français, termes du contrat.
+  await assert.rejects(actions.removeAgentSkills({ home: h, agent: 'codex', backup: false }), (e) => {
+    assert.equal(e.code, 'SHARED');
+    assert.deepEqual([...e.readers].sort(), ['cursor', 'gemini-cli']);
+    assert.match(e.message, /Codex lit le dossier partagé \(~\/\.agents\/skills\)/);
+    assert.match(e.message, /Désinstallez/);
+    assert.doesNotMatch(e.message, /Retirez|codex|gemini-cli|universal/);
+    return true;
+  });
   assert.ok(await lexists(path.join(shared, 'SKILL.md')));
   assert.equal(await fs.realpath(path.join(h, '.claude', 'skills', 'demo-skill')), shared);
+  // Désinstaller sans liste d'agents : le skill quitte le dossier partagé (ce que propose l'interface après SHARED).
+  const r = await actions.remove({ home: h, names: ['demo-skill'], backup: false });
+  assert.deepEqual(r.removed, ['demo-skill']);
+  assert.equal(await lexists(shared), false);
+  assert.equal(await lexists(path.join(h, '.claude', 'skills', 'demo-skill')), false);
+});
+
+// Messages : noms affichés des agents, jamais leur identifiant ; « le dossier partagé (~/.agents/skills) » seulement sous cette forme.
+test('messages des actions : noms des agents, jamais d’identifiant', async () => {
+  const h = await home();
+  const ids = /\b(claude-code|gemini-cli|universal|custom-\d+|agent-inconnu)\b/;
+  const bare = /(^|[^(])~\/\.agents\/skills/;
+  const check = (m) => { assert.doesNotMatch(m, ids, m); assert.doesNotMatch(m, bare, m); };
+  await assert.rejects(actions.remove({ home: h, names: ['demo-skill'], agents: ['agent-inconnu'], backup: false }), (e) => { assert.equal(e.code, 'NOT_FOUND'); check(e.message); return true; });
+  // Cursor seul ne peut pas perdre un skill que Gemini CLI et Claude Code lisent encore.
+  let r = await actions.remove({ home: h, names: ['demo-skill'], agents: ['cursor'], backup: false });
+  assert.equal(r.failed.length, 1);
+  assert.match(r.failed[0].message, /Cursor/);
+  assert.match(r.failed[0].message, /Gemini CLI|Claude Code/);
+  check(r.failed[0].message);
+  r = await actions.disable({ home: h, names: ['demo-skill'], agents: ['cursor'] });
+  assert.equal(r.failed.length, 1);
+  assert.match(r.failed[0].message, /Claude Code|Gemini CLI/);
+  check(r.failed[0].message);
+  // Déjà actif au retour : nom affiché de l'agent.
+  assert.deepEqual((await actions.disable({ home: h, names: ['demo-skill'], agents: ['claude-code'] })).done, ['demo-skill']);
+  await putLink(h, '.claude/skills', 'demo-skill', path.join(h, '.agents', 'skills', 'demo-skill'));
+  r = await actions.enable({ home: h, names: ['demo-skill'], agents: ['claude-code'] });
+  assert.match(r.failed[0].message, /Claude Code/);
+  check(r.failed[0].message);
 });
 
 // Agent personnalisé dans le dossier jetable, avec un dossier ordinaire et un vrai skill.
@@ -438,7 +536,8 @@ test('remove : sauvegarde impossible, rien n’est supprimé', async () => {
   const res = await actions.remove({ home: h, names: ['demo-skill'], backup: true });
   assert.deepEqual(res.removed, []);
   assert.equal(res.failed[0].name, 'demo-skill');
-  assert.match(res.failed[0].message, /rien n’a été supprimé/);
+  // Contrat 1.0 : « désinstaller » pour un skill.
+  assert.match(res.failed[0].message, /rien n’a été désinstallé/);
   assert.doesNotMatch(res.failed[0].message, /E[A-Z]{3,}:/);
   assert.ok(await lexists(path.join(h, '.agents', 'skills', 'demo-skill', 'SKILL.md')));
   assert.ok(await lexists(path.join(h, '.claude', 'skills', 'demo-skill')));
@@ -465,30 +564,16 @@ test('disable refuse le dossier partagé lu par un autre agent détecté', async
   await fs.unlink(link);
   const r = await actions.disable({ home: h, names: ['demo-skill'], agents: ['cursor'] });
   assert.deepEqual(r.done, []);
-  assert.match(r.failed[0].message, /gemini-cli/);
+  // Contrat 1.0 : le nom de l'agent, jamais son identifiant.
+  assert.match(r.failed[0].message, /Gemini CLI/);
+  assert.doesNotMatch(r.failed[0].message, /gemini-cli/);
   assert.ok(await lexists(path.join(h, '.agents', 'skills', 'demo-skill', 'SKILL.md')));
   const both = await actions.disable({ home: h, names: ['demo-skill'], agents: ['cursor', 'gemini-cli'] });
   assert.deepEqual(both.done, ['demo-skill']);
 });
 
-test('update : échec de la CLI, contenu et verrou remis', async () => {
-  const h = await home();
-  const shared = path.join(h, '.agents', 'skills', 'demo-skill');
-  const before = await fs.readFile(path.join(shared, 'SKILL.md'), 'utf8');
-  const lockBefore = (await readLock(h)).skills['demo-skill'];
-  const broken = async ({ name }) => {
-    await fs.writeFile(path.join(shared, 'SKILL.md'), skillMd(name, 'À moitié écrit.'));
-    const lock = await readLock(h);
-    lock.skills[name].skillFolderHash = 'casse';
-    await fs.writeFile(path.join(h, '.agents', '.skill-lock.json'), JSON.stringify(lock));
-    throw Object.assign(new Error('L’outil skills a échoué : réseau.'), { code: 'CLI_FAILED' });
-  };
-  const r = await actions.update({ home: h, runCheck: async () => ['demo-skill'], runUpdate: broken });
-  assert.deepEqual(r.updated, []);
-  assert.deepEqual(r.failed, [{ name: 'demo-skill', message: 'L’outil skills a échoué : réseau.' }]);
-  assert.equal(await fs.readFile(path.join(shared, 'SKILL.md'), 'utf8'), before);
-  assert.deepEqual((await readLock(h)).skills['demo-skill'], lockBefore);
-});
+// Contrat 1.0 : la mise à jour résout et vérifie la nouvelle version avant d'écrire.
+// Les anciens tests « échec de la CLI » et « version rouge » passent par de vrais dépôts locaux : install.test.mjs.
 
 test('update ignore un nom forcé qui n’a pas de mise à jour', async () => {
   const h = await home();
@@ -506,37 +591,17 @@ test('disable refuse le dossier partagé encore lié par un autre agent', async 
   assert.ok(await lexists(path.join(h, '.agents', 'skills', 'demo-skill')));
 });
 
-test('update : retient une version rouge, sauf si forcée', async () => {
+// Contrat 1.0 : chaque élément est validé seul ; un élément refusé va dans failed, sans appel au paquet.
+test('install refuse les sources et noms invalides, élément par élément', async () => {
   const h = await home();
-  const shared = path.join(h, '.agents', 'skills', 'demo-skill');
-  const before = await fs.readFile(path.join(shared, 'SKILL.md'), 'utf8');
-  const lockBefore = (await readLock(h)).skills['demo-skill'];
-  // Remplace l'étape réseau : écrit une nouvelle version rouge et change le verrou.
-  const fakeUpdate = async ({ name }) => {
-    await fs.writeFile(path.join(shared, 'SKILL.md'), skillMd(name, 'Nouvelle version.', RED));
-    await putLock(h, { [name]: 'vercel-labs/agent-skills' });
-    const lock = await readLock(h);
-    lock.skills[name].skillFolderHash = 'neuf';
-    await fs.writeFile(path.join(h, '.agents', '.skill-lock.json'), JSON.stringify(lock));
-  };
-  const fakeCheck = async () => ['demo-skill'];
-  let r = await actions.update({ home: h, names: ['demo-skill'], runCheck: fakeCheck, runUpdate: fakeUpdate });
-  assert.deepEqual(r.updated, []);
-  assert.deepEqual(r.held, ['demo-skill']);
-  assert.equal(await fs.readFile(path.join(shared, 'SKILL.md'), 'utf8'), before);
-  assert.equal((await readLock(h)).skills['demo-skill'].skillFolderHash, lockBefore.skillFolderHash);
-  r = await actions.update({ home: h, force: ['demo-skill'], runCheck: fakeCheck, runUpdate: fakeUpdate });
-  assert.deepEqual(r.updated, ['demo-skill']);
-  assert.deepEqual(r.held, []);
-  assert.match(await fs.readFile(path.join(shared, 'SKILL.md'), 'utf8'), /Nouvelle version/);
-  await assert.rejects(actions.update({ home: h, names: ['../x'], runCheck: fakeCheck, runUpdate: fakeUpdate }), codeOf('BAD_NAME'));
-});
-
-test('install refuse les sources et noms invalides', async () => {
-  const h = await home();
-  await assert.rejects(actions.install({ home: h, items: [{ source: '../x', skill: 'a' }], agents: ['claude-code'], scope: 'global' }), codeOf('BAD_SOURCE'));
-  await assert.rejects(actions.install({ home: h, items: [{ source: 'a/b', skill: '../a' }], agents: ['claude-code'], scope: 'global' }), codeOf('BAD_NAME'));
+  let r = await actions.install({ home: h, items: [{ source: '../x', skill: 'a' }, { source: 'a/b', skill: '../a' }, { source: 'uizze.sh', skill: 'ios-design' }], agents: ['claude-code'], scope: 'global' });
+  assert.deepEqual(r.installed, []);
+  assert.deepEqual(r.failed.map((f) => f.name), ['a', '../a', 'ios-design']);
+  for (const f of r.failed) assert.match(f.message, /Skill Advisor ne sait pas installer/);
   await assert.rejects(actions.install({ home: h, items: [{ source: 'a/b', skill: 'a' }], agents: ['../x'], scope: 'global' }), codeOf('BAD_NAME'));
+  await assert.rejects(actions.install({ home: h, items: [], agents: ['claude-code'], scope: 'global' }), codeOf('BAD_INPUT'));
+  // Portée projet sans projet choisi.
+  await assert.rejects(actions.install({ home: h, items: [{ source: 'a/b', skill: 'a' }], agents: ['claude-code'], scope: 'project', project: null }), codeOf('BAD_INPUT'));
 });
 
 // --- Corrections de la relecture ---
@@ -588,7 +653,7 @@ test('agent personnalisé : dossiers dangereux refusés, chemin réel gardé', a
   }
   // Un lien vers le dossier partagé est démasqué.
   const sneaky = path.join(h, 'raccourci');
-  await fs.symlink(path.join(h, '.agents', 'skills'), sneaky, 'dir');
+  await dirLink(path.join(h, '.agents', 'skills'), sneaky);
   await assert.rejects(addCustomAgent({ home: h, name: 'X', dir: sneaky }), codeOf('BAD_INPUT'));
   if (process.platform === 'darwin' || process.platform === 'win32') {
     await assert.rejects(addCustomAgent({ home: h, name: 'X', dir: path.join(h, '.Agents', 'Skills') }), codeOf('BAD_INPUT'));
@@ -597,7 +662,7 @@ test('agent personnalisé : dossiers dangereux refusés, chemin réel gardé', a
   const real = path.join(h, 'outils', 'skills');
   await fs.mkdir(real, { recursive: true });
   const via = path.join(h, 'vers-outils');
-  await fs.symlink(path.join(h, 'outils'), via, 'dir');
+  await dirLink(path.join(h, 'outils'), via);
   const ag = await addCustomAgent({ home: h, name: 'Outils', dir: path.join(via, 'skills') });
   assert.equal(ag.dir, real);
   assert.equal((await readSettings({ home: h })).custom[0].dir, real);
@@ -637,7 +702,9 @@ test('déplacement entre volumes raté : aucune copie partielle ne reste', async
   assert.ok(await lexists(path.join(off, 'universal', 'demo-skill', 'SKILL.md')));
 });
 
-test('sauvegarde : liens hors du skill ignorés, boucle détectée, taille limitée', async () => {
+test('sauvegarde : liens hors du skill ignorés, boucle détectée, taille limitée', async (t) => {
+  // Liens de fichier : demandent un droit spécial sous Windows.
+  if (!(await fileLinksOk())) { t.skip(NO_FILE_LINK); return; }
   const h = await home();
   const shared = path.join(h, '.agents', 'skills', 'demo-skill');
   const secret = path.join(h, 'ailleurs', 'secret.txt');
@@ -647,8 +714,8 @@ test('sauvegarde : liens hors du skill ignorés, boucle détectée, taille limit
   await fs.mkdir(path.join(shared, 'docs'));
   await fs.writeFile(path.join(shared, 'docs', 'a.md'), 'doc');
   await fs.symlink(secret, path.join(shared, 'docs', 'externe'));
-  await fs.symlink(path.join(h, 'ailleurs'), path.join(shared, 'dossier-externe'), 'dir');
-  await fs.symlink('..', path.join(shared, 'docs', 'boucle'), 'dir');
+  await dirLink(path.join(h, 'ailleurs'), path.join(shared, 'dossier-externe'));
+  await dirLink('..', path.join(shared, 'docs', 'boucle'));
   await fs.symlink('docs/a.md', path.join(shared, 'alias.md'));
   const b = await createBackup({ home: h, name: 'demo-skill', agents: [], from: shared });
   const copy = path.join(h, '.skill-advisor', 'backups', b.id, 'demo-skill');
@@ -669,26 +736,7 @@ test('sauvegarde : liens hors du skill ignorés, boucle détectée, taille limit
   assert.ok(await lexists(path.join(shared, 'SKILL.md')));
 });
 
-test('update : liens gardés tels quels, skill trop gros non mis à jour', async () => {
-  const h = await home();
-  const shared = path.join(h, '.agents', 'skills', 'demo-skill');
-  const secret = path.join(h, 'ailleurs', 'secret.txt');
-  await fs.mkdir(path.dirname(secret), { recursive: true });
-  await fs.writeFile(secret, 'secret');
-  await fs.symlink(secret, path.join(shared, 'externe'));
-  const broken = async () => { throw Object.assign(new Error('L’outil skills a échoué : réseau.'), { code: 'CLI_FAILED' }); };
-  let r = await actions.update({ home: h, runCheck: async () => ['demo-skill'], runUpdate: broken });
-  assert.equal(r.failed.length, 1);
-  assert.ok((await fs.lstat(path.join(shared, 'externe'))).isSymbolicLink());
-  assert.equal(await fs.readlink(path.join(shared, 'externe')), secret);
-  await fs.writeFile(path.join(shared, 'gros.bin'), '');
-  await fs.truncate(path.join(shared, 'gros.bin'), 201 * 1024 * 1024);
-  let ran = 0;
-  r = await actions.update({ home: h, runCheck: async () => ['demo-skill'], runUpdate: async () => { ran++; } });
-  assert.equal(ran, 0);
-  assert.deepEqual(r.updated, []);
-  assert.match(r.failed[0].message, /200 Mo/);
-});
+// « update : liens gardés tels quels, skill trop gros » : voir install.test.mjs (mise à jour coupée au milieu).
 
 // Remplace le lien de Claude Code par une vraie copie qui diffère du dossier partagé.
 async function divergedCopy(h, text) {
@@ -774,14 +822,241 @@ test('remove d’une copie divergente désactivée : sauvegardée aussi', async 
   assert.match(await fs.readFile(path.join(own, 'SKILL.md'), 'utf8'), /Version de Claude Code/);
 });
 
+// --- Version 1.0 : relecture totale ---
+
+test('état : version, projet, catalogue ; lignes de projet seulement avec un projet', async () => {
+  const h = await home();
+  const cwd = await cwdOf(h);
+  await fs.mkdir(path.join(cwd, '.claude', 'skills', 'proj-skill'), { recursive: true });
+  await fs.writeFile(path.join(cwd, '.claude', 'skills', 'proj-skill', 'SKILL.md'), skillMd('proj-skill', 'Projet.'));
+  const pkg = JSON.parse(await fs.readFile(new URL('../../package.json', import.meta.url), 'utf8'));
+  let st = await getState({ home: h, cwd: h, project: null });
+  assert.equal(st.version, pkg.version);
+  assert.equal(st.project, null);
+  assert.equal(st.catalog.source, 'bundled');
+  assert.match(st.catalog.generatedAt, /^\d{4}-\d\d-\d\d/);
+  assert.ok(!st.mine.some((r) => r.scope === 'project'));
+  st = await getState({ home: h, cwd, project: cwd });
+  assert.equal(st.project, cwd);
+  assert.ok(st.mine.some((r) => r.name === 'proj-skill' && r.scope === 'project'));
+});
+
+test('état : dossier personnel atteint par un lien, aucun skill compté deux fois', async () => {
+  const h = await home();
+  const via = path.join(path.dirname(h), path.basename(h) + '-lien');
+  assert.ok(via.startsWith(path.dirname(h)) && path.basename(via).startsWith('sa-test-'));
+  await fs.symlink(h, via, process.platform === 'win32' ? 'junction' : 'dir');
+  try {
+    const st = await getState({ home: h, cwd: via });
+    assert.equal(st.project, null);
+    assert.deepEqual(st.mine.filter((r) => r.name === 'demo-skill').map((r) => r.scope), ['global']);
+    const st2 = await getState({ home: h, cwd: h, project: via });
+    assert.equal(st2.project, null);
+  } finally { await fs.unlink(via).catch(() => fs.rmdir(via)); }
+});
+
+test('vider un agent qui n’a que des liens : la sauvegarde se restaure en skill utilisable', async () => {
+  const h = await home();
+  const link = path.join(h, '.claude', 'skills', 'demo-skill');
+  const res = await actions.removeAgentSkills({ home: h, agent: 'claude-code', backup: true });
+  assert.deepEqual(res.removed, ['demo-skill']);
+  const meta = JSON.parse(await fs.readFile(path.join(h, '.skill-advisor', 'backups', res.backups[0].id, 'meta.json'), 'utf8'));
+  assert.deepEqual(meta.items[0].places, [{ agent: 'claude-code', off: false, copy: 'demo-skill', link: true }]);
+  assert.equal(await lexists(link), false);
+  await restoreBackup({ home: h, id: res.backups[0].id });
+  assert.ok(await lexists(path.join(link, 'SKILL.md')));
+  const row = (await getState({ home: h, cwd: h })).mine.find((x) => x.name === 'demo-skill');
+  assert.equal(row.ag['claude-code'], 'ok');
+});
+
+test('désactivé pour un agent, désinstallé avec sauvegarde, restauré : reste désactivé', async () => {
+  const h = await home();
+  const link = path.join(h, '.claude', 'skills', 'demo-skill');
+  const off = path.join(h, '.skill-advisor', 'disabled', 'claude-code', 'demo-skill');
+  assert.deepEqual((await actions.disable({ home: h, names: ['demo-skill'], agents: ['claude-code'] })).done, ['demo-skill']);
+  const rm = await actions.remove({ home: h, names: ['demo-skill'], backup: true });
+  assert.deepEqual(rm.removed, ['demo-skill']);
+  const meta = JSON.parse(await fs.readFile(path.join(h, '.skill-advisor', 'backups', rm.backups[0].id, 'meta.json'), 'utf8'));
+  assert.ok(meta.items[0].places.some((p) => p.agent === 'claude-code' && p.off === true));
+  await restoreBackup({ home: h, id: rm.backups[0].id });
+  assert.equal(await lexists(link), false, 'pas de lien actif pour Claude Code');
+  assert.ok(await lexists(path.join(off, 'SKILL.md')));
+  assert.ok(await lexists(path.join(h, '.agents', 'skills', 'demo-skill', 'SKILL.md')));
+});
+
+test('désactivé partout, désinstallé avec sauvegarde, restauré : chaque agent reste désactivé', async () => {
+  const h = await home();
+  const off = path.join(h, '.skill-advisor', 'disabled');
+  assert.deepEqual((await actions.disable({ home: h, names: ['demo-skill'] })).done, ['demo-skill']);
+  const rm = await actions.remove({ home: h, names: ['demo-skill'], backup: true });
+  assert.deepEqual(rm.removed, ['demo-skill']);
+  const meta = JSON.parse(await fs.readFile(path.join(h, '.skill-advisor', 'backups', rm.backups[0].id, 'meta.json'), 'utf8'));
+  assert.deepEqual(meta.items[0].places.map((p) => [p.agent, p.off]).sort(), [['claude-code', true], ['universal', true]]);
+  await restoreBackup({ home: h, id: rm.backups[0].id });
+  assert.ok(await lexists(path.join(off, 'universal', 'demo-skill', 'SKILL.md')));
+  assert.ok(await lexists(path.join(off, 'claude-code', 'demo-skill', 'SKILL.md')));
+  assert.equal(await lexists(path.join(h, '.claude', 'skills', 'demo-skill')), false);
+  assert.equal(await lexists(path.join(h, '.agents', 'skills', 'demo-skill')), false);
+  assert.deepEqual((await actions.enable({ home: h, names: ['demo-skill'] })).done, ['demo-skill']);
+  assert.ok(await lexists(path.join(h, '.claude', 'skills', 'demo-skill', 'SKILL.md')));
+});
+
+test('pseudo-agent shared : vaut tous les lecteurs du dossier partagé', async () => {
+  const h = await home();
+  const link = path.join(h, '.claude', 'skills', 'demo-skill');
+  assertInHome(h, link);
+  await fs.unlink(link);
+  const r = await actions.disable({ home: h, names: ['demo-skill'], agents: ['shared'] });
+  assert.deepEqual(r.done, ['demo-skill']);
+  assert.ok(await lexists(path.join(h, '.skill-advisor', 'disabled', 'universal', 'demo-skill', 'SKILL.md')));
+  assert.deepEqual((await actions.enable({ home: h, names: ['demo-skill'], agents: ['shared'] })).done, ['demo-skill']);
+  assert.deepEqual((await actions.remove({ home: h, names: ['demo-skill'], agents: ['shared'], backup: false })).removed, ['demo-skill']);
+  assert.equal(await lexists(path.join(h, '.agents', 'skills', 'demo-skill')), false);
+});
+
+// « Retirer du dossier partagé » envoie agents: ['shared'] : le dossier partagé et les liens vers lui partent,
+// jamais la copie propre d'un agent (même contenu, autre contenu, agent personnalisé, lien vers une autre copie).
+// Dossier propre d'un agent, lu dans le registre (le même sur chaque système), relatif au dossier jetable.
+async function ownDirOf(h, id) {
+  const { agentMap } = await import('../lib/registry.mjs');
+  const a = (await agentMap({ home: h }))[id];
+  assert.ok(a && a.dir && !a.shared, id);
+  assertInHome(h, a.dir);
+  return path.relative(h, a.dir);
+}
+
+test('remove agents [shared] : les copies propres des agents restent', async () => {
+  const h = await home();
+  const shared = path.join(h, '.agents', 'skills', 'demo-skill');
+  const same = path.join(h, await ownDirOf(h, 'augment'), 'demo-skill');
+  const other = path.join(h, await ownDirOf(h, 'bob'), 'demo-skill');
+  const ownDir = path.join(h, 'outils', 'mon agent', 'skills');
+  for (const p of [same, other, ownDir]) assertInHome(h, p);
+  await fs.cp(shared, same, { recursive: true });
+  await fs.mkdir(other, { recursive: true });
+  await fs.writeFile(path.join(other, 'SKILL.md'), skillMd('demo-skill', 'Autre contenu.'));
+  await fs.mkdir(ownDir, { recursive: true });
+  await fs.cp(shared, path.join(ownDir, 'demo-skill'), { recursive: true });
+  const custom = await addCustomAgent({ home: h, name: 'Mon agent', dir: ownDir });
+  // Deux liens vers le dossier partagé (Claude Code, Aider Desk), un lien vers la copie de l'agent personnalisé.
+  const aider = await ownDirOf(h, 'aider-desk');
+  await putLink(h, aider, 'demo-skill', shared);
+  const elsewhere = await putLink(h, await ownDirOf(h, 'autohand-code'), 'demo-skill', path.join(custom.dir, 'demo-skill'));
+  const res = await actions.remove({ home: h, names: ['demo-skill'], agents: ['shared'], backup: true });
+  assert.deepEqual(res.removed, ['demo-skill']);
+  assert.deepEqual(res.failed, []);
+  assert.equal(await lexists(shared), false);
+  assert.equal(await lexists(path.join(h, '.claude', 'skills', 'demo-skill')), false);
+  assert.equal(await lexists(path.join(h, aider, 'demo-skill')), false);
+  // Copies propres intactes, lien vers une autre copie intact.
+  assert.ok(await lexists(path.join(same, 'SKILL.md')));
+  assert.match(await fs.readFile(path.join(other, 'SKILL.md'), 'utf8'), /Autre contenu/);
+  assert.ok(await lexists(path.join(custom.dir, 'demo-skill', 'SKILL.md')));
+  assert.equal(await fs.realpath(elsewhere), await fs.realpath(path.join(custom.dir, 'demo-skill')));
+  // Des copies restent : elles gardent leur entrée de verrou.
+  assert.ok((await readLock(h)).skills['demo-skill']);
+  // Sauvegarde : le dossier partagé seul ; la restauration remet les deux liens.
+  assert.equal(res.backups.length, 1);
+  const meta = JSON.parse(await fs.readFile(path.join(h, '.skill-advisor', 'backups', res.backups[0].id, 'meta.json'), 'utf8'));
+  assert.deepEqual(meta.items[0].places.map((p) => p.agent), ['universal']);
+  assert.ok(meta.items[0].agents.includes('claude-code') && meta.items[0].agents.includes('aider-desk'), meta.items[0].agents.join(','));
+  assert.ok(!meta.items[0].agents.includes('augment') && !meta.items[0].agents.includes(custom.id));
+  await restoreBackup({ home: h, id: res.backups[0].id });
+  assert.ok(await lexists(path.join(shared, 'SKILL.md')));
+  assert.equal(await fs.realpath(path.join(h, '.claude', 'skills', 'demo-skill')), await fs.realpath(shared));
+  assert.equal(await fs.realpath(path.join(h, aider, 'demo-skill')), await fs.realpath(shared));
+  // Absent du dossier partagé : échec pour ce nom, rien d'autre touché.
+  const nf = await actions.remove({ home: h, names: ['absent-skill'], agents: ['shared'], backup: false });
+  assert.deepEqual(nf.removed, []);
+  assert.equal(nf.failed.length, 1);
+  assert.doesNotMatch(nf.failed[0].message, /universal|shared|~\/\.agents/);
+  // Identifiant inconnu à côté de shared : refus avant toute écriture.
+  await assert.rejects(actions.remove({ home: h, names: ['demo-skill'], agents: ['shared', 'agent-inconnu'], backup: false }), codeOf('NOT_FOUND'));
+  assert.ok(await lexists(path.join(shared, 'SKILL.md')));
+});
+
+test('remove agents [shared] : plus aucune copie, le verrou part ; shared avec un agent propre', async () => {
+  const h = await home();
+  const shared = path.join(h, '.agents', 'skills', 'demo-skill');
+  const same = path.join(h, await ownDirOf(h, 'augment'), 'demo-skill');
+  assertInHome(h, same);
+  await fs.cp(shared, same, { recursive: true });
+  // shared et augment : les deux partent ensemble.
+  const r = await actions.remove({ home: h, names: ['demo-skill'], agents: ['shared', 'augment'], backup: false });
+  assert.deepEqual(r.removed, ['demo-skill']);
+  assert.deepEqual(r.failed, []);
+  assert.equal(await lexists(shared), false);
+  assert.equal(await lexists(same), false);
+  assert.equal(await lexists(path.join(h, '.claude', 'skills', 'demo-skill')), false);
+  assert.equal((await readLock(h)).skills['demo-skill'], undefined);
+});
+
+test('Windows : un lien recréé (deux volumes, copie fidèle) est une jonction à cible absolue', async () => {
+  const h = await home();
+  const shared = path.join(h, '.agents', 'skills', 'demo-skill');
+  const saved = { ...actions.io }, was = platform.name;
+  actions.io.rename = async () => { throw Object.assign(new Error('EXDEV'), { code: 'EXDEV' }); };
+  platform.name = 'win32';
+  try {
+    const r = await actions.disable({ home: h, names: ['demo-skill'], agents: ['claude-code'] });
+    assert.deepEqual(r.done, ['demo-skill']);
+    const off = path.join(h, '.skill-advisor', 'disabled', 'claude-code', 'demo-skill');
+    assert.ok((await fs.lstat(off)).isSymbolicLink());
+    assert.ok(path.isAbsolute(await fs.readlink(off)), 'cible absolue, comme une jonction');
+    assert.equal(await fs.realpath(off), await fs.realpath(shared));
+    // Copie fidèle d'un dossier qui contient un lien vers un dossier.
+    await fs.mkdir(path.join(h, 'arbre', 'cible'), { recursive: true });
+    await dirLink('cible', path.join(h, 'arbre', 'lien'));
+    await copyTree(path.join(h, 'arbre'), path.join(h, 'copie'), { links: 'verbatim' });
+    assert.ok(path.isAbsolute(await fs.readlink(path.join(h, 'copie', 'lien'))));
+    assert.equal(await fs.realpath(path.join(h, 'copie', 'lien')), await fs.realpath(path.join(h, 'arbre', 'cible')));
+  } finally { Object.assign(actions.io, saved); platform.name = was; }
+});
+
+test('droits : ~/.skill-advisor en 0700, ses fichiers en 0600', { skip: process.platform === 'win32' && 'droits POSIX : sans effet sous Windows' }, async () => {
+  const h = await home(false);
+  const sa = path.join(h, '.skill-advisor');
+  const mode = async (p) => (await fs.stat(p)).mode & 0o777;
+  await writeJsonAtomic(path.join(sa, 'cache', 'x.json'), { a: 1 });
+  assert.equal(await mode(sa), 0o700);
+  assert.equal(await mode(path.join(sa, 'cache')), 0o700);
+  assert.equal(await mode(path.join(sa, 'cache', 'x.json')), 0o600);
+  await putShared(h, 'demo-skill', 'Démo.');
+  await mkdirp(path.join(sa, 'tmp'));
+  await copyTree(path.join(h, '.agents', 'skills', 'demo-skill'), path.join(sa, 'tmp', 'copie'));
+  assert.equal(await mode(path.join(sa, 'tmp')), 0o700);
+  assert.equal(await mode(path.join(sa, 'tmp', 'copie')), 0o700);
+  // Dossier déjà là, trop ouvert : refermé au démarrage.
+  await fs.chmod(sa, 0o755);
+  await prepareSaDir(h);
+  assert.equal(await mode(sa), 0o700);
+  // Hors de ~/.skill-advisor : droits ordinaires.
+  await mkdirp(path.join(h, 'ailleurs', 'x'));
+  assert.notEqual(await mode(path.join(h, 'ailleurs')), 0o700);
+  await writeJsonAtomic(path.join(h, 'ailleurs', 'y.json'), {});
+  assert.notEqual(await mode(path.join(h, 'ailleurs', 'y.json')), 0o600);
+});
+
+test('liens de fichier : sautés sous Windows sans le droit de les créer', async (t) => {
+  if (!(await fileLinksOk())) { t.skip(NO_FILE_LINK); return; }
+  const h = await home();
+  const shared = path.join(h, '.agents', 'skills', 'demo-skill');
+  await fs.symlink('SKILL.md', path.join(shared, 'alias.md'), 'file');
+  await copyTree(shared, path.join(h, 'copie'), { links: 'verbatim' });
+  assert.equal(await fs.readlink(path.join(h, 'copie', 'alias.md')), 'SKILL.md');
+});
+
 // --- Réseau (SA_NET=1) ---
 
 const NET = { skip: !process.env.SA_NET && 'réseau : SA_NET=1 pour lancer' };
 
 test('réseau : installer, vérifier, mettre à jour web-design-guidelines', NET, async () => {
   const h = await home(false);
+  // Windsurf détecté, jamais choisi : il ne doit rien recevoir, ni à l'installation, ni à la mise à jour.
+  await fs.mkdir(path.join(h, '.codeium', 'windsurf'), { recursive: true });
   await assertSafeHome(h);
   const cwd = await cwdOf(h);
+  const wind = path.join(h, '.codeium', 'windsurf', 'skills', 'web-design-guidelines');
   const ins = await actions.install({ home: h, cwd, items: [{ source: 'vercel-labs/agent-skills', skill: 'web-design-guidelines' }], agents: ['claude-code', 'cursor'], scope: 'global' });
   assert.deepEqual(ins.failed, []);
   assert.deepEqual(ins.installed, ['web-design-guidelines']);
@@ -805,6 +1080,8 @@ test('réseau : installer, vérifier, mettre à jour web-design-guidelines', NET
   assert.deepEqual(up.updated, ['web-design-guidelines']);
   st = await getState({ home: h, cwd });
   assert.equal(st.mine.find((x) => x.name === 'web-design-guidelines').st, 'ok');
+  assert.equal(await lexists(wind), false, 'Windsurf ne gagne pas le skill');
+  assert.deepEqual((await actions.check({ home: h })).outdated, [], 'verrou à jour après la mise à jour');
 
   // Désactivé partout : check ne le signale pas, update ne le réinstalle pas.
   const name = 'web-design-guidelines';
@@ -835,4 +1112,19 @@ test('réseau : installer, vérifier, mettre à jour web-design-guidelines', NET
   row = st.mine.find((x) => x.name === name);
   assert.equal(row.st, 'ok');
   assert.equal(row.ag['claude-code'], 'ok');
+});
+
+test('réseau : causes d’échec, hôte introuvable et dépôt absent', NET, async () => {
+  const h = await home(false);
+  await assertSafeHome(h);
+  const r = await actions.install({ home: h, scope: 'global', agents: ['claude-code'], items: [{ source: 'https://gitlab.com/skill-advisor-test-zz/depot-inexistant-zz', skill: 'x' }] });
+  assert.deepEqual(r.installed, []);
+  assert.match(r.failed[0].message, /Source introuvable ou privée/);
+  assert.doesNotMatch(r.failed[0].message, /GitHub limite|Authentication|fatal/);
+  // Hôte inconnu (DNS) : erreur NETWORK pour tout l'appel, jamais « limite GitHub ».
+  await assert.rejects(actions.install({ home: h, scope: 'global', agents: ['claude-code'], items: [{ source: 'https://skills.invalid/a/b.git', skill: 'x' }] }), (e) => {
+    assert.equal(e.code, 'NETWORK');
+    assert.doesNotMatch(e.message, /GitHub/);
+    return true;
+  });
 });

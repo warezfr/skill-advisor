@@ -1,4 +1,4 @@
-// Inventaire : état complet de la machine (agents, skills installés, sauvegardes, réglages).
+// Inventaire : état complet de la machine (agents, skills installés, sauvegardes, réglages, projet, version).
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -6,9 +6,25 @@ import { call } from './worker.mjs';
 import { listAgents, readsShared } from './registry.mjs';
 import { readSettings } from './settings.mjs';
 import { listBackups } from './backups.mjs';
-import { AGENT_RE, NAME_RE, disabledDir, homeOf, lockPath, lstatOrNull, osName, readJson, saDir, scanOf, sharedDir, statOrNull } from './util.mjs';
+import { catalogInfo as catalogOf } from './catalog.mjs';
+import { AGENT_RE, NAME_RE, disabledDir, homeOf, keyIn, lockPath, lstatOrNull, osName, readJson, saDir, scanOf, sharedDir, statOrNull } from './util.mjs';
 
 const CATALOG = fileURLToPath(new URL('../../catalog/catalog.json', import.meta.url));
+const PACKAGE = fileURLToPath(new URL('../../package.json', import.meta.url));
+let versionP = null;
+
+// Version de Skill Advisor, lue une fois dans package.json.
+function appVersion() {
+  if (!versionP) versionP = fs.readFile(PACKAGE, 'utf8').then((t) => String(JSON.parse(t).version || ''), () => '');
+  return versionP;
+}
+// Source et date du catalogue : catalogInfo lit le cache ou la copie fournie, jamais le réseau (l'état doit rester rapide).
+async function catalogState(home) {
+  const c = await catalogOf({ home }).catch(() => ({ source: 'bundled', generatedAt: null }));
+  return { source: c.source === 'online' ? 'online' : 'bundled', generatedAt: c.generatedAt || null };
+}
+// Chemin réel, ou le chemin résolu s'il n'existe pas.
+async function real(p) { try { return await fs.realpath(p); } catch { return path.resolve(p); } }
 const OWNER_REPO = /^[\w-][\w.-]*\/[\w-][\w.-]*$/;
 let catalogP = null;
 
@@ -52,11 +68,12 @@ async function agentStatus(entry, sharedMd) {
   return own !== null && own !== sharedMd ? 'div' : 'ok';
 }
 
-// Entrées désactivées des agents encore connus : { nom: [{ agent, path }] }.
-async function readDisabled(home, known) {
+// Entrées désactivées : { nom: [{ agent, path }] }. Un agent qui n'existe plus (retiré du paquet ou des réglages)
+// garde ses skills désactivés visibles : sans cela, ils resteraient cachés sous ~/.skill-advisor/disabled.
+async function readDisabled(home) {
   const out = {};
   for (const a of await readdirOrEmpty(disabledDir(home))) {
-    if (!a.isDirectory() || !AGENT_RE.test(a.name) || !known.has(a.name)) continue;
+    if (!a.isDirectory() || !AGENT_RE.test(a.name)) continue;
     for (const e of await readdirOrEmpty(path.join(disabledDir(home), a.name))) {
       if (!NAME_RE.test(e.name)) continue;
       (out[e.name] = out[e.name] || []).push({ agent: a.name, path: path.join(disabledDir(home), a.name, e.name) });
@@ -67,15 +84,22 @@ async function readDisabled(home, known) {
 
 export async function getState(opts = {}) {
   const home = homeOf(opts);
-  const cwd = opts.cwd || process.cwd();
-  const scope = path.resolve(cwd) !== path.resolve(home) ? 'all' : 'global';
-  const [snap, settings, lockRaw, checked, cat, backups] = await Promise.all([
-    call('snapshot', [{ cwd, scope }], { home, cwd }),
+  // Projet : celui que donne le serveur ; sans lui (appel direct), le dossier courant s'il n'est pas le dossier personnel.
+  // Comparaison par chemins réels : un dossier personnel atteint par un lien n'est pas un projet.
+  let project = opts.project !== undefined ? opts.project : null;
+  const cwd = project || opts.cwd || home;
+  if (opts.project === undefined && opts.cwd) project = (await real(opts.cwd)) !== (await real(home)) ? opts.cwd : null;
+  if (project && (await real(project)) === (await real(home))) project = null;
+  const scope = project ? 'all' : 'global';
+  const [snap, settings, lockRaw, checked, cat, backups, version, catalogInfo] = await Promise.all([
+    call('snapshot', [{ cwd: project || home, scope }], { home, cwd: project || home }),
     readSettings({ home }),
     readJson(lockPath(home), null),
     readJson(checkFile(home), null),
     catalog(),
     listBackups({ home }),
+    appVersion(),
+    catalogState(home),
   ]);
   const agents = await listAgents({ home, settings, supported: snap.supported, detected: snap.detected });
   const lock = (lockRaw && lockRaw.skills) || {};
@@ -87,27 +111,32 @@ export async function getState(opts = {}) {
   const ownDirs = infos.filter((a) => !readsShared(a) && a.globalSkillsDir).map((a) => ({ id: a.id, dir: a.globalSkillsDir }))
     .concat(settings.custom.map((c) => ({ id: c.id, dir: c.dir })));
   const shared = sharedDir(home);
-  const disabled = await readDisabled(home, new Set(['universal', ...ownDirs.map((a) => a.id)]));
+  const disabled = await readDisabled(home);
 
   const row = (name, src, inLock, p, sc) => {
     const id = src && OWNER_REPO.test(src) ? src + '/' + name : 'local/' + name;
     const c = cat[id];
     return {
       id, name, src: src || 'local', real: !!c, st: !inLock ? 'ng' : outdated.has(name) ? 'maj' : 'ok', on: true, ag: {},
-      chars: null, warn: 0, note: c && c.score && typeof c.score.total === 'number' ? c.score.total : null, scan: null, path: p, scope: sc,
+      chars: null, desc: null, warn: 0, note: c && c.score && typeof c.score.total === 'number' ? c.score.total : null, scan: null, path: p, scope: sc,
     };
   };
   const finish = async (r, desc, scanDir) => {
     if (desc == null && scanDir) desc = descriptionOf(await readOrNull(path.join(scanDir, 'SKILL.md')));
     r.chars = typeof desc === 'string' ? desc.length : null;
+    // Description du front matter : le guide d'usage la montre pour les skills hors catalogue (constat 77).
+    r.desc = typeof desc === 'string' ? desc : null;
     r.scan = scanDir ? scanOf(scanDir) : null;
     r.warn = r.scan ? (r.scan.verdict === 'rouge' ? 2 : r.scan.verdict === 'orange' ? 1 : 0) : 0;
   };
 
   const mine = [];
   const seen = new Set();
+  // Chemins réels des skills globaux : un skill de projet qui est en fait l'un d'eux n'est pas compté deux fois.
+  const globalReal = new Set(await Promise.all(snap.skills.filter((s) => s.scope !== 'project').map((s) => real(s.path))));
   for (const s of snap.skills) {
     if (s.scope === 'project') {
+      if (!project || globalReal.has(await real(s.path))) continue;
       const r = row(s.name, s.source, !!s.source, s.path, 'project');
       for (const a of s.agents) r.ag[a] = 'ok';
       await finish(r, s.description, s.path);
@@ -137,7 +166,8 @@ export async function getState(opts = {}) {
       const st = await agentStatus(p, null);
       const md = await statOrNull(path.join(p, 'SKILL.md'));
       if (st !== 'ko' && !md) continue;
-      const entry = lock[e.name];
+      // Clé du verrou par la règle du nom de dossier (clé « PDF » pour le dossier pdf).
+      const k = keyIn(lock, e.name), entry = k ? lock[k] : null;
       let r = mine.find((x) => x.scope === 'global' && x.name === e.name && x._extra);
       if (!r) {
         r = row(e.name, entry && entry.source, !!entry, p, 'global');
@@ -153,7 +183,7 @@ export async function getState(opts = {}) {
   for (const [name, list] of Object.entries(disabled)) {
     let r = mine.find((x) => x.scope === 'global' && (x.name === name || path.basename(x.path) === name));
     if (!r) {
-      const entry = lock[name];
+      const k = keyIn(lock, name), entry = k ? lock[k] : null;
       const real = list.find((d) => d.agent === 'universal') || list[0];
       let dir = real.path;
       const l = await lstatOrNull(dir);
@@ -173,5 +203,5 @@ export async function getState(opts = {}) {
     delete r.off; delete r._extra;
   }
   mine.sort((a, b) => a.name.localeCompare(b.name) || a.scope.localeCompare(b.scope));
-  return { mode: 'live', os: osName(), home, cwd, agents, mine, backups, settings };
+  return { mode: 'live', os: osName(), version, home, cwd, project: project || null, catalog: catalogInfo, agents, mine, backups, settings };
 }

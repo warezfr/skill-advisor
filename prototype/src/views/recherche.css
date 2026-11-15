@@ -72,3 +72,9 @@
 .sr-pop-sec { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--line); display: grid; gap: 8px; }
 .sr-pop-sec .sr-pop-h { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .sr-pop-lk { margin: 0; }
+
+/* Titre : sous-titre avec le total de skills.sh, la date et la source de la base */
+.sr-sub { margin: 4px 0 12px; font-size: 13.5px; }
+/* Entrées à installer à la main : la raison sous le nom, le lien à la place du bouton */
+.sr-man { margin: 4px 0 0; font-size: 12.5px; line-height: 1.5; }
+.sr-man-l { text-decoration: none; white-space: nowrap; }

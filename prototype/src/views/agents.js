@@ -86,6 +86,10 @@
   }
   /* Dossier partagé lu par les agents universels (~/.agents/skills). */
   function sharedPath() { return '~' + sep() + '.agents' + sep() + 'skills'; }
+  /* Mode réel : agents universels détectés, c'est-à-dire les lecteurs du dossier partagé. Ils forment une seule cible. */
+  function readers() { return live() ? all().filter(function (a) { return a.universal && a.detected; }) : []; }
+  function namesList(l) { return l.length < 2 ? l.join('') : l.slice(0, -1).join(', ') + ' et ' + l[l.length - 1]; }
+  function nameOf(id) { var a = find(id); return a ? a.name : id; }
   function byName(a, b) { return a.name.localeCompare(b.name, 'fr', { sensitivity: 'base' }); }
 
   function list() {
@@ -170,7 +174,7 @@
 
   function sigText(a) {
     if (a.custom) return 'ajouté à la main';
-    if (live()) return !a.detected ? 'aucun signal' : a.universal ? 'lit le dossier partagé ' + sharedPath() : '';
+    if (live()) return !a.detected ? 'aucun signal' : a.universal ? 'lit le dossier partagé' : '';
     if (!a.sig || !a.sig.length) return 'aucun signal';
     var os = SA.state.os;
     return a.sig.map(function (k) {
@@ -211,20 +215,38 @@
     '</div>';
   }
 
+  /* Case du produit dans un label : un clic sur le texte coche aussi. */
+  function backupBox(id, on) {
+    return '<label class="ckl"><button type="button" class="cb" role="checkbox" aria-checked="' + !!on + '" data-ag-backup data-fk="backup:' + id + '">' +
+      SA.icon('check') + '</button><span>Garder une sauvegarde</span></label>';
+  }
   function confirmHTML(a, c) {
     var id = SA.esc(a.id), name = SA.esc(a.name);
-    if (c.kind === 'empty') {
-      return '<div class="ag-cf" role="group" aria-labelledby="ag-cf-t-' + id + '">' +
-        '<p class="ag-cf-t" id="ag-cf-t-' + id + '">' + (a.count === 1 ? 'Retirer le skill de ' + name + ' ? L’agent ne le lira plus.'
-          : 'Retirer ' + (a.count ? 'les ' + a.count + ' skills' : 'les skills') + ' de ' + name + ' ? L’agent ne les lira plus.') + '</p>' +
-        (a.universal ? '<p class="ag-cf-w">Ces skills sont dans le dossier partagé <span class="mono">' + SA.esc(sharedPath()) + '</span>. Les autres agents qui lisent ce dossier ne les liront plus non plus.</p>' : '') +
-        '<label class="ag-cb"><input type="checkbox" data-ag-backup data-fk="backup:' + id + '"' + (c.backup !== false ? ' checked' : '') + '><span>Garder une sauvegarde</span></label>' +
-        '<p class="ag-cf-a"><button type="button" class="btn danger" data-ag-ok data-fk="ok:' + id + '">Retirer les skills</button>' +
+    var head = '<div class="ag-cf cfm" role="group" aria-labelledby="ag-cf-t-' + id + '">';
+    if (c.kind === 'shared') {
+      /* Refus SHARED du serveur : le dossier est lu par d'autres agents. La question les nomme. */
+      /* Lecteurs envoyés par le serveur ; un identifiant que l'écran ne connaît pas n'est pas affiché tel quel. */
+      var rd = (c.readers || []).filter(function (x) { return x !== a.id && !!find(x); }).map(nameOf);
+      return head +
+        '<p class="ag-cf-t cfm-t" id="ag-cf-t-' + id + '">' + name + ' lit ses skills dans le dossier partagé <span class="mono">' + SA.esc(sharedPath()) + '</span>' +
+          (rd.length ? ', lu aussi par ' + SA.esc(namesList(rd)) : '') + '.</p>' +
+        '<p class="ag-cf-w cfm-w">Skill Advisor peut désinstaller ces skills du dossier partagé. Les liens vers ce dossier partent aussi. Les copies propres des autres agents sont gardées.</p>' +
+        backupBox(id, c.backup !== false) +
+        '<p class="ag-cf-a cfm-a"><button type="button" class="btn danger" data-ag-ok data-fk="ok:' + id + '">Retirer du dossier partagé pour tous ces agents</button>' +
         '<button type="button" class="btn quiet" data-ag-no data-fk="no:' + id + '">Annuler</button></p></div>';
     }
-    return '<div class="ag-cf" role="group" aria-labelledby="ag-cf-t-' + id + '">' +
-      '<p class="ag-cf-t" id="ag-cf-t-' + id + '">Retirer ' + name + ' de la liste ? Skill Advisor n’installera plus rien dans son dossier.</p>' +
-      '<p class="ag-cf-a"><button type="button" class="btn danger" data-ag-ok data-fk="ok:' + id + '">Retirer l’agent</button>' +
+    if (c.kind === 'empty') {
+      return head +
+        '<p class="ag-cf-t cfm-t" id="ag-cf-t-' + id + '">' + (a.count === 1 ? 'Retirer le skill de ' + name + ' ? L’agent ne le lira plus.'
+          : 'Retirer ' + (a.count ? 'les ' + a.count + ' skills' : 'les skills') + ' de ' + name + ' ? L’agent ne les lira plus.') + '</p>' +
+        (a.universal ? '<p class="ag-cf-w cfm-w">' + name + ' lit le dossier partagé <span class="mono">' + SA.esc(sharedPath()) + '</span>. Si d’autres agents le lisent, Skill Advisor vous le dit avant de retirer quoi que ce soit.</p>' : '') +
+        backupBox(id, c.backup !== false) +
+        '<p class="ag-cf-a cfm-a"><button type="button" class="btn danger" data-ag-ok data-fk="ok:' + id + '">Retirer les skills</button>' +
+        '<button type="button" class="btn quiet" data-ag-no data-fk="no:' + id + '">Annuler</button></p></div>';
+    }
+    return head +
+      '<p class="ag-cf-t cfm-t" id="ag-cf-t-' + id + '">Retirer ' + name + ' de la liste ? Skill Advisor n’installera plus rien dans son dossier.</p>' +
+      '<p class="ag-cf-a cfm-a"><button type="button" class="btn danger" data-ag-ok data-fk="ok:' + id + '">Retirer l’agent</button>' +
       '<button type="button" class="btn quiet" data-ag-no data-fk="no:' + id + '">Annuler</button></p></div>';
   }
 
@@ -233,10 +255,13 @@
     var b = badge(a), skl = pending ? ' skl' : '';
     var can = a.detected || a.custom;
     var open = ag.menu === a.id, c = ag.confirm && ag.confirm.id === a.id ? ag.confirm : null;
-    var p = a.dir ? shortPath(a.dir) : 'Aucun dossier';
+    var p = a.dir ? shortPath(a.dir) : live() && a.universal ? sharedPath() : 'Aucun dossier';
     var sig = sigText(a);
-    return '<li class="ag-row ag-' + (a.custom ? 'ok' : a.st) + (a.hidden ? ' is-hidden' : '') + '" data-id="' + id + '" data-st>' +
-      '<button type="button" class="sw" role="switch" aria-checked="' + (can && a.target) + '" aria-label="Recevoir les installations : ' + name + '" title="Recevoir les installations" data-fk="sw:' + id + '"' + (can ? '' : ' disabled') + '></button>' +
+    /* Lecteur du dossier partagé : il reçoit les installations par la ligne « Dossier partagé », jamais seul. */
+    var sw = live() && a.universal
+      ? '<span class="ag-sw-na mut" aria-hidden="true">·</span>'
+      : '<button type="button" class="sw" role="switch" aria-checked="' + (can && a.target) + '" aria-label="Recevoir les installations : ' + name + '" data-fk="sw:' + id + '"' + (can ? '' : ' disabled') + '></button>';
+    return '<li class="ag-row ag-' + (a.custom ? 'ok' : a.st) + (a.hidden ? ' is-hidden' : '') + '" data-id="' + id + '" data-st>' + sw +
       '<p class="ag-l1"><span class="ag-n">' + name + '</span>' + (sig ? '<span class="ag-sig">' + SA.esc(sig) + '</span>' : '') + '</p>' +
       '<span class="bdg ' + b[0] + skl + '">' + b[1] + '</span>' +
       '<p class="ag-path' + (a.dir ? '' : ' mut') + skl + '"><span class="mono">' + SA.esc(p) + '</span><span class="ag-cnt">' + SA.esc(countText(a)) + '</span></p>' +
@@ -258,13 +283,37 @@
   function rows(items, pending) {
     return items.map(function (a) { return rowHTML(a, pending); }).join('');
   }
+  /* Le dossier partagé : une cible, un interrupteur, ses lecteurs détectés nommés dessous. */
+  function sharedOn() { return readers().some(function (a) { return a.target; }); }
+  /* Filtres et recherche : la ligne reste quand elle correspond (détectée, cible si allumée, nom ou lecteur cherché). */
+  function sharedKeep(rd) {
+    var f = st().f, q = st().q.trim().toLowerCase();
+    if (f === 'masques' || (f === 'cibles' && !sharedOn())) return false;
+    if (!q) return true;
+    return 'dossier partagé'.indexOf(q) > -1 || 'shared'.indexOf(q) > -1 || rd.some(function (a) { return a.name.toLowerCase().indexOf(q) > -1 || a.id.indexOf(q) > -1; });
+  }
+  function sharedHTML() {
+    var rd = readers();
+    if (!rd.length || !sharedKeep(rd)) return '';
+    var n = rd.reduce(function (m, a) { return Math.max(m, a.count || 0); }, 0);
+    return '<ul class="ledger ag-list ag-shared" aria-label="Dossier partagé"><li class="ag-row ag-ok" data-id="shared" data-st>' +
+      '<button type="button" class="sw" role="switch" aria-checked="' + sharedOn() + '" aria-label="Recevoir les installations : dossier partagé" data-ag-shared data-fk="sw:shared"></button>' +
+      '<p class="ag-l1"><span class="ag-n">Dossier partagé</span><span class="ag-sig">lu par ' + SA.esc(namesList(rd.map(function (a) { return a.name; }))) + '</span></p>' +
+      '<span class="bdg ok">' + SA.pl(rd.length, 'lecteur', 'lecteurs') + '</span>' +
+      '<p class="ag-path"><span class="mono">' + SA.esc(sharedPath()) + '</span><span class="ag-cnt">' + SA.esc(n ? SA.pl(n, 'skill', 'skills') : 'aucun skill') + '</span></p>' +
+    '</li></ul>';
+  }
+  /* Libellé visible au-dessus de la colonne des interrupteurs. */
+  function colHead() { return '<p class="ag-colh" aria-hidden="true">Recevoir les installations</p>'; }
 
   function listHTML() {
     var pending = !scanned(), l = list(), f = filtering(), ag = st(), out = '';
     var top = l.top.filter(keep), others = l.others.filter(keep), custom = l.custom.filter(keep);
-    if (!top.length && !others.length && !custom.length) {
+    var shared = sharedHTML();
+    if (!top.length && !others.length && !custom.length && !shared) {
       return '<p class="sub ag-empty" data-st>Aucun agent ne correspond. Modifiez la recherche ou le filtre.</p>';
     }
+    out += colHead() + shared;
     if (top.length || (!live() && SA.state.os === 'win' && !f)) {
       out += '<ul class="ledger ag-list" aria-label="Agents principaux">' + rows(top, pending) +
         (!live() && SA.state.os === 'win' && !f ? wslHTML(pending) : '') + '</ul>';
@@ -309,11 +358,14 @@
       return '<p class="sub">Indiquez son nom et le dossier où il lit ses skills : il recevra les installations comme les autres.</p>' +
         '<p class="ag-new-a"><button type="button" class="btn" data-ag-new data-fk="new">Ajouter un agent</button></p>';
     }
+    /* Le message d'erreur se place sous le champ fautif. */
+    var errP = '<p class="ag-new-err" id="ag-new-err" role="alert">' + SA.esc(ag.err || '') + '</p>';
     return '<div class="ag-form"><label class="ag-fl" for="ag-new-n">Nom de l’agent</label>' +
       '<input id="ag-new-n" class="fld" type="text" autocomplete="off" maxlength="60" placeholder="Mon agent" data-fk="n" value="' + SA.esc(ag.nv || '') + '"' + (ag.err && ag.errAt === 'n' ? ' aria-invalid="true" aria-describedby="ag-new-err"' : '') + '>' +
+      (ag.errAt === 'n' ? errP : '') +
       '<label class="ag-fl" for="ag-new-p">Dossier où il lit ses skills, en chemin complet</label>' +
       '<input id="ag-new-p" class="fld mono" type="text" autocomplete="off" spellcheck="false" placeholder="' + SA.esc(example()) + '" data-fk="p" value="' + SA.esc(ag.dv || '') + '"' + (ag.err && ag.errAt === 'p' ? ' aria-invalid="true" aria-describedby="ag-new-err"' : '') + '>' +
-      '<p class="ag-new-err" id="ag-new-err" role="alert">' + SA.esc(ag.err || '') + '</p>' +
+      (ag.errAt === 'n' ? '' : errP) +
       '<p class="ag-new-a"><button type="button" class="btn primary" data-ag-add data-fk="add"' + (ag.busy ? ' disabled' : '') + '>Ajouter cet agent</button><button type="button" class="btn quiet" data-ag-cancel>Annuler</button></p></div>';
   }
 
@@ -353,7 +405,7 @@
     }, function (e) {
       var a = st(), m = (e && e.message) || 'L’action a échoué. Réessayez.';
       a.busy = false;
-      if (o.ko) o.ko(m); else a.fail = m;
+      if (o.ko) o.ko(m, e); else a.fail = m;
       refresh(o.koFocus || o.focus);
       return false;
     });
@@ -387,9 +439,23 @@
     return run('POST', '/api/agents/targets', { ids: ids }, { focus: o.focus, ok: function () { st().msg = o.msg; }, ko: o.ko });
   }
 
+  /* Interrupteur du dossier partagé : tous ses lecteurs détectés ensemble (le serveur les traite comme un seul dossier). */
+  function targetShared(on) {
+    var rd = readers(), ids = rd.map(function (a) { return a.id; });
+    if (!ids.length) return Promise.resolve(false);
+    on = !!on;
+    var keep = all().filter(function (x) { return x.target && ids.indexOf(x.id) < 0; }).map(function (x) { return x.id; });
+    var next = on ? keep.concat(ids) : keep;
+    var msg = on ? 'Le dossier partagé recevra les installations.' : 'Le dossier partagé ne recevra plus les installations.';
+    if (!next.length) return refuse('Gardez au moins un agent qui reçoit les installations.', 'sw:shared');
+    if (!next.every(okId)) return refuse(BAD_ID, 'sw:shared');
+    return run('POST', '/api/agents/targets', { ids: next }, { focus: 'sw:shared', ok: function () { st().msg = msg; } });
+  }
+
   function target(id, on) {
     var a = find(id);
     if (!a || !(a.detected || a.custom)) return Promise.resolve(false);
+    if (live() && a.universal) return targetShared(on);
     on = !!on;
     var msg = a.name + (on ? ' recevra les installations.' : ' ne recevra plus les installations.');
     if (live()) return sendTargets(id, on, { focus: 'sw:' + id, msg: msg });
@@ -469,15 +535,27 @@
         return run('POST', '/api/agents/empty', { id: a.id, backup: backup }, {
           focus: 'menu:' + a.id,
           ok: function (res) {
-            var n = (res.removed || []).length, f = (res.failed || []).length;
-            st().msg = removedText(n, a.name) +
-              (n && backup ? ' Une sauvegarde est gardée.' : '') + (f ? ' ' + SA.pl(f, 'échec', 'échecs') + '.' : '');
-          }
+            var n = (res.removed || []).length;
+            st().msg = removedText(n, a.name) + (n && backup ? ' Une sauvegarde est gardée.' : '');
+            st().fail = failText(res.failed);
+          },
+          /* Refus SHARED : la question nomme les lecteurs du dossier et propose de le vider pour tous. */
+          ko: function (m, e) {
+            if (e && e.code === 'SHARED') {
+              var rd = Array.isArray(e.readers) ? e.readers.filter(okId) : readers().map(function (x) { return x.id; });
+              st().confirm = { id: a.id, kind: 'shared', readers: rd, backup: backup };
+              st().focus = 'no:' + a.id;
+              return;
+            }
+            st().fail = m;
+          },
+          koFocus: 'no:' + a.id
         });
       }
       var n = emptyDemo(a, backup);
       return done(removedText(n, a.name) + (n && backup ? ' Une sauvegarde est gardée.' : ''), 'menu:' + a.id);
     }
+    if (c.kind === 'shared') return emptyShared(a, c.backup !== false);
     if (c.kind === 'remove') {
       if (!a.custom) { refresh('menu:' + a.id); return Promise.resolve(false); }
       if (live()) {
@@ -494,6 +572,36 @@
     }
     refresh();
     return Promise.resolve(false);
+  }
+
+  /* Échecs nommés, avec la raison donnée par le serveur. */
+  function failText(list) {
+    return (Array.isArray(list) ? list : []).filter(function (f) { return f && typeof f === 'object'; })
+      .map(function (f) { return (f.name ? f.name + ' : ' : '') + (f.message || 'échec.'); }).join(' ');
+  }
+  /* Skills du dossier partagé, d'après Mes skills : noms de dossier des lignes globales que ce lecteur voit. */
+  var NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
+  function sharedSkills(id) {
+    var out = [];
+    (SA.state.mine || []).forEach(function (r) {
+      if (!r || r.kind === 'plugin' || r.scope === 'project' || !(r.ag || {})[id]) return;
+      var n = String(r.path || '').replace(/[\/\\]+$/, '').split(/[\/\\]/).pop();
+      if (NAME_RE.test(n) && out.indexOf(n) < 0) out.push(n);
+    });
+    return out;
+  }
+  function emptyShared(a, backup) {
+    var names = sharedSkills(a.id);
+    if (!names.length) return refuse('Skill Advisor ne trouve aucun skill de ' + a.name + ' dans Mes skills. Actualisez la page.', 'menu:' + a.id);
+    /* agents: ['shared'] : le moteur ne retire que le dossier partagé et les liens qui y mènent ; les copies propres restent. */
+    return run('POST', '/api/skills/remove', { names: names, agents: ['shared'], backup: backup }, {
+      focus: 'menu:' + a.id,
+      ok: function (res) {
+        var n = (res.removed || []).length;
+        st().msg = (n ? SA.pl(n, 'skill retiré', 'skills retirés') : 'Aucun skill retiré') + ' du dossier partagé.' + (n && backup ? ' Une sauvegarde est gardée.' : '');
+        st().fail = failText(res.failed);
+      }
+    });
   }
 
   function absolute(dir) {
@@ -518,6 +626,9 @@
     var s = SA.state, ag = st();
     name = String(name == null ? '' : name).trim();
     dir = String(dir == null ? '' : dir).trim();
+    /* Une paire de guillemets autour du chemin est retirée. */
+    var q = /^(["'])([\s\S]*)\1$/.exec(dir);
+    if (q) dir = q[2].trim();
     s.agNew = true;
     ag.nv = name;
     ag.dv = dir;
@@ -700,7 +811,7 @@
       var projet = s.scope === 'projet';
       var pending = !scanned();
       return '<div class="ag-mgr">' +
-        '<p class="eye" data-st>Cette machine</p>' +
+        '<p class="eye" data-st>Agents</p>' +
         SA.h1(lv ? 'Agents de cette machine' : 'Agents trouvés sur cette machine') +
         '<p class="lede" data-st>' + (lv
           ? 'Skill Advisor connaît ' + SA.pl(all().length, 'agent', 'agents') + '. Activez « Recevoir les installations » pour ceux qui doivent recevoir les skills.'
@@ -736,7 +847,9 @@
           '<div class="ag-scope-seg">' + segHTML('Portée de l’installation', [['global', 'Tous les projets'], ['projet', 'Ce projet seulement']], s.scope, 'data-scope') + '</div>' +
           '<div class="fold ag-proj-fold' + (projet ? ' open' : '') + '">' +
             '<div class="fold-in"' + (projet ? '' : ' inert') + '>' +
-              '<p class="ag-proj"><span class="ag-proj-l">Projet</span><span class="ag-proj-p mono">' + SA.esc(SA.projRoot()) + '</span></p>' +
+              /* Mode réel : le dossier gardé par le serveur, ou le champ pour le choisir (même champ qu'à l'installation). */
+              (lv && SA.projectField ? SA.projectField('ag')
+                : '<p class="ag-proj"><span class="ag-proj-l">Projet</span><span class="ag-proj-p mono">' + SA.esc(SA.projRoot()) + '</span></p>') +
             '</div>' +
           '</div>' +
         '</section>' +
@@ -752,8 +865,10 @@
         if (os && root.contains(os)) { setOs(root, os.getAttribute('data-os')); return; }
         var sc = t.closest('[data-scope]');
         if (sc && root.contains(sc)) { setScope(root, sc.getAttribute('data-scope')); return; }
+        if (live() && SA.projectClick && SA.projectClick(t, 'ag')) return;
         if ((b = t.closest('[data-ag-f]'))) { setFilter(b.getAttribute('data-ag-f')); return; }
         var sw = t.closest('.ag-row .sw');
+        if (sw && root.contains(sw) && sw.hasAttribute('data-ag-shared')) { if (!sw.disabled) targetShared(sw.getAttribute('aria-checked') !== 'true'); return; }
         if (sw && root.contains(sw)) {
           if (sw.disabled) return;
           var li = sw.closest('.ag-row');
@@ -765,6 +880,12 @@
         if ((b = t.closest('[data-ag-show]'))) { setHidden(b.getAttribute('data-ag-show'), false); return; }
         if ((b = t.closest('[data-ag-empty]'))) { if (!b.disabled) askEmpty(b.getAttribute('data-ag-empty')); return; }
         if ((b = t.closest('[data-ag-remove]'))) { askRemove(b.getAttribute('data-ag-remove')); return; }
+        if ((b = t.closest('[data-ag-backup]'))) {
+          var on = b.getAttribute('aria-checked') !== 'true';
+          b.setAttribute('aria-checked', String(on));
+          setBackup(on);
+          return;
+        }
         if (t.closest('[data-ag-ok]')) { confirm(); return; }
         if (t.closest('[data-ag-no]')) { cancel(); return; }
         if (t.closest('[data-ag-others]')) { toggleOthers(); return; }
@@ -782,14 +903,13 @@
         if (t && t.id === 'ag-q') { setQuery(t.value); updateRegion(root); return; }
         if (t && t.id === 'ag-new-n') st().nv = t.value;
         if (t && t.id === 'ag-new-p') st().dv = t.value;
-      });
-      root.addEventListener('change', function (e) {
-        var t = e.target;
-        if (t && t.hasAttribute && t.hasAttribute('data-ag-backup')) setBackup(t.checked);
+        /* Dossier du projet : gardé sans redessiner, le champ garde le focus. */
+        if (t && t.id === 'ag-proj-dir') SA.state.projDraft = t.value;
       });
       root.addEventListener('keydown', function (e) {
         var t = e.target;
         if (!t || !t.closest) return;
+        if (e.key === 'Enter' && t.id === 'ag-proj-dir' && SA.setProject) { e.preventDefault(); e.stopPropagation(); SA.setProject(); return; }
         if (e.key === 'Enter' && (t.id === 'ag-new-n' || t.id === 'ag-new-p')) { e.preventDefault(); submit(); return; }
         if (e.key === 'Escape') {
           var ag = st();
@@ -808,7 +928,7 @@
     /* Actions sans DOM, pour les essais et pour les autres écrans. */
     _do: {
       list: list, visible: visible, setQuery: setQuery, setFilter: setFilter, toggleOthers: toggleOthers,
-      target: target, hide: function (id) { return setHidden(id, true); }, show: function (id) { return setHidden(id, false); },
+      target: target, targetShared: targetShared, hide: function (id) { return setHidden(id, true); }, show: function (id) { return setHidden(id, false); },
       askEmpty: askEmpty, askRemove: askRemove, setBackup: setBackup, confirm: confirm, cancel: cancel,
       add: add, removeCustom: function (id) { askRemove(id); return confirm(); }, validate: validate
     }

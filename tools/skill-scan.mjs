@@ -12,7 +12,7 @@ import path from 'node:path';
 const SEV = { high: 3, medium: 2, low: 1 };
 
 // À augmenter à chaque changement de règle : la collecte recontrôle alors tous les skills.
-export const SCAN_VERSION = 4;
+export const SCAN_VERSION = 5;
 
 // applies : 'all' = tout fichier, 'script' = fichiers de code seulement, 'doc' = Markdown et texte
 export const RULES = [
@@ -97,16 +97,31 @@ export function verdict(findings) {
   return 'vert';
 }
 
-// Lit tout le fichier, ou son début et sa fin s'il dépasse deux fois MAX_BYTES.
+// Lit tout le fichier, ou son début et sa fin s'il dépasse deux fois MAX_BYTES. Rend des octets.
 function readParts(p, size) {
-  if (size <= 2 * MAX_BYTES) return [fs.readFileSync(p).toString('utf8')];
+  if (size <= 2 * MAX_BYTES) return [fs.readFileSync(p)];
   const fd = fs.openSync(p, 'r');
   try {
     const head = Buffer.alloc(MAX_BYTES), tail = Buffer.alloc(MAX_BYTES);
     const h = fs.readSync(fd, head, 0, MAX_BYTES, 0);
     const t = fs.readSync(fd, tail, 0, MAX_BYTES, size - MAX_BYTES);
-    return [head.subarray(0, h).toString('utf8'), tail.subarray(0, t).toString('utf8')]; // lignes de la fin : numérotées depuis le début du morceau
+    return [head.subarray(0, h), tail.subarray(0, t)]; // lignes de la fin : numérotées depuis le début du morceau
   } finally { fs.closeSync(fd); }
+}
+
+// UTF-16 annoncé par un BOM : FF FE (petit-boutiste) ou FE FF (gros-boutiste). Sortie courante de PowerShell 5.1 et du Bloc-notes.
+function bomOf(buf) {
+  if (buf.length < 2) return null;
+  if (buf[0] === 0xff && buf[1] === 0xfe) return 'le';
+  if (buf[0] === 0xfe && buf[1] === 0xff) return 'be';
+  return null;
+}
+
+// Décode un morceau UTF-16. skip : octet à sauter pour retomber sur une unité entière ; un octet final isolé est laissé.
+function decode16(buf, order, skip) {
+  let b = buf.subarray(skip, skip + ((buf.length - skip) & ~1));
+  if (order === 'be') b = Buffer.from(b).swap16();
+  return b.toString('utf16le');
 }
 
 export function scanSkillDir(dir) {
@@ -138,19 +153,35 @@ export function scanSkillDir(dir) {
   walk(dir);
   for (const { p, size } of files) {
     const rel = path.relative(dir, p);
-    let parts;
-    try { parts = readParts(p, size); } catch { continue; }
+    let bufs;
+    try { bufs = readParts(p, size); } catch { continue; }
+    const parts = bufs.map((b) => b.toString('utf8'));
     const nulAt = parts.findIndex((t) => t.includes('\u0000'));
+    // UTF-16 annoncé par un BOM : décodé. Un caractère nul après décodage : ce n'est pas du texte UTF-16.
+    const order = bomOf(bufs[0]);
+    let wide = order ? bufs.map((b, i) => decode16(b, order, i ? (size - MAX_BYTES) % 2 : 0)) : null;
+    if (wide && wide.some((t) => t.includes('\u0000'))) wide = null;
     // Binaire (image, police, archive…) : ni lu ni signalé, même gros. Un agent ne le lit pas comme consigne.
-    if (nulAt >= 0 && !TEXT_EXT.test(rel) && !SCRIPT_EXT.test(rel)) continue;
+    if (nulAt >= 0 && !wide && !TEXT_EXT.test(rel) && !SCRIPT_EXT.test(rel)) continue;
     if (size > MAX_BYTES) findings.push({ rule: 'OVERSIZE', sev: 'medium', label: 'Fichier très gros, contrôlé en partie', file: rel, line: 1, excerpt: '' });
-    if (nulAt >= 0) {
+    // Vue en octets, sans les octets nuls : toujours contrôlée, un faux BOM ne cache donc rien.
+    let found = [];
+    for (const t of parts) found.push(...scanText(nulAt >= 0 ? t.replace(/\u0000/g, '') : t, rel));
+    if (wide) {
+      const decoded = [];
+      for (const t of wide) decoded.push(...scanText(t, rel));
+      // Une règle vue seulement dans les octets : le fichier n'est pas le texte UTF-16 qu'il annonce.
+      const seen = new Set(decoded.map((f) => f.rule));
+      const extra = found.filter((f) => !seen.has(f.rule));
+      if (extra.length) wide = null;
+      found = [...decoded, ...extra];
+    }
+    if (nulAt >= 0 && !wide) {
       const t = parts[nulAt];
       const line = t.slice(0, t.indexOf('\u0000')).split('\n').length;
       findings.push({ rule: 'BINARY_TEXT', sev: 'high', label: 'Fichier texte qui contient des octets nuls', file: rel, line, excerpt: '' });
-      parts = parts.map((x) => x.replace(/\u0000/g, ''));
     }
-    for (const t of parts) findings.push(...scanText(t, rel));
+    findings.push(...found);
   }
   findings.sort((a, b) => SEV[b.sev] - SEV[a.sev]);
   return { files: files.length, verdict: verdict(findings), findings };
@@ -159,6 +190,10 @@ export function scanSkillDir(dir) {
 if (process.argv[1] && process.argv[1].endsWith('skill-scan.mjs')) {
   const root = process.argv[2];
   if (!root) { console.error('Usage : node tools/skill-scan.mjs <dossier> [--json]'); process.exit(2); }
+  // Dossier absent ou fichier : une ligne claire, pas une pile d'appels.
+  let isDir = false;
+  try { isDir = fs.statSync(root).isDirectory(); } catch { /* absent */ }
+  if (!isDir) { console.error('Dossier introuvable : ' + root + '. Indiquez un dossier qui contient vos skills.'); process.exit(2); }
   const res = {};
   for (const e of fs.readdirSync(root, { withFileTypes: true })) if (e.isDirectory()) res[e.name] = scanSkillDir(path.join(root, e.name));
   if (process.argv.includes('--json')) console.log(JSON.stringify(res, null, 1));

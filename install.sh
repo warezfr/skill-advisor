@@ -152,11 +152,17 @@ if [ -d "$DIR/.git" ] && [ "$GIT" = 1 ]; then
     msg "  Mise à jour impossible : la version déjà présente est gardée." "  Update failed: the version already there is kept."
   fi
 elif [ -f "$PAGE" ]; then
+  # Copie déjà là, que le script ne met pas à jour : copie d'archive sans git, ou copie git sans git utilisable.
   msg "  Skill Advisor est déjà dans ce dossier : il est gardé tel quel." "  Skill Advisor is already in this folder: it is kept as it is."
-  # Copie sans git et sans app/server.mjs : ancienne version, le script ne la met pas à jour.
-  if [ ! -f "$DIR/app/server.mjs" ]; then
-    msg "  Ce dossier contient une ancienne version, sans l'application. Le script ne la met pas à jour." "  This folder holds an older version, without the application. The script does not update it."
-    msg "  Pour une nouvelle installation, supprimez ce dossier ou choisissez-en un autre avec --dir." "  Delete this folder, or choose another one with --dir for a fresh installation."
+  HAVE_V="$(sed -n 's/^[[:space:]]*"version":[[:space:]]*"\([^"]*\)".*/\1/p' "$DIR/package.json" 2>/dev/null | head -n 1 || true)"
+  if [ -n "$HAVE_V" ]; then msg "  Version présente : $HAVE_V." "  Version found: $HAVE_V."; fi
+  if [ -d "$DIR/.git" ]; then
+    msg "  Cette copie a été installée avec git, mais git n'est pas utilisé ici. Le script ne la met pas à jour." "  This copy was installed with git, but git is not used here. The script does not update it."
+    msg "  Pour la mettre à jour, installez git, puis relancez le script sans --no-git." "  To update it, install git, then run the script again without --no-git."
+  else
+    msg "  Cette copie vient d'une archive, sans git. Le script ne la met pas à jour." "  This copy comes from an archive, without git. The script does not update it."
+    msg "  Pour avoir la nouvelle version, supprimez ce dossier, puis relancez le script." "  To get the new version, delete this folder, then run the script again."
+    msg "  Ou installez dans un autre dossier avec --dir. Vos réglages et sauvegardes dans ~/.skill-advisor restent." "  Or install into another folder with --dir. Your settings and backups in ~/.skill-advisor stay."
   fi
 elif [ -e "$DIR" ] && [ -n "$(ls -A "$DIR" 2>/dev/null)" ]; then
   fail "le dossier $DIR existe et contient autre chose. Choisissez un autre dossier avec --dir." "the folder $DIR exists and holds something else. Choose another folder with --dir."
@@ -225,7 +231,26 @@ fi
 
 # --- 4. Check -------------------------------------------------------------------
 step 4 "Contrôle" "Check"
-if [ "$NODE" = 1 ]; then
+# Application prête (dépendances dans node_modules) : tous les tests, npm test. Sinon le test de l'interface seul.
+if [ "$READY" = 1 ] && [ -d "$DIR/node_modules" ]; then
+  msg "  Tests de l'application (npm test). Cela prend environ une minute." "  Tests of the application (npm test). This takes about one minute."
+  if out="$(cd "$DIR" && npm test 2>&1)"; then T_OK=1; else T_OK=0; fi
+  # Bloc « Bilan » de test/run-all.mjs : une ligne par suite, « réussi » ou « ÉCHEC ».
+  bilan="$(printf '%s\n' "$out" | sed -n '/^=== Bilan ===$/,$p' | sed '1d')"
+  passed="$(printf '%s\n' "$bilan" | grep -c '^réussi' || true)"
+  failed="$(printf '%s\n' "$bilan" | grep -c '^ÉCHEC' || true)"
+  if [ "$T_OK" = 1 ]; then
+    msg "  Tests (npm test) : réussis, $passed suites." "  Tests (npm test): passed, $passed suites."
+  elif [ $((passed + failed)) = 0 ]; then
+    # Pas de bloc « Bilan » : npm test s'est arrêté avant la fin.
+    msg "  Tests (npm test) : échec avant la fin. L'installation continue." "  Tests (npm test): failed before the end. The installation goes on."
+    msg "  Pour le détail : cd $DIR, puis npm test" "  For the details: cd $DIR, then npm test"
+  else
+    msg "  Tests (npm test) : échec, $failed suite(s) sur $((passed + failed)). L'installation continue." "  Tests (npm test): failed, $failed suite(s) of $((passed + failed)). The installation goes on."
+    printf '%s\n' "$bilan" | grep '^ÉCHEC' | sed 's/^/    /' || true
+    msg "  Pour le détail : cd $DIR, puis npm test" "  For the details: cd $DIR, then npm test"
+  fi
+elif [ "$NODE" = 1 ]; then
   if out="$(cd "$DIR" && node prototype/test/smoke.mjs 2>&1)"; then
     last="$(printf '%s\n' "$out" | tail -n 1)"
     msg "  Test de l'interface : réussi ($last)" "  Interface test: passed ($last)"

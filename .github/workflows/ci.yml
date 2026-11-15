@@ -1,0 +1,93 @@
+# Intégration continue : tous les tests sans réseau, sur macOS, Linux et Windows, Node 22.20.0 et 26.
+# Aucun secret, aucun test réseau (SA_NET n'est jamais défini ici).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Tests (${{ matrix.os }}, Node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        node: ['22.20.0', '26']
+    steps:
+      # Sous Windows, Git convertit en CRLF par défaut : .gitattributes doit l'empêcher (constat 1).
+      # Le test « prototype/dist à jour » échoue si preview.html contient un CR.
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      # Chrome est installé d'avance sur les machines macOS, Ubuntu et Windows de GitHub ; test/e2e/cdp.mjs le trouve
+      # (macOS : /Applications/Google Chrome.app).
+      # CI est défini par GitHub : un Chrome absent fait échouer ce pas au lieu de le sauter.
+      - name: Essais bout à bout (Chrome sans fenêtre)
+        run: npm run test:e2e
+
+  scripts:
+    name: Scripts d'installation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: install.sh, syntaxe
+        run: bash -n install.sh
+      - name: install.sh, shellcheck
+        run: shellcheck install.sh
+      - name: install.ps1, ASCII seulement
+        # Windows PowerShell 5.1 lit un fichier sans BOM en ANSI : tout octet hors ASCII serait mal lu.
+        run: node -e "const b=require('fs').readFileSync('install.ps1');const i=b.findIndex((x)=>x>127||x===13);if(i>=0){console.error('install.ps1 doit rester en ASCII, sans CR (octet '+i+').');process.exit(1)}"
+      - name: install.sh, copie sans git gardée et signalée (constat 72)
+        # Dossier personnel jetable ; --demo : ni npm, ni application, ni navigateur.
+        run: |
+          home="$RUNNER_TEMP/home"; dir="$RUNNER_TEMP/copie/skill-advisor"
+          mkdir -p "$home" "$dir"
+          tar -cf - --exclude=.git --exclude=node_modules . | tar -xf - -C "$dir"
+          out="$(HOME="$home" bash install.sh --lang en --dir "$dir" --no-open --demo)"
+          printf '%s\n' "$out"
+          printf '%s' "$out" | grep -qF 'The script does not update it.'
+      - name: Fins de ligne LF dans le dépôt
+        run: |
+          if git ls-files --eol | grep -E '^i/crlf'; then
+            echo "Des fichiers sont enregistrés en CRLF : git add --renormalize ."
+            exit 1
+          fi
+
+  powershell:
+    name: install.ps1, analyse (Windows PowerShell 5.1)
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      # shell: powershell = Windows PowerShell 5.1, celui d'un Windows 11 ordinaire (pas pwsh).
+      # Le fichier est extrait en LF (.gitattributes) : cette analyse prouve que 5.1 le lit tel quel.
+      - name: Analyse de install.ps1
+        shell: powershell
+        run: |
+          $file = (Resolve-Path 'install.ps1').Path
+          $tokens = $null
+          $errors = $null
+          [System.Management.Automation.Language.Parser]::ParseFile($file, [ref]$tokens, [ref]$errors) | Out-Null
+          if ($errors.Count -gt 0) {
+            $errors | ForEach-Object { Write-Host ('ligne ' + $_.Extent.StartLineNumber + ' : ' + $_.Message) }
+            exit 1
+          }
+          if ([System.IO.File]::ReadAllBytes($file) -contains 13) { Write-Host 'install.ps1 contient des CR : le checkout devrait rester en LF.'; exit 1 }
+          Write-Host ('install.ps1 : ' + $tokens.Count + ' jetons, aucune erreur, fins de ligne LF.')

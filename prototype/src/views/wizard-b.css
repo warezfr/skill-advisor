@@ -532,3 +532,32 @@
   .rs-row::before, .rs-row::after, .rs-name, .cf-row, .cf-prog i, .gd-tab, .gd-ind.gd-ind-live { transition-duration: 1ms; }
   .cf-st.cf-tick, .cf-st.cf-done svg * { animation: none; }
 }
+
+/* ---------- étape 4 : dossier partagé, dossier du projet, skills retenus ---------- */
+.cf-ags .cf-ag .sw { grid-row: 1 / span 3; align-self: start; margin-top: 2px; }
+.cf-ags .cf-shared { padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.cf-ag-r { margin: 2px 0 0; font-size: 13px; line-height: 1.5; }
+.cf-ag .sw:disabled { opacity: .45; cursor: not-allowed; }
+.cf-projset, .cf-projf { flex-basis: 100%; }
+.cf-projset { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; }
+.cf-proj-l { display: block; margin: 0 0 6px; font-size: 14px; color: var(--ink-2); }
+.cf-proj-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.cf-proj-row .fld { flex: 1 1 280px; min-width: 0; }
+.cf-proj-h { margin: 6px 0 0; font-size: 13px; }
+.cf-ask { margin: 10px 0 4px; padding: 12px 14px; border: 1px solid var(--line-2); border-radius: var(--r2); background-color: var(--bg-2); }
+.cf-ask-t { margin: 0; font-size: 14px; line-height: 1.55; color: var(--ink); }
+.cf-ask-t .bdg { margin-right: 6px; }
+.cf-ask-a { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; }
+.cf-fd { margin: 10px 0 0; padding: 0; list-style: none; display: grid; gap: 10px; }
+.cf-fd-l { margin: 0; font-size: 13.5px; font-weight: 500; color: var(--ink); }
+.cf-fd-f { margin: 2px 0 0; font-size: 12.5px; overflow-wrap: anywhere; }
+.cf-fd-x { margin: 6px 0 0; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12.5px; }
+.cf-held .cf-st, .cf-conflict .cf-st { color: var(--bad); }
+.cf-nw .cf-st { color: var(--bad); }
+.cf-kept { opacity: .6; }
+
+/* ---------- étape 3 : entrées à installer à la main, skills d'une autre option ---------- */
+.rs-row.rs-man { cursor: default; }
+.rs-row.rs-man:hover::before { background-color: transparent; }
+.rs-man-t, .rs-offt { margin: 6px 0 0; font-size: 13px; line-height: 1.5; }
+.rs-off .rs-name { color: var(--ink-3); }

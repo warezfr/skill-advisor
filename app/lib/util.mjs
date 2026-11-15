@@ -1,10 +1,11 @@
-// Outils communs du socle machine : erreurs, validation, chemins, JSON.
+// Outils communs du socle machine : erreurs, validation, chemins, JSON, droits des fichiers.
 import crypto from 'node:crypto';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { scanSkillDir } from '../../tools/skill-scan.mjs';
 
+// Noms de skills et identifiants d'agents.
 export const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 export const AGENT_RE = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const OWNER_REPO_RE = /^[\w.-]+\/[\w.-]+$/;
@@ -62,7 +63,8 @@ export function isTrackedSource(src) {
   } catch { return false; }
 }
 
-// Retire les dossiers de travail export-* et import-* oubliés sous ~/.skill-advisor/tmp. Ne lève jamais d'erreur.
+// Retire les dossiers de travail export-*, import-*, stage-* et update-* oubliés sous ~/.skill-advisor/tmp,
+// et les anciennes versions old-* qu'un remplacement n'a pas pu effacer. Ne lève jamais d'erreur.
 export async function sweepTmp(opts = {}) {
   const maxAgeMs = Number.isFinite(opts.maxAgeMs) && opts.maxAgeMs >= 0 ? opts.maxAgeMs : 3600000;
   const dir = tmpDir(homeOf(opts));
@@ -70,7 +72,7 @@ export async function sweepTmp(opts = {}) {
   try { names = await fs.readdir(dir); } catch { return; }
   const now = Date.now();
   for (const n of names) {
-    if (!/^(export|import)-/.test(n)) continue;
+    if (!/^(export|import|stage|update|old)-/.test(n)) continue;
     try {
       const at = path.join(dir, n);
       const l = await fs.lstat(at);
@@ -94,6 +96,35 @@ export function sharedDir(home) { return path.join(home, '.agents', 'skills'); }
 export function disabledDir(home) { return path.join(saDir(home), 'disabled'); }
 export function backupsDir(home) { return path.join(saDir(home), 'backups'); }
 export function tmpDir(home) { return path.join(saDir(home), 'tmp'); }
+
+// Droits de ~/.skill-advisor : dossiers 0700, fichiers 0600 (sans effet sous Windows).
+const PRIVATE = '.skill-advisor';
+// Racine ~/.skill-advisor d'un chemin qui passe par elle, sinon null.
+function privateRoot(p) {
+  const parts = path.resolve(p).split(path.sep);
+  const i = parts.lastIndexOf(PRIVATE);
+  return i < 1 ? null : parts.slice(0, i + 1).join(path.sep) || path.sep;
+}
+export function isPrivate(p) { return privateRoot(p) !== null; }
+
+// Crée un dossier ; sous ~/.skill-advisor, chaque dossier créé l'est en 0700 et la racine est remise en 0700.
+export async function mkdirp(dir) {
+  const root = privateRoot(dir);
+  if (!root) { await fs.mkdir(dir, { recursive: true }); return; }
+  await fs.mkdir(dir, { recursive: true, mode: 0o700 });
+  await fs.chmod(root, 0o700).catch(() => {});
+}
+
+// Au démarrage : ~/.skill-advisor existe et n'est lisible que par l'utilisateur.
+export async function prepareSaDir(home) {
+  await mkdirp(saDir(home));
+}
+
+// Écrit un fichier texte ; sous ~/.skill-advisor, en 0600.
+export async function writePrivate(file, data) {
+  await mkdirp(path.dirname(file));
+  await fs.writeFile(file, data, isPrivate(file) ? { mode: 0o600 } : undefined);
+}
 
 // Le dossier réel de l'utilisateur : seul cas où les variables XDG et *_HOME sont reprises.
 export function isRealHome(home) {
@@ -172,13 +203,16 @@ export async function copyTree(src, dest, opts = {}) {
     if (out.size > limit) throw tooBig();
     await fs.copyFile(a, b);
   };
+  // Dossiers : 0700 sous ~/.skill-advisor (sauvegardes, dossiers de travail), sinon ordinaires (0755, selon le masque).
+  // ordinary : dossiers ordinaires même sous ~/.skill-advisor (copie désactivée d'un skill, comme un dossier déplacé).
+  const mode = !opts.ordinary && isPrivate(dest) ? 0o700 : 0o755;
   const walk = async (from, to, rel, stack) => {
-    await fs.mkdir(to);
+    await fs.mkdir(to, { mode });
     for (const e of await fs.readdir(from, { withFileTypes: true })) {
       if (++counter.n > maxEntries) throw tooBig();
       const p = path.join(from, e.name), q = path.join(to, e.name), r = rel + e.name;
       if (e.isSymbolicLink()) {
-        if (verbatim) { await fs.symlink(await fs.readlink(p), q); continue; }
+        if (verbatim) { await copyLink(p, q); continue; }
         const real = await fs.realpath(p).catch(() => null);
         const st = real && within(real, root) ? await statOrNull(real) : null;
         if (st && st.isDirectory() && !stack.includes(real)) await walk(real, q, r + '/', [...stack, real]);
@@ -199,11 +233,20 @@ export async function exists(p) {
 export async function lstatOrNull(p) { try { return await fs.lstat(p); } catch { return null; } }
 export async function statOrNull(p) { try { return await fs.stat(p); } catch { return null; } }
 
-// Un skill dans un dossier d'agent : un lien (même cassé) ou un dossier qui contient SKILL.md.
+// Un skill dans un dossier d'agent : un dossier qui contient SKILL.md, ou un lien vers un tel dossier.
+// Un lien cassé ne compte que s'il visait <…>/skills/<nom> ou <…>/universal/<nom> (lien posé par le moteur) :
+// un dossier d'agent ajouté à la main peut contenir d'autres liens (outils, bibliothèques) qu'il ne faut jamais toucher.
 export async function isSkillEntry(p) {
   const l = await lstatOrNull(p);
   if (!l) return false;
-  if (l.isSymbolicLink()) return true;
+  if (l.isSymbolicLink()) {
+    const st = await statOrNull(p);
+    if (st) return st.isDirectory() && !!(await statOrNull(path.join(p, 'SKILL.md')));
+    let t;
+    try { t = await fs.readlink(p); } catch { return false; }
+    const parts = t.replace(/\\/g, '/').replace(/\/+$/, '').split('/');
+    return parts[parts.length - 1] === path.basename(p) && ['skills', 'universal'].includes(parts[parts.length - 2]);
+  }
   if (!l.isDirectory()) return false;
   const md = await statOrNull(path.join(p, 'SKILL.md'));
   return !!(md && md.isFile());
@@ -251,18 +294,88 @@ export async function readJson(file, fallback) {
   try { return JSON.parse(await fs.readFile(file, 'utf8')); } catch { return fallback; }
 }
 
-// Écriture atomique : fichier temporaire puis renommage.
+// --- Verrous passagers de Windows (antivirus, indexation) ---
+
+// Opérations du disque, remplaçables par les tests. delays : attentes en millisecondes entre deux essais.
+// Un seul objet pour tout le socle : settings.mjs le reprend tel quel.
+export const disk = { platform: process.platform, delays: [100, 200, 400, 800], rename: (a, b) => fs.rename(a, b) };
+const BUSY = new Set(['EPERM', 'EBUSY', 'EACCES']);
+
+// Lance op(). Sous Windows, EPERM, EBUSY ou EACCES vient souvent d'un fichier encore ouvert par un autre programme :
+// nouvel essai après une attente croissante. opts.stop : fonction qui rend vrai quand un nouvel essai est inutile.
+export async function retryBusy(op, opts = {}) {
+  for (let i = 0; ; i++) {
+    try { return await op(); } catch (e) {
+      if (disk.platform !== 'win32' || !BUSY.has(e.code) || i >= disk.delays.length) throw e;
+      if (opts.stop && (await opts.stop())) throw e;
+      await new Promise((r) => setTimeout(r, disk.delays[i]));
+    }
+  }
+}
+
+// Renomme, avec les essais répétés de retryBusy.
+export function renameRetry(from, to, opts = {}) {
+  return retryBusy(() => disk.rename(from, to), opts);
+}
+
+// Options d'effacement d'un dossier : essais répétés sous Windows seulement (ailleurs, un refus est définitif).
+export function rmOpts() {
+  return disk.platform === 'win32' ? { recursive: true, force: true, maxRetries: 5, retryDelay: 200 } : { recursive: true, force: true };
+}
+
+// Écriture atomique : fichier temporaire puis renommage (retenté sous Windows). Sous ~/.skill-advisor : fichier 0600, dossiers 0700.
 export async function writeJsonAtomic(file, data) {
-  await fs.mkdir(path.dirname(file), { recursive: true });
-  const tmp = file + '.' + process.pid + '.' + Date.now() + '.tmp';
+  await mkdirp(path.dirname(file));
+  const tmp = file + '.' + process.pid + '.' + Date.now() + '.' + crypto.randomBytes(3).toString('hex') + '.tmp';
   try {
-    await fs.writeFile(tmp, JSON.stringify(data, null, 2) + '\n', 'utf8');
-    await fs.rename(tmp, file);
+    await fs.writeFile(tmp, JSON.stringify(data, null, 2) + '\n', isPrivate(file) ? { encoding: 'utf8', mode: 0o600 } : 'utf8');
+    await renameRetry(tmp, file);
   } catch (e) {
     // Échec : le fichier temporaire ne reste pas.
-    await fs.rm(tmp, { force: true }).catch(() => {});
+    await fs.rm(tmp, rmOpts()).catch(() => {});
     throw e;
   }
+}
+
+// --- Noms : dossier sur le disque et clé du verrou ---
+
+// Nom du dossier que le paquet crée pour un skill (sanitizeName de skills 1.8.1).
+export function folderOf(name) {
+  return String(name).toLowerCase().replace(/[^a-z0-9._]+/g, '-').replace(/^[.\-]+|[.\-]+$/g, '').substring(0, 255) || 'unnamed-skill';
+}
+// Entrées du verrou global : { clé: entrée }.
+export async function lockSkills(home) {
+  const lock = await readJson(lockPath(home), null);
+  return (lock && lock.skills && typeof lock.skills === 'object') ? lock.skills : {};
+}
+// Clé d'un dossier dans des entrées du verrou : la clé égale au dossier, sinon celle dont le dossier calculé lui est égal.
+export function keyIn(skills, folder) {
+  if (Object.hasOwn(skills, folder)) return folder;
+  return Object.keys(skills).find((k) => folderOf(k) === folder) || null;
+}
+export async function lockKey(home, folder) { return keyIn(await lockSkills(home), folder); }
+// Entrée du verrou d'un dossier : { key, entry } ou null.
+export async function lockOf(home, folder) {
+  const skills = await lockSkills(home);
+  const key = keyIn(skills, folder);
+  return key ? { key, entry: skills[key] } : null;
+}
+// Nom du front matter de SKILL.md (forme simple ou entre guillemets), ou null.
+export function frontName(text) {
+  const m = /^﻿?---\r?\n([\s\S]*?)\r?\n---/.exec(text || '');
+  const l = m && m[1].split(/\r?\n/).find((x) => /^name\s*:/.test(x));
+  if (!l) return null;
+  let v = l.replace(/^name\s*:\s*/, '').trim();
+  if (v.length > 1 && ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith('\'') && v.endsWith('\'')))) v = v.slice(1, -1);
+  return v || null;
+}
+// Clé sous laquelle écrire l'entrée du verrou d'un dossier : la clé déjà présente, sinon le nom du front matter
+// de dir/SKILL.md quand le paquet en tire ce dossier (le paquet verrouille par ce nom), sinon le nom du dossier.
+export async function lockKeyFor(home, folder, dir) {
+  const k = await lockKey(home, folder);
+  if (k) return k;
+  const n = dir ? frontName(await fs.readFile(path.join(dir, 'SKILL.md'), 'utf8').catch(() => '')) : null;
+  return n && n.length <= 255 && folderOf(n) === folder ? n : folder;
 }
 
 export function osName() {
@@ -273,4 +386,19 @@ export function osName() {
 export async function linkDir(target, at) {
   if (process.platform === 'win32') await fs.symlink(path.resolve(target), at, 'junction');
   else await fs.symlink(path.relative(path.dirname(at), target), at, 'dir');
+}
+
+// Recopie le lien src en dest, sans le suivre. Sous Windows : jonction à cible absolue vers un dossier
+// (ou une cible absente), lien de fichier sinon ; lien de fichier refusé (EPERM) : copie du fichier.
+export const platform = { name: process.platform };
+export async function copyLink(src, dest) {
+  const target = await fs.readlink(src);
+  if (platform.name !== 'win32') { await fs.symlink(target, dest); return; }
+  const abs = path.resolve(path.dirname(src), target);
+  const st = await statOrNull(abs);
+  if (!st || st.isDirectory()) { await fs.symlink(abs, dest, 'junction'); return; }
+  try { await fs.symlink(target, dest, 'file'); } catch (e) {
+    if (e.code !== 'EPERM') throw e;
+    await fs.copyFile(abs, dest);
+  }
 }

@@ -37,7 +37,7 @@ export async function agentData(opts = {}) {
   return { supported: snap.supported, detected: snap.detected };
 }
 
-// Carte id → { dir propre (null pour un lecteur du dossier partagé), shared, custom, detected }.
+// Carte id → { name (nom affiché), dir propre (null pour un lecteur du dossier partagé), shared, custom, detected }.
 export async function agentMap(opts = {}) {
   const home = homeOf(opts);
   const [{ supported, detected }, settings] = await Promise.all([agentData({ home }), readSettings({ home })]);
@@ -46,9 +46,9 @@ export async function agentMap(opts = {}) {
   for (const a of supported) {
     if (a.id === 'universal') continue;
     const shared = readsShared(a);
-    map[a.id] = { id: a.id, dir: shared ? null : a.globalSkillsDir || null, shared, custom: false, detected: det.has(a.id) };
+    map[a.id] = { id: a.id, name: a.name || a.id, dir: shared ? null : a.globalSkillsDir || null, shared, custom: false, detected: det.has(a.id) };
   }
-  for (const c of settings.custom) map[c.id] = { id: c.id, dir: c.dir, shared: false, custom: true, detected: true };
+  for (const c of settings.custom) map[c.id] = { id: c.id, name: c.name, dir: c.dir, shared: false, custom: true, detected: true };
   return map;
 }
 
@@ -68,6 +68,8 @@ export async function listAgents(opts = {}) {
     const universal = readsShared(a);
     out.push({
       id: a.id, name: a.name, detected: d, top: TOP_AGENTS.includes(a.id), universal, globalDir: a.globalSkillsDir || null,
+      // Dossier de projet, relatif au projet (projectSkillsDir du paquet).
+      projectDir: typeof a.projectSkillsDir === 'string' && a.projectSkillsDir ? a.projectSkillsDir : null,
       custom: false, hidden: hidden.has(a.id), target: isTarget(a.id, d),
       count: universal ? (d ? shared : 0) : await countSkills(a.globalSkillsDir),
     });
@@ -77,7 +79,7 @@ export async function listAgents(opts = {}) {
   for (const c of settings.custom) {
     let d = false;
     try { d = (await fs.stat(c.dir)).isDirectory(); } catch { /* dossier disparu */ }
-    out.push({ id: c.id, name: c.name, detected: d, top: false, universal: false, globalDir: c.dir, custom: true, hidden: hidden.has(c.id), target: isTarget(c.id, false), count: await countSkills(c.dir) });
+    out.push({ id: c.id, name: c.name, detected: d, top: false, universal: false, globalDir: c.dir, projectDir: null, custom: true, hidden: hidden.has(c.id), target: isTarget(c.id, false), count: await countSkills(c.dir) });
   }
   return out;
 }

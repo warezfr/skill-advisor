@@ -13,7 +13,7 @@ import { exportBackup, importBackup, archiveLimits } from '../lib/archive.mjs';
 import { applyBackup, remove } from '../lib/actions.mjs';
 import { addCustomAgent } from '../lib/settings.mjs';
 import { getState } from '../lib/inventory.mjs';
-import { demoHome, makeHome, assertSafeHome, assertInHome, putShared, putLink, putLock, readLock, rmHome, lexists, skillMd, tarOf, listTree } from './helpers.mjs';
+import { demoHome, makeHome, assertSafeHome, assertInHome, putShared, putLink, putLock, readLock, rmHome, lexists, skillMd, tarOf, listTree, fileLinksOk, NO_FILE_LINK } from './helpers.mjs';
 
 const homes = [];
 async function home(demo = true) { const h = demo ? await demoHome() : await makeHome(); if (!demo) await assertSafeHome(h); homes.push(h); return h; }
@@ -98,8 +98,9 @@ test('sauvegarde manuelle de deux skills, dont une copie divergente', async () =
 test('sauvegarde manuelle : nom par défaut, entrées refusées, limite sur toute la sauvegarde', async () => {
   const { h } = await twoSkills();
   const { backup: b } = await createManualBackup({ home: h, names: ['autre-skill'] });
-  assert.equal(b.label, frDate(b.at));
-  assert.match(b.label, /^\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}$/);
+  // Contrat 1.0 : nom par défaut = noms des skills ; la date reste dans at.
+  assert.equal(b.label, 'autre-skill');
+  assert.notEqual(b.label, frDate(b.at));
   assert.equal(b.note, '');
   await assert.rejects(createManualBackup({ home: h, names: ['demo-skill'], label: 'x'.repeat(81) }), codeOf('BAD_INPUT'));
   await assert.rejects(createManualBackup({ home: h, names: ['demo-skill'], note: 'x'.repeat(501) }), codeOf('BAD_INPUT'));
@@ -192,7 +193,7 @@ test('ancienne sauvegarde (version 1) : listée et restaurée', async () => {
     assert.deepEqual(Object.keys(b).sort(), BACKUP_KEYS);
     assert.equal(b.origin, 'remove');
     assert.equal(b.note, '');
-    assert.equal(b.label, frDate(b.at));
+    assert.equal(b.label, 'demo-skill');
     assert.deepEqual(b.items, [{ name: 'demo-skill', src: 'vercel-labs/agent-skills', agents: ['claude-code'], verdict: null }]);
     assert.equal(b.name, 'demo-skill');
   }
@@ -243,7 +244,10 @@ test('export puis import : contenu identique, nouvel identifiant, origine import
   // Import dans un autre dossier personnel.
   const h2 = await home(false);
   const r = await importBackup({ home: h2, data });
-  assert.deepEqual(r.warnings, []);
+  // Chaque source suivie est nommée, une fois par skill (constat 87).
+  assert.equal(r.warnings.length, 2, r.warnings.join(' | '));
+  assert.ok(r.warnings.some((w) => /autre-skill/.test(w) && /owner\/autre/.test(w)), r.warnings.join(' | '));
+  assert.ok(r.warnings.some((w) => /demo-skill/.test(w) && /vercel-labs\/agent-skills/.test(w)), r.warnings.join(' | '));
   assert.equal(r.backup.origin, 'import');
   assert.equal(r.backup.label, 'Pour le portable');
   assert.equal(r.backup.note, 'Note.');
@@ -330,7 +334,7 @@ test('import refuse les archives dangereuses ou abîmées', async () => {
     'skill absent': [man(bad([{ ...good.meta.items[0], name: 'autre-skill' }])), ...skill],
     'copie inventée': [man(bad([{ ...good.meta.items[0], places: [{ agent: 'claude-code', off: false, copy: '../ok-skill' }] }])), ...skill],
   };
-  const why = (w) => (/lien|périph|fifo/.test(w) ? /lien ou un fichier spécial/ : /remontée/.test(w) ? /sort du dossier/ : /oblique/.test(w) ? /barre oblique inverse/ : /absolu|lecteur/.test(w) ? /chemin absolu/
+  const why = (w) => (/lien|périph|fifo/.test(w) ? /lien ou un fichier spécial/ : /remontée/.test(w) ? /sort du dossier/ : /oblique/.test(w) ? (process.platform === 'win32' ? /barre oblique inverse|sort du dossier/ : /barre oblique inverse/) : /absolu|lecteur/.test(w) ? /chemin absolu/
     : /contrôle/.test(w) ? /caractère de contrôle/ : w === 'trop gros' ? /200 Mo/ : /manifeste|format|éléments/.test(w) ? /manifeste/ : /./);
   for (const [what, entries] of Object.entries(cases)) {
     await assert.rejects(importBackup({ home: h, data: tarOf(entries) }), (e) => codeOf('BAD_ARCHIVE')(e) && why(what).test(e.message), what);
@@ -393,8 +397,15 @@ test('import : entrée de verrouillage gardée si vérifiable, sinon ignorée av
   assert.equal(meta.items[0].src, 'owner/repo');
   for (const it of meta.items.slice(1)) assert.equal(it.lock, null, it.name);
   assert.equal(meta.items[1].src, '');
-  for (const it of items.slice(1)) assert.ok(r.warnings.some((w) => w.includes(it.name) && /verrouillage/.test(w)), it.name);
-  assert.ok(r.warnings.some((w) => /web-skill/.test(w) && /source/.test(w) && !/verrouillage/.test(w)));
+  const dropped = (w) => /sans sa source/.test(w) && /ne sera pas mis à jour/.test(w);
+  for (const it of items.slice(1)) assert.ok(r.warnings.some((w) => w.includes(it.name) && dropped(w)), it.name);
+  assert.ok(r.warnings.some((w) => /web-skill/.test(w) && /source/.test(w) && /invalide/.test(w)));
+  // Source gardée : annoncée, une seule fois, et seulement pour ok-skill.
+  const kept = r.warnings.filter((w) => /viendront de/.test(w));
+  assert.equal(kept.length, 1);
+  assert.match(kept[0], /ok-skill/);
+  assert.match(kept[0], /owner\/repo/);
+  for (const w of r.warnings) assert.doesNotMatch(w, /verrouillage|rouge|orange|vert/, w);
   // La restauration ne remet que l'entrée vérifiée.
   await restoreBackup({ home: h, id: r.backup.id });
   const lock = await readLock(h);
@@ -410,10 +421,11 @@ test('import : chaque copie est vérifiée, un verdict qui change est signalé',
   ], { 'copies/1/two-skill': RED }) });
   // Le verdict reste celui de la copie principale ; la copie rouge est signalée.
   assert.equal(r.backup.items[0].verdict, 'vert');
-  assert.ok(r.warnings.some((w) => /two-skill/.test(w) && /copie/.test(w) && /rouge/.test(w)), r.warnings.join(' | '));
+  assert.ok(r.warnings.some((w) => /two-skill/.test(w) && /copie/.test(w) && /motif à risque/.test(w)), r.warnings.join(' | '));
   assert.equal(r.backup.items[1].verdict, 'vert');
-  assert.ok(r.warnings.some((w) => /calm-skill/.test(w) && /changé/.test(w) && /vert/.test(w) && /rouge/.test(w)), r.warnings.join(' | '));
+  assert.ok(r.warnings.some((w) => /calm-skill/.test(w) && /changé/.test(w) && /« Aucun motif connu »/.test(w) && /« Motif à risque »/.test(w)), r.warnings.join(' | '));
   assert.equal(r.warnings.length, 2);
+  for (const w of r.warnings) assert.doesNotMatch(w, /verdict|rouge|vert|orange/, w);
 });
 
 test('restauration de plusieurs skills : un échec défait tout', async () => {
@@ -534,12 +546,14 @@ test('apply : un skill rouge demande force, entrées refusées', async () => {
   await assert.rejects(applyBackup({ home: h, id: '../../etc', agents: ['cursor'], conflict: 'skip' }), codeOf('BAD_NAME'));
 });
 
-test('apply : un lien interne au skill ne rend pas le contenu différent', async () => {
+test('apply : un lien interne au skill ne rend pas le contenu différent', async (t) => {
+  // Lien de fichier : refusé sous Windows sans le droit de créer des liens symboliques.
+  if (!(await fileLinksOk())) { t.skip(NO_FILE_LINK); return; }
   const h = await home();
   const shared = path.join(h, '.agents', 'skills', 'demo-skill');
   await fs.mkdir(path.join(shared, 'docs'));
   await fs.writeFile(path.join(shared, 'docs', 'a.md'), 'doc');
-  await fs.symlink('docs/a.md', path.join(shared, 'alias.md'));
+  await fs.symlink('docs/a.md', path.join(shared, 'alias.md'), 'file');
   const { backup: b } = await createManualBackup({ home: h, names: ['demo-skill'] });
   const r = await applyBackup({ home: h, id: b.id, agents: ['cursor', 'claude-code'], conflict: 'skip' });
   assert.deepEqual(r.skipped.map((s) => s.reason), ['identical', 'identical']);
@@ -851,4 +865,300 @@ test('restauration : message rouge au pluriel', async () => {
   const { backup: b } = await createManualBackup({ home: h, names: ['rouge-un', 'rouge-deux'] });
   await remove({ home: h, names: ['rouge-un', 'rouge-deux'], backup: false });
   await assert.rejects(restoreBackup({ home: h, id: b.id }), (e) => codeOf('ROUGE')(e) && /rouge-un, rouge-deux/.test(e.message) && /les restaurer/.test(e.message));
+});
+
+// --- Version 1.0 : nom par défaut, droits, messages, verrous de Windows ---
+
+test('nom par défaut d’une sauvegarde : les skills, jamais la date (constat 18)', async () => {
+  const { defaultLabel } = await import('../lib/backups.mjs');
+  assert.equal(defaultLabel(['safe-notes']), 'safe-notes');
+  assert.equal(defaultLabel(['safe-notes', 'pdf']), 'safe-notes et 1 autre');
+  assert.equal(defaultLabel(['safe-notes', 'pdf', 'sql']), 'safe-notes et 2 autres');
+  const long = 'a'.repeat(128);
+  for (const names of [[long], [long, 'b', 'c']]) {
+    const l = defaultLabel(names);
+    assert.ok(l.length <= 80, l);
+    assert.ok(l.startsWith('aaa'));
+  }
+  assert.match(defaultLabel([long, 'b', 'c']), /… et 2 autres$/);
+  // Désinstallation avec sauvegarde : le nom du skill.
+  const h = await home();
+  const rm = await remove({ home: h, names: ['demo-skill'], backup: true });
+  assert.equal(rm.backups[0].label, 'demo-skill');
+  assert.equal((await listBackups({ home: h }))[0].label, 'demo-skill');
+  // Deux skills dans une sauvegarde faite à la main, sans nom.
+  const { h: h2 } = await twoSkills();
+  const { backup: b } = await createManualBackup({ home: h2, names: ['demo-skill', 'autre-skill'] });
+  assert.equal(b.label, 'demo-skill et 1 autre');
+  // Ancienne sauvegarde nommée par sa date : lue avec le nom du skill. Un vrai nom choisi reste.
+  const meta = await readMeta(h2, b.id);
+  await fs.writeFile(path.join(bdir(h2, b.id), 'meta.json'), JSON.stringify({ ...meta, label: frDate(meta.at) }));
+  assert.equal((await listBackups({ home: h2 })).find((x) => x.id === b.id).label, 'demo-skill et 1 autre');
+  await fs.writeFile(path.join(bdir(h2, b.id), 'meta.json'), JSON.stringify({ ...meta, label: 'Avant le 12' }));
+  assert.equal((await listBackups({ home: h2 })).find((x) => x.id === b.id).label, 'Avant le 12');
+  // Import d'une archive sans nom : le nom du skill.
+  await fs.writeFile(path.join(bdir(h2, b.id), 'meta.json'), JSON.stringify({ ...meta, label: '' }));
+  const h3 = await home(false);
+  const r = await importBackup({ home: h3, data: await exportBackup({ home: h2, id: b.id }) });
+  assert.equal(r.backup.label, 'demo-skill et 1 autre');
+});
+
+test('export puis import : un script exécutable le reste, après restauration aussi (constat 79)', { skip: process.platform === 'win32' && 'pas de bit d’exécution sous Windows' }, async () => {
+  const h = await home();
+  const dir = path.join(h, '.agents', 'skills', 'demo-skill');
+  await fs.mkdir(path.join(dir, 'scripts'), { recursive: true });
+  await fs.writeFile(path.join(dir, 'scripts', 'run.sh'), '#!/bin/sh\necho bonjour\n');
+  await fs.chmod(path.join(dir, 'scripts', 'run.sh'), 0o755);
+  await fs.writeFile(path.join(dir, 'notes.md'), 'texte');
+  await fs.chmod(path.join(dir, 'notes.md'), 0o644);
+  const { backup: b } = await createManualBackup({ home: h, names: ['demo-skill'] });
+  const h2 = await home(false);
+  const r = await importBackup({ home: h2, data: await exportBackup({ home: h, id: b.id }) });
+  const mode = async (p) => (await fs.stat(p)).mode & 0o777;
+  const kept = path.join(bdir(h2, r.backup.id), 'demo-skill');
+  assert.ok((await mode(path.join(kept, 'scripts', 'run.sh'))) & 0o100, 'script exécutable dans la sauvegarde importée');
+  assert.equal((await mode(path.join(kept, 'notes.md'))) & 0o111, 0, 'texte non exécutable');
+  await restoreBackup({ home: h2, id: r.backup.id });
+  const back = path.join(h2, '.agents', 'skills', 'demo-skill');
+  assert.ok((await mode(path.join(back, 'scripts', 'run.sh'))) & 0o100, 'script exécutable après restauration');
+  assert.equal((await mode(path.join(back, 'notes.md'))) & 0o111, 0);
+  // Une archive qui marque un fichier exécutable pour les autres seulement : exécutable aussi, jamais inscriptible par les autres.
+  const meta = { version: 2, id: '20261113-100000-x-skill', label: 'x', note: '', origin: 'manual', at: '2026-11-13T10:00:00.000Z', size: 1,
+    items: [{ name: 'x-skill', src: '', agents: [], places: [{ agent: 'universal', off: false, copy: 'x-skill' }], lock: null, skipped: [], copy: 'x-skill', verdict: 'vert' }] };
+  // Archive faite à la main : go.sh en 0777 dans l'en-tête.
+  const blocks = [];
+  for (const e of [{ path: 'skill-advisor-backup.json', body: JSON.stringify({ format: 'skill-advisor/backup/1', meta }) },
+    { path: 'x-skill/SKILL.md', body: skillMd('x-skill', 'Test.') }, { path: 'x-skill/go.sh', body: '#!/bin/sh\n', mode: 0o777 }]) {
+    const body = Buffer.from(e.body);
+    const hd = new tar.Header({ path: e.path, type: 'File', mode: e.mode || 0o644, size: body.length, mtime: new Date(0) });
+    hd.encode();
+    blocks.push(hd.block, body, Buffer.alloc((512 - (body.length % 512)) % 512));
+  }
+  const data = zlib.gzipSync(Buffer.concat([...blocks, Buffer.alloc(1024)]));
+  const r2 = await importBackup({ home: h2, data });
+  const go = await mode(path.join(bdir(h2, r2.backup.id), 'x-skill', 'go.sh'));
+  assert.ok(go & 0o100);
+  assert.equal(go & 0o022, 0);
+});
+
+test('messages de restauration : nom de l’agent, « Désinstallez », jamais d’identifiant ni de verdict interne (constat 50)', async () => {
+  const { disable } = await import('../lib/actions.mjs');
+  const { h, own } = await twoSkills();
+  const { backup: b } = await createManualBackup({ home: h, names: ['demo-skill'] });
+  // La copie de Claude Code est encore là.
+  await fs.rm(path.join(h, '.agents', 'skills', 'demo-skill'), { recursive: true });
+  const clean = (m) => !/claude-code|universal|Supprimez|~\/\.agents|rouge|verdict/.test(m);
+  await assert.rejects(restoreBackup({ home: h, id: b.id }), (e) => codeOf('EXISTS')(e) && /Claude Code/.test(e.message) && /Désinstallez-le/.test(e.message) && clean(e.message));
+  // Le dossier partagé : nommé ainsi.
+  await fs.rm(own, { recursive: true });
+  await putShared(h, 'demo-skill', 'Autre version.');
+  await assert.rejects(restoreBackup({ home: h, id: b.id }), (e) => codeOf('EXISTS')(e) && /dossier partagé/.test(e.message) && clean(e.message));
+  // Désactivé pour Claude Code : « Activez-le ».
+  await remove({ home: h, names: ['demo-skill'], backup: false });
+  await putShared(h, 'demo-skill', 'Encore.');
+  await putLink(h, '.claude/skills', 'demo-skill', path.join(h, '.agents', 'skills', 'demo-skill'));
+  assert.deepEqual((await disable({ home: h, names: ['demo-skill'], agents: ['claude-code'] })).done, ['demo-skill']);
+  await fs.rm(path.join(h, '.agents', 'skills', 'demo-skill'), { recursive: true });
+  await assert.rejects(restoreBackup({ home: h, id: b.id }), (e) => codeOf('EXISTS')(e) && /Activez-le ou désinstallez-le/.test(e.message) && /Claude Code/.test(e.message) && clean(e.message));
+  // Skill à risque : « motif à risque », pas « rouge ».
+  const h2 = await home();
+  await putShared(h2, 'risque', 'Dangereux.', RED);
+  const { backup: c } = await createManualBackup({ home: h2, names: ['risque'] });
+  await remove({ home: h2, names: ['risque'], backup: false });
+  await assert.rejects(restoreBackup({ home: h2, id: c.id }), (e) => codeOf('ROUGE')(e) && /motif à risque/.test(e.message) && !/verdict|rouge /.test(e.message));
+});
+
+test('import sous Windows : EPERM passager retenté, même identifiant ; EPERM qui dure, erreur sans changer d’identifiant (constat 82)', async () => {
+  const { disk } = await import('../lib/settings.mjs');
+  const h = await home();
+  const { backup: b } = await createManualBackup({ home: h, names: ['demo-skill'] });
+  const data = await exportBackup({ home: h, id: b.id });
+  const h2 = await home(false);
+  const old = { ...disk };
+  const busy = () => Object.assign(new Error('EPERM'), { code: 'EPERM' });
+  try {
+    disk.platform = 'win32';
+    disk.delays = [1, 1, 1, 1];
+    let calls = 0, fails = 0;
+    // Chaque renommage échoue une fois, puis passe.
+    const seen = new Set();
+    disk.rename = async (a, c) => { calls++; if (!seen.has(a)) { seen.add(a); fails++; throw busy(); } return old.rename(a, c); };
+    const r = await importBackup({ home: h2, data });
+    assert.ok(fails >= 2, 'copie et dossier final retentés');
+    assert.equal(calls, fails * 2);
+    assert.deepEqual((await listBackups({ home: h2 })).map((x) => x.id), [r.backup.id]);
+    // Verrou qui dure sur le dossier final : 5 essais, une erreur claire, aucune sauvegarde de plus.
+    calls = 0;
+    disk.rename = async (a, c) => { if (path.basename(path.dirname(a)) !== 'x' && path.basename(a) === 'new') { calls++; throw busy(); } return old.rename(a, c); };
+    await assert.rejects(importBackup({ home: h2, data }), codeOf('BACKUP_FAILED'));
+    assert.equal(calls, 5);
+    assert.equal((await listBackups({ home: h2 })).length, 1);
+  } finally { Object.assign(disk, old); }
+  // Ailleurs que sous Windows : EPERM n'est pas retenté.
+  const old2 = { ...disk };
+  try {
+    disk.platform = 'linux';
+    let calls = 0;
+    disk.rename = async () => { calls++; throw busy(); };
+    await assert.rejects(importBackup({ home: h2, data }), codeOf('BACKUP_FAILED'));
+    assert.equal(calls, 1);
+  } finally { Object.assign(disk, old2); }
+});
+
+// Clé du verrou différente du dossier (front matter « PDF », dossier pdf) : sauvegarde, restauration et application
+// gardent la clé du paquet, jamais le nom du dossier (constat 13).
+test('clé du verrou différente du dossier : source gardée, verrou remis sous la clé du paquet (constat 13)', async () => {
+  const h = await home();
+  const dir = path.join(h, '.agents', 'skills', 'pdf');
+  assertInHome(h, dir);
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(path.join(dir, 'SKILL.md'), skillMd('PDF', 'Lire des PDF.'));
+  await putLink(h, '.claude/skills', 'pdf', dir);
+  await putLock(h, { PDF: 'acme/outils' });
+  // Sauvegarde à la demande : source et entrée du verrou trouvées par le nom du dossier.
+  const { backup: b } = await createManualBackup({ home: h, names: ['pdf'] });
+  assert.equal(b.items[0].src, 'acme/outils');
+  assert.equal((await readMeta(h, b.id)).items[0].lock.source, 'acme/outils');
+  // Désinstallation : l'entrée PDF part. Restauration : elle revient sous PDF, jamais sous pdf.
+  assert.deepEqual((await remove({ home: h, names: ['pdf'], backup: false })).removed, ['pdf']);
+  assert.equal((await readLock(h)).skills.PDF, undefined);
+  await restoreBackup({ home: h, id: b.id });
+  let lock = (await readLock(h)).skills;
+  assert.equal(lock.PDF && lock.PDF.source, 'acme/outils');
+  assert.equal(lock.pdf, undefined);
+  // Entrée déjà là sous sa clé : rien n'est ajouté ni écrasé.
+  await remove({ home: h, names: ['pdf'], backup: false });
+  await putLock(h, { PDF: 'autre/source' });
+  await restoreBackup({ home: h, id: b.id });
+  lock = (await readLock(h)).skills;
+  assert.equal(lock.PDF.source, 'autre/source');
+  assert.equal(lock.pdf, undefined);
+  // Désinstallation avec sauvegarde : la sauvegarde garde la source.
+  const res = await remove({ home: h, names: ['pdf'], backup: true });
+  assert.equal(res.backups[0].src, 'autre/source');
+  // Application vers Cursor (dossier partagé) : verrou sous PDF.
+  const r = await applyBackup({ home: h, id: b.id, agents: ['cursor'], conflict: 'skip' });
+  assert.deepEqual(r.failed, []);
+  lock = (await readLock(h)).skills;
+  assert.equal(lock.PDF && lock.PDF.source, 'acme/outils');
+  assert.equal(lock.pdf, undefined);
+  // État : la ligne est suivie (pas « ng ») et garde la source.
+  const row = (await getState({ home: h })).mine.find((x) => path.basename(x.path) === 'pdf');
+  assert.equal(row.st, 'ok');
+  assert.equal(row.src, 'acme/outils');
+});
+
+// Skill entièrement désactivé dont la clé du verrou diffère du dossier : toujours suivi, pas « copié à la main ».
+test('état : skill désactivé, clé du verrou différente du dossier, suivi (constat 13)', async () => {
+  const { disable } = await import('../lib/actions.mjs');
+  const h = await home();
+  const dir = path.join(h, '.agents', 'skills', 'pdf');
+  assertInHome(h, dir);
+  await fs.mkdir(dir, { recursive: true });
+  await fs.writeFile(path.join(dir, 'SKILL.md'), skillMd('PDF', 'Lire des PDF.'));
+  await putLock(h, { PDF: 'acme/outils' });
+  assert.deepEqual((await disable({ home: h, names: ['pdf'] })).done, ['pdf']);
+  const row = (await getState({ home: h })).mine.find((x) => x.name === 'pdf');
+  assert.equal(row.on, false);
+  assert.equal(row.st, 'ok');
+  assert.equal(row.src, 'acme/outils');
+});
+
+// Seuls les chemins sous ~/.skill-advisor sont privés : un skill restauré ou appliqué garde des dossiers ordinaires
+// (0755, selon le masque de l'utilisateur) et les droits de ses fichiers tels que la sauvegarde les tient.
+test('restauration et application : dossiers ordinaires hors de ~/.skill-advisor, droits des fichiers gardés', { skip: process.platform === 'win32' && 'pas de droits POSIX sous Windows' }, async () => {
+  const { disable, enable } = await import('../lib/actions.mjs');
+  const h = await home();
+  const mode = async (p) => (await fs.stat(p)).mode & 0o777;
+  // Droits attendus d'un dossier ordinaire : 0755 passé au masque de l'utilisateur.
+  const probe = path.join(h, 'sonde');
+  await fs.mkdir(probe, { mode: 0o755 });
+  const want = await mode(probe);
+  const shared = path.join(h, '.agents', 'skills', 'demo-skill');
+  await fs.mkdir(path.join(shared, 'scripts'), { recursive: true });
+  await fs.writeFile(path.join(shared, 'scripts', 'run.sh'), '#!/bin/sh\necho bonjour\n');
+  await fs.chmod(path.join(shared, 'scripts', 'run.sh'), 0o755);
+  await fs.writeFile(path.join(shared, 'notes.md'), 'texte');
+  await fs.chmod(path.join(shared, 'notes.md'), 0o644);
+  const own = await divergedCopy(h, 'Copie à moi.');
+  const res = await remove({ home: h, names: ['demo-skill'], backup: true });
+  const id = res.backups[0].id;
+  // Dans la sauvegarde : privé.
+  assert.equal(await mode(path.join(bdir(h, id), 'demo-skill')), 0o700);
+  await restoreBackup({ home: h, id });
+  for (const d of [shared, path.join(shared, 'scripts'), own, path.join(own, 'notes')]) assert.equal(await mode(d), want, d);
+  assert.equal(await mode(path.join(shared, 'scripts', 'run.sh')), 0o755);
+  assert.equal(await mode(path.join(shared, 'notes.md')), 0o644);
+  // Application vers un agent personnalisé (copie) : dossiers ordinaires aussi.
+  const dir = path.join(h, 'outils', 'agent', 'skills');
+  assertInHome(h, dir);
+  await fs.mkdir(dir, { recursive: true });
+  const custom = await addCustomAgent({ home: h, name: 'Agent', dir });
+  const ap = await applyBackup({ home: h, id, agents: [custom.id], conflict: 'skip' });
+  assert.deepEqual(ap.applied, [{ name: 'demo-skill', agent: custom.id }]);
+  for (const d of [path.join(custom.dir, 'demo-skill'), path.join(custom.dir, 'demo-skill', 'scripts')]) assert.equal(await mode(d), want, d);
+  assert.equal(await mode(path.join(custom.dir, 'demo-skill', 'scripts', 'run.sh')), 0o755);
+  // Copie désactivée restaurée, puis réactivée : dossiers ordinaires dans le dossier de l'agent.
+  const h2 = await home();
+  const own2 = await divergedCopy(h2, 'Copie à moi.');
+  assert.deepEqual((await disable({ home: h2, names: ['demo-skill'], agents: ['claude-code'] })).done, ['demo-skill']);
+  const res2 = await remove({ home: h2, names: ['demo-skill'], backup: true });
+  await restoreBackup({ home: h2, id: res2.backups[0].id });
+  const offDir = path.join(h2, '.skill-advisor', 'disabled', 'claude-code');
+  assert.equal(await mode(offDir), 0o700);
+  assert.ok(await lexists(path.join(offDir, 'demo-skill', 'SKILL.md')));
+  assert.deepEqual((await enable({ home: h2, names: ['demo-skill'], agents: ['claude-code'] })).done, ['demo-skill']);
+  for (const d of [own2, path.join(own2, 'notes')]) assert.equal(await mode(d), want, d);
+});
+
+// swapIn : l'ancienne entrée écartée (.sa-old-*) ne reste jamais cachée dans le dossier d'un agent.
+// Effacement raté une fois : nouvel essai. Raté encore : déplacée sous ~/.skill-advisor/tmp (balayé), et dit dans warnings.
+test('apply avec remplacement : ancienne entrée impossible à effacer, réessayée puis rangée sous tmp (échec simulé)', async () => {
+  const actions = await import('../lib/actions.mjs');
+  const h = await home();
+  const shared = path.join(h, '.agents', 'skills', 'demo-skill');
+  const { backup: b } = await createManualBackup({ home: h, names: ['demo-skill'] });
+  const saved = await fs.readFile(path.join(shared, 'SKILL.md'), 'utf8');
+  const cdir = path.join(h, 'mon-agent', 'skills');
+  assertInHome(h, cdir);
+  const perso = async () => {
+    await fs.rm(path.join(cdir, 'demo-skill'), { recursive: true, force: true });
+    await fs.mkdir(path.join(cdir, 'demo-skill'), { recursive: true });
+    await fs.writeFile(path.join(cdir, 'demo-skill', 'SKILL.md'), skillMd('demo-skill', 'Version perso.'));
+  };
+  await perso();
+  const ag = await addCustomAgent({ home: h, name: 'Mon agent', dir: cdir });
+  const hidden = async () => (await fs.readdir(cdir)).filter((x) => x.startsWith('.'));
+  const tmp = path.join(h, '.skill-advisor', 'tmp');
+  const olds = async () => (await fs.readdir(tmp).catch(() => [])).filter((x) => x.startsWith('old-'));
+  const real = actions.io.drop;
+  // 1. Un échec passager : le deuxième essai efface, sans avertissement.
+  let calls = 0;
+  actions.io.drop = async (p) => { calls++; if (calls === 1) throw Object.assign(new Error('occupé'), { code: 'EBUSY' }); return real(p); };
+  let r;
+  try { r = await applyBackup({ home: h, id: b.id, agents: [ag.id], conflict: 'replace' }); } finally { actions.io.drop = real; }
+  assert.deepEqual(r.failed, []);
+  assert.deepEqual(r.applied, [{ name: 'demo-skill', agent: ag.id }]);
+  assert.equal(calls, 2);
+  assert.deepEqual(r.warnings, []);
+  assert.deepEqual(await hidden(), []);
+  assert.deepEqual(await olds(), []);
+  // 2. Échec qui dure : rangée sous ~/.skill-advisor/tmp, avertissement en français, rien de caché chez l'agent.
+  await perso();
+  actions.io.drop = async () => { throw Object.assign(new Error('occupé'), { code: 'EBUSY' }); };
+  try { r = await applyBackup({ home: h, id: b.id, agents: [ag.id], conflict: 'replace' }); } finally { actions.io.drop = real; }
+  assert.deepEqual(r.failed, []);
+  assert.deepEqual(r.applied, [{ name: 'demo-skill', agent: ag.id }]);
+  assert.equal(await fs.readFile(path.join(cdir, 'demo-skill', 'SKILL.md'), 'utf8'), saved);
+  assert.deepEqual(await hidden(), []);
+  const kept = await olds();
+  assert.equal(kept.length, 1);
+  assert.match(await fs.readFile(path.join(tmp, kept[0], 'SKILL.md'), 'utf8'), /Version perso/);
+  assert.equal(r.warnings.length, 1);
+  assert.match(r.warnings[0], /^L’ancienne version de demo-skill n’a pas pu être effacée\./);
+  assert.ok(r.warnings[0].includes(path.join(tmp, kept[0])), r.warnings[0]);
+  assert.doesNotMatch(r.warnings[0], /—/);
+  // Le balayage des dossiers de travail l'efface.
+  await sweepTmp({ home: h, maxAgeMs: 0 });
+  assert.deepEqual(await olds(), []);
 });

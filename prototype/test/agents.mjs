@@ -101,7 +101,8 @@ ok(before > 0, 'demo : Cursor a des skills');
 ok(T.list().top.filter((a) => a.id === 'cursor')[0].count === before, 'demo : nombre de skills de Cursor');
 T.askEmpty('cursor');
 html = render('demo/vider');
-ok(/Garder une sauvegarde/.test(html) && /type="checkbox"[^>]*checked/.test(html), 'demo : case « Garder une sauvegarde » cochée par défaut');
+/* Constat 70 : case du produit (.cb role="checkbox"), plus la case native. */
+ok(/Garder une sauvegarde/.test(html) && /class="cb" role="checkbox" aria-checked="true" data-ag-backup/.test(html) && !/type="checkbox"/.test(html), 'demo : case « Garder une sauvegarde » cochée par défaut');
 T.confirm();
 ok(SA.state.mine.filter((r) => r.ag && r.ag.cursor).length === 0, 'demo : Cursor vidé');
 ok(SA.state.mine.every((r) => !SA.state.backups.some((b) => b.id === r.id)), 'demo : aucune sauvegarde d’une ligne encore installée');
@@ -186,7 +187,7 @@ function liveAgents() {
   return all;
 }
 const calls = [];
-let reject = null, rejectPath = null, nextCustom = 10;
+let reject = null, rejectPath = null, nextCustom = 10, sharedReaders = null, emptyReply = null;
 // Faux serveur avec état : il modifie SA.data.agents comme le ferait live.js après la réponse,
 // avec les règles de registry.mjs (liste de cibles vide = agents détectés, agent ajouté non ciblé).
 function serve(method, p, body) {
@@ -199,15 +200,24 @@ function serve(method, p, body) {
   if (p === '/api/agents/hide' || p === '/api/agents/show') { byId(body.id).hidden = p.endsWith('hide'); return {}; }
   if (p === '/api/agents/empty') {
     const a = byId(body.id), n = a.count || 0;
+    if (a.universal && sharedReaders) { const e = new Error(a.id + ' lit le dossier partagé.'); e.code = 'SHARED'; e.readers = sharedReaders; throw e; }
     a.count = 0;
+    if (emptyReply) return emptyReply;
     return { removed: Array.from({ length: n }, (_, i) => 'skill-' + i), backups: [], failed: [] };
   }
+  if (p === '/api/skills/remove') return { removed: body.names, backups: body.backup ? [{ id: 'b1' }] : [], failed: [] };
   if (method === 'POST' && p === '/api/agents/custom') {
     const a = { id: 'custom-' + (++nextCustom), name: body.name, detected: true, top: false, universal: false, globalDir: body.dir, custom: true, hidden: false, target: false, count: 0 };
     ag.push(a);
     return { agent: { id: a.id, name: a.name, dir: body.dir } };
   }
   if (method === 'DELETE') { const id = decodeURIComponent(p.split('/').pop()); SA.data.agents = ag.filter((a) => a.id !== id); return {}; }
+  /* Dossier du projet : gardé dans l'état, comme le ferait live.js avec la réponse. */
+  if (method === 'POST' && p === '/api/project') {
+    if (body.dir === '/nulle/part') { const e = new Error('Ce dossier n’existe pas.'); e.code = 'BAD_INPUT'; throw e; }
+    SA.live.state.project = body.dir;
+    return {};
+  }
   return {};
 }
 function fakeLive(os) {
@@ -217,7 +227,7 @@ function fakeLive(os) {
     call(method, p, body) {
       calls.push({ method, path: p, body });
       if (reject && (!rejectPath || p === rejectPath)) { const e = new Error(reject); return Promise.reject(e); }
-      return Promise.resolve(Object.assign(serve(method, p, body), { state: {} }));
+      try { return Promise.resolve(Object.assign(serve(method, p, body), { state: {} })); } catch (e) { return Promise.reject(e); }
     }
   };
 }
@@ -304,7 +314,7 @@ all.filter((a) => a.id === 'cursor')[0].count = 5;
 const cnt0 = 5;
 T.askEmpty('cursor');
 html = render('live/vider');
-ok(/Garder une sauvegarde/.test(html) && /type="checkbox"[^>]*checked/.test(html), 'live : sauvegarde cochée par défaut');
+ok(/Garder une sauvegarde/.test(html) && /aria-checked="true" data-ag-backup/.test(html), 'live : sauvegarde cochée par défaut');
 ok(html.includes('Retirer les ' + cnt0 + ' skills de Cursor'), 'live : nombre de skills dans la confirmation');
 ok(!/dossier partagé/.test(html), 'live : pas d’avertissement de dossier partagé pour un agent non universel');
 await T.confirm();
@@ -316,7 +326,7 @@ all.filter((a) => a.id === 'cursor')[0].count = 3;
 T.askEmpty('cursor');
 T.setBackup(false);
 html = render('live/vider-sans');
-ok(!/type="checkbox"[^>]*checked/.test(html), 'live : case décochée');
+ok(/aria-checked="false" data-ag-backup/.test(html), 'live : case décochée');
 await T.confirm();
 eq(last(), { method: 'POST', path: '/api/agents/empty', body: { id: 'cursor', backup: false } }, 'live : vider sans sauvegarde');
 ok(!SA.state.ag.confirm, 'live : confirmation refermée');
@@ -420,6 +430,153 @@ SA.data.agents[0].globalDir = null;
 html = render('live/donnees-partielles');
 const row0 = html.slice(html.indexOf('data-id="' + SA.data.agents[0].id + '"'));
 ok(/nombre de skills inconnu/.test(row0.slice(0, row0.indexOf('</li>'))) && /Aucun dossier/.test(row0.slice(0, row0.indexOf('</li>'))), 'live : dossier et nombre inconnus');
+
+// ================================================================ version 1.0 : dossier partagé, refus SHARED, libellé, guillemets
+liveSet();
+{
+  const A = SA.data.agents;
+  const byId = (id) => A.filter((a) => a.id === id)[0];
+  Object.assign(byId('cursor'), { universal: true, detected: true, target: false, count: 2, hidden: false, globalDir: null });
+  Object.assign(byId('gemini-cli'), { universal: true, detected: true, target: false, count: 2, hidden: false, globalDir: null });
+  Object.assign(byId('codex'), { universal: true, detected: false, target: false, count: 0, hidden: false, globalDir: null });
+  SA.state.mine = [
+    { id: 'a/b/alpha', name: 'alpha', src: 'a/b', ag: { cursor: 'ok', 'gemini-cli': 'ok', 'claude-code': 'ok' }, path: HOME + '/.agents/skills/alpha', scope: 'global' },
+    { id: 'a/b/beta', name: 'Beta', src: 'a/b', ag: { cursor: 'ok', 'gemini-cli': 'ok' }, path: HOME + '/.agents/skills/beta-dir', scope: 'global' },
+    { id: 'a/b/proj', name: 'proj', src: 'a/b', ag: { cursor: 'ok' }, path: '/w/.agents/skills/proj', scope: 'project' }
+  ];
+  html = render('v1/partage');
+  /* Contrat : une seule cible « Dossier partagé », lecteurs nommés ; aucun interrupteur par lecteur. */
+  ok(/data-id="shared"/.test(html) && /Dossier partagé/.test(html) && /lu par Cursor et Gemini CLI/.test(html), '29 : ligne « Dossier partagé » avec ses lecteurs');
+  ok(/data-ag-shared[^>]*data-fk="sw:shared"/.test(html), '29 : un interrupteur pour le dossier partagé');
+  ok(!/data-fk="sw:cursor"/.test(html) && !/data-fk="sw:gemini-cli"/.test(html) && !/data-fk="sw:codex"/.test(html), '29 : aucun lecteur du dossier coché un par un');
+  /* Constat 69 : libellé visible au-dessus des interrupteurs. */
+  ok(/class="ag-colh"[^>]*>Recevoir les installations</.test(html), '69 : « Recevoir les installations » écrit au-dessus des interrupteurs');
+  ok(/<p class="eye" data-st>Agents<\/p>/.test(html), '70 : sur-titre = nom de l’écran');
+  /* Filtres et recherche : la ligne du dossier partagé reste quand elle correspond. */
+  T.setFilter('detectes');
+  ok(/data-id="shared"/.test(render('v1/detectes')), '29 : « Détectés » garde le dossier partagé');
+  T.setFilter('cibles');
+  ok(!/data-id="shared"/.test(render('v1/cibles-off')), '29 : « Ciblés » sans le dossier partagé quand il est éteint');
+  T.setFilter('tous');
+  T.setQuery('gemini');
+  ok(/data-id="shared"/.test(render('v1/recherche-lecteur')), '29 : chercher un lecteur montre le dossier partagé');
+  T.setQuery('partagé');
+  ok(/data-id="shared"/.test(render('v1/recherche-partage')) && !/Aucun agent ne correspond/.test(render('v1/recherche-partage')), '29 : chercher « partagé » le montre');
+  T.setQuery('');
+  const tg = A.filter((a) => a.target).map((a) => a.id);
+  await T.targetShared(true);
+  eq(sorted(last().body.ids), sorted(tg.concat(['cursor', 'gemini-cli'])), '29 : activer le dossier partagé = ses lecteurs détectés');
+  eq(SA.state.ag.focus, 'sw:shared', '55 : focus gardé sur l’interrupteur du dossier partagé');
+  T.setFilter('cibles');
+  ok(/data-id="shared"/.test(render('v1/cibles-on')), '29 : « Ciblés » montre le dossier partagé allumé');
+  T.setFilter('tous');
+  ok(/aria-checked="true"[^>]*data-ag-shared/.test(render('v1/partage-on')), '29 : interrupteur du dossier partagé allumé');
+  await T.target('cursor', false);
+  eq(sorted(last().body.ids), sorted(tg), '29 : un lecteur ne se retire pas seul, le dossier entier sort des cibles');
+  await T.target('claude-code', !byId('claude-code').target);
+  eq(SA.state.ag.focus, 'sw:claude-code', '55 : focus gardé sur l’interrupteur après activer ou désactiver');
+  /* Constats 29 et 46 : refus SHARED, question qui nomme les lecteurs, puis retrait du dossier partagé. */
+  sharedReaders = ['cursor', 'gemini-cli'];
+  T.askEmpty('cursor');
+  html = render('v1/vider-cursor');
+  ok(/Cursor lit le dossier partagé/.test(html) && !/ne les liront plus non plus/.test(html), '29 : la première question ne promet rien de faux');
+  await T.confirm();
+  eq(last().path, '/api/agents/empty', '29 : vider appelle d’abord le serveur');
+  html = render('v1/shared');
+  ok(SA.state.ag.confirm && SA.state.ag.confirm.kind === 'shared', '46 : refus SHARED : une nouvelle question, pas un échec muet');
+  ok(/lu aussi par Gemini CLI\./.test(html), '46 : la question nomme les autres lecteurs du dossier : ' + html.slice(html.indexOf('ag-cf-t'), html.indexOf('ag-cf-t') + 300));
+  ok(/>Retirer du dossier partagé pour tous ces agents</.test(html), '46 : bouton « Retirer du dossier partagé pour tous ces agents »');
+  ok(/copies propres des autres agents sont gardées/.test(html), '46 : la question dit que les copies propres des autres agents sont gardées : ' + html.slice(html.indexOf('ag-cf-w'), html.indexOf('ag-cf-w') + 260));
+  ok(!/quittent le dossier partagé et tous les agents/.test(html), '46 : la question ne promet plus de retirer le skill de tous les agents');
+  ok(!/échec/.test(SA.state.ag.msg || '') && !SA.state.ag.fail, '46 : aucun « N échecs » sans raison');
+  eq(SA.state.ag.focus, 'no:cursor', '57 : focus sur « Annuler » de la question');
+  const nS = calls.length;
+  await T.confirm();
+  eq(calls.slice(nS), [{ method: 'POST', path: '/api/skills/remove', body: { names: ['alpha', 'beta-dir'], agents: ['shared'], backup: true } }], '46 : retrait du dossier partagé : noms de dossier, lignes de projet exclues, agents: [\'shared\'] (dossier partagé et liens vers lui seulement)');
+  ok(/2 skills retirés du dossier partagé\. Une sauvegarde est gardée\./.test(render('v1/shared-fait')), '46 : message après le retrait');
+  /* Échec du serveur : la raison est dite. */
+  sharedReaders = null;
+  emptyReply = { removed: [], backups: [], failed: [{ name: 'alpha', message: 'Le dossier est verrouillé.' }] };
+  T.askEmpty('claude-code');
+  await T.confirm();
+  ok(/alpha : Le dossier est verrouillé\./.test(SA.state.ag.fail) && /role="alert"[^>]*>[^<]*verrouillé/.test(render('v1/echec-raison')), '29 : la raison de l’échec est affichée');
+  emptyReply = null;
+  /* Constat 83 : chemin collé entre guillemets. */
+  liveSet('win');
+  const nQ = calls.length;
+  await T.add('Outil cité', '"C:\\Users\\Jean\\mon agent\\skills"');
+  eq(calls[nQ] && calls[nQ].body, { name: 'Outil cité', dir: 'C:\\Users\\Jean\\mon agent\\skills' }, '83 : guillemets retirés du chemin collé');
+  liveSet('mac');
+  await T.add('Outil cité 2', " '/opt/mon agent/skills' ");
+  eq(last().path === '/api/agents/targets' ? calls[calls.length - 2].body : last().body, { name: 'Outil cité 2', dir: '/opt/mon agent/skills' }, '83 : apostrophes retirées aussi');
+  /* Constat 69 : message d'erreur sous le champ fautif. */
+  await T.add('', '/opt/x');
+  html = render('v1/err-nom');
+  ok(html.indexOf('id="ag-new-err"') > html.indexOf('id="ag-new-n"') && html.indexOf('id="ag-new-err"') < html.indexOf('id="ag-new-p"'), '69 : erreur du nom sous le champ du nom');
+  await T.add('Outil', 'relatif');
+  html = render('v1/err-dossier');
+  ok(html.indexOf('id="ag-new-err"') > html.indexOf('id="ag-new-p"'), '69 : erreur du dossier sous le champ du dossier');
+  SA.state.agNew = false;
+}
+
+// ================================================================ version 1.0 : lecteurs du refus SHARED, dossier du projet
+liveSet();
+{
+  const A = SA.data.agents;
+  const byId = (id) => A.filter((a) => a.id === id)[0];
+  Object.assign(byId('cursor'), { universal: true, detected: true, count: 2, hidden: false, globalDir: null });
+  SA.state.mine = [{ id: 'a/b/alpha', name: 'alpha', src: 'a/b', ag: { cursor: 'ok' }, path: HOME + '/.agents/skills/alpha', scope: 'global' }];
+  /* Les lecteurs viennent du serveur : un lecteur que l'écran ne connaît pas n'apparaît pas en identifiant brut. */
+  sharedReaders = ['cursor', 'roo', 'agent-inconnu'];
+  T.askEmpty('cursor');
+  await T.confirm();
+  html = render('v1/shared-lecteurs');
+  ok(SA.state.ag.confirm && SA.state.ag.confirm.kind === 'shared', 'SHARED : question du dossier partagé');
+  ok(/lu aussi par Roo Code\./.test(html), 'SHARED : les lecteurs envoyés par le serveur sont nommés : ' + html.slice(html.indexOf('ag-cf-t'), html.indexOf('ag-cf-t') + 260));
+  ok(!/agent-inconnu/.test(html), 'SHARED : un identifiant inconnu n’est pas affiché');
+  T.cancel();
+  sharedReaders = null;
+}
+liveSet();
+{
+  /* Mode réel sans projet choisi : l'écran Agents demande le dossier, comme l'étape d'installation. */
+  SA.state.scope = 'projet';
+  SA.live.state.project = null;
+  SA.state.projDraft = null; SA.state.projErr = ''; SA.state.projEdit = false;
+  let reps = 0;
+  const repaint = SA.repaint;
+  SA.repaint = () => { reps++; };
+  html = render('v1/projet-sans-dossier');
+  ok(/<label[^>]*for="ag-proj-dir"[^>]*>Dossier du projet<\/label>/.test(html) && /<input[^>]*id="ag-proj-dir"/.test(html), 'projet : champ « Dossier du projet » quand aucun projet n’est choisi');
+  ok(/data-ag-proj-set/.test(html) && /data-fk="proj-set"/.test(html), 'projet : bouton « Choisir ce dossier », retrouvé après le rendu');
+  ok(!/class="ag-proj-p mono"><\/span>/.test(html), 'projet : jamais de chemin vide');
+  /* Gestes par la vue montée : saisie, clic, puis Entrée. */
+  const h = {};
+  const rootEl = { addEventListener(t, f) { (h[t] = h[t] || []).push(f); }, querySelector() { return null; }, querySelectorAll() { return []; }, isConnected: true, contains() { return true; } };
+  V.mount(rootEl);
+  const target = (attrs) => ({ id: attrs.id || '', value: attrs.value || '', disabled: false, getAttribute: (n) => (n in attrs ? attrs[n] : null), hasAttribute: (n) => n in attrs,
+    closest(sel) { const m = sel.match(/^\[([\w-]+)\]$/); return m && m[1] in attrs ? this : null; } });
+  const fire = (type, attrs, extra = {}) => (h[type] || []).forEach((f) => f(Object.assign({ target: target(attrs), preventDefault() {}, stopPropagation() {} }, extra)));
+  fire('input', { id: 'ag-proj-dir', value: '/nulle/part' });
+  fire('click', { 'data-ag-proj-set': '' });
+  await new Promise((r) => setTimeout(r, 0)); await new Promise((r) => setTimeout(r, 0));
+  eq(last(), { method: 'POST', path: '/api/project', body: { dir: '/nulle/part' } }, 'projet : POST /api/project { dir }');
+  html = render('v1/projet-refuse');
+  ok(/Ce dossier n’existe pas\./.test(html) && /value="\/nulle\/part"/.test(html), 'projet : refus du serveur affiché, chemin gardé');
+  fire('input', { id: 'ag-proj-dir', value: '/w/mon app' });
+  fire('keydown', { id: 'ag-proj-dir' }, { key: 'Enter' });
+  await new Promise((r) => setTimeout(r, 0)); await new Promise((r) => setTimeout(r, 0));
+  eq(last().body, { dir: '/w/mon app' }, 'projet : Entrée valide le champ');
+  ok(SA.live.state.project === '/w/mon app' && reps > 0, 'projet : dossier gardé, écran redessiné');
+  html = render('v1/projet-choisi');
+  ok(html.includes('/w/mon app') && /data-ag-proj-edit/.test(html) && !/id="ag-proj-dir"/.test(html), 'projet : dossier choisi affiché, avec « Changer de dossier »');
+  fire('click', { 'data-ag-proj-edit': '' });
+  ok(/<input[^>]*id="ag-proj-dir"[^>]*value="\/w\/mon app"/.test(render('v1/projet-changer')), 'projet : « Changer de dossier » rouvre le champ');
+  fire('click', { 'data-ag-proj-cancel': '' });
+  ok(!/id="ag-proj-dir"/.test(render('v1/projet-annuler')), 'projet : « Annuler » referme le champ');
+  SA.repaint = repaint;
+  SA.state.scope = 'global';
+}
 
 SA.data.agents = demoAgents;
 SA.live = undefined;

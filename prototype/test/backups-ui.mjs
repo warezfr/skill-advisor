@@ -42,9 +42,10 @@ function btn(attrs) {
       return m && m[1] in attrs ? this : null;
     } };
 }
-function makeWin(fetchFn, liveOn) {
+function makeWin(fetchFn, liveOn, nav) {
   const handlers = {}, els = {}, links = [], urls = [], flags = {};
   const win = { matchMedia: null, setTimeout, clearTimeout, Promise, JSON, Date, Math, encodeURIComponent, fetch: fetchFn };
+  if (nav) win.navigator = nav;
   if (liveOn) win.SA_LIVE = { token: TOKEN };
   win.console = { log() {}, warn() {}, error(...a) { if (String(a[0]).indexOf('[Skill Advisor]') !== 0) console.error(...a); } };
   win.window = win;
@@ -151,6 +152,15 @@ const TOKEN = 'b'.repeat(64);
   /* importer : expliqué aussi */
   await V._do.importFile({ name: 'a.tar.gz', size: 10 });
   ok(/application locale/.test(V.render()) && calls === 0, 'demo : import expliqué, aucun appel');
+  ok(/avec npm start\./.test(txt(V.render())), 'demo : la commande de démarrage est npm start hors de Windows');
+  /* Constat 38 : sous Windows, npm.cmd start. */
+  {
+    const dw = makeWin(() => Promise.reject(new Error('aucun réseau en démo')), false, { platform: 'Win32', userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' });
+    dw.SA.initState({ route: 'sauvegardes', backups: dw.SA.demoBackups() });
+    await dw.SA.views.sauvegardes._do.exportB(dw.SA.state.backups[0].id);
+    const tw = txt(dw.SA.views.sauvegardes.render());
+    ok(/avec npm\.cmd start\./.test(tw) && !/npm start/.test(tw), '38 : Windows : « npm.cmd start » dans le texte de l’export : ' + (tw.match(/[^.]*application locale[^.]*\./) || [''])[0]);
+  }
 
   /* restaurer en mémoire */
   const rb = SA.state.backups.find((b) => b.origin === 'manual');
@@ -194,7 +204,9 @@ const TOKEN = 'b'.repeat(64);
   V._do.setConflict('replace');
   ok(/Le dossier partagé ~\/\.agents\/skills sera remplacé/.test(V._do.drawerHTML()) && /concernés : [^<]*Claude Code/.test(V._do.drawerHTML()), 'demo : « Remplacer » prévient pour le dossier partagé');
   V._do.setConflict('skip');
-  ok(/type="checkbox"[^>]*data-sv-ap-item/.test(dr) && /checked/.test(dr), 'demo : cases à cocher');
+  /* Constat 70 : la case du produit (.cb, role="checkbox"), plus la case native du navigateur. */
+  ok(/class="cb" role="checkbox" aria-checked="true" data-sv-ap-item/.test(dr) && !/type="checkbox"|type="radio"/.test(dr), 'demo : cases à cocher du produit');
+  ok(/data-sv-ap-conflict="skip" aria-pressed="true"/.test(dr) && /data-sv-ap-conflict="replace" aria-pressed="false"/.test(dr), 'demo : Passer / Remplacer en segments');
   const undet = SA.agents().find((a) => a.st === 'no' && !a.custom);
   ok(undet && dr.indexOf('data-sv-ap-agent="' + undet.id + '"') < 0, 'demo : agent non détecté caché sans recherche : ' + (undet && undet.id));
   V._do.setQuery(undet.name.slice(0, 3));
@@ -341,7 +353,10 @@ async function liveWin() {
   ok(await w.SA.live.ready === true, 'live : état lu');
   w.SA.go = () => true;
   w.SA.state.route = 'sauvegardes';
-  return Object.assign(w, { srv, V: w.SA.views.sauvegardes, last: () => srv.log[srv.log.length - 1] });
+  // last() ignore la recherche automatique des mises à jour (lancée 300 ms après l'affichage de Mes skills) :
+  // sur une machine lente, elle passait avant l'appel vérifié et le test échouait au hasard (vu sous Windows).
+  const acts = () => srv.log.filter((c) => c.url !== '/api/skills/check');
+  return Object.assign(w, { srv, V: w.SA.views.sauvegardes, last: () => acts()[acts().length - 1] });
 }
 
 {
@@ -561,7 +576,8 @@ function clickEv(target) { return Object.assign(keyEv(''), { target }); }
 
   /* 7. « Remplacer » prévient que le dossier partagé change pour tous les agents qui le lisent */
   V._do.openApply(ID);
-  ok(!sharedBox(V._do.drawerHTML()), '7 : rien en « Passer »');
+  /* Constat 30 : en « Passer » aussi, le tiroir dit avant d'appliquer qui lira le skill par le dossier partagé. */
+  ok(sharedBox(V._do.drawerHTML()).indexOf(SHARED) < 0 && /passent par le dossier partagé/.test(sharedBox(V._do.drawerHTML())) && /Codex les lira aussi/.test(sharedBox(V._do.drawerHTML())), '7 : en « Passer », pas de remplacement annoncé, lecteurs nommés : ' + sharedBox(V._do.drawerHTML()));
   V._do.setConflict('replace');
   let box = sharedBox(V._do.drawerHTML());
   ok(box.indexOf(SHARED) > -1, '7 : avertissement en « Remplacer » : ' + box);
@@ -574,7 +590,7 @@ function clickEv(target) { return Object.assign(keyEv(''), { target }); }
   V._do.setAgent('zed', true);
   ok(sharedBox(V._do.drawerHTML()).indexOf(SHARED) > -1, '7 : agent à dossier propre (lien), avertissement');
   V._do.setConflict('skip');
-  ok(!/Le dossier partagé/.test(t.els['sv-ap-shared'].innerHTML), '7 : retour à « Passer », avertissement retiré');
+  ok(t.els['sv-ap-shared'].innerHTML.indexOf(SHARED) < 0, '7 : retour à « Passer », avertissement de remplacement retiré');
   clean('7 drawer', V._do.drawerHTML());
   /* nom de dossier (beta-dir) différent du nom de la ligne (beta) : Cursor, qui a ce skill, est nommé sans être coché */
   srv.state.mine[1].ag = { 'claude-code': 'ok', cursor: 'ok' };
@@ -727,6 +743,82 @@ function clickEv(target) { return Object.assign(keyEv(''), { target }); }
   await V._do.confirmRestore();
   eq(t.last().body, { id: '20261112-101010-old', force: ['old'] }, 'ROUGE : sans rouge connu, force = tous les noms');
   ok(!SA.state.backups.some((b) => b.id === '20261112-101010-old') && /restaurée/.test(V.render()), 'ROUGE : restauration faite après confirmation');
+}
+
+/* ======================================================= 4. version 1.0 : dossier partagé, bilan complet, composants, focus */
+{
+  const t = await liveWin();
+  const { SA, V, srv } = t;
+  const ID = '20261113-090000-lot';
+  srv.state.agents.find((a) => a.id === 'codex').detected = true;
+  srv.state.agents.push({ id: 'gemini-cli', name: 'Gemini CLI', detected: true, top: true, universal: true, globalDir: null, custom: false, hidden: false, target: false, count: 0 },
+    { id: 'windsurf', name: 'Windsurf', detected: true, top: true, universal: false, globalDir: HOME + '/.windsurf/skills', custom: false, hidden: false, target: false, count: 0 });
+  await SA.live.refresh();
+  V._do.openApply(ID);
+  let dr = V._do.drawerHTML();
+  /* Contrat : les lecteurs du dossier partagé forment une seule cible, nommée, avec ses lecteurs dessous. */
+  ok(/data-sv-ap-shared="shared"/.test(dr) && /Lu par Codex et Gemini CLI\./.test(txt(dr)), '30 : une case « Dossier partagé », lecteurs nommés : ' + txt(dr).slice(0, 400));
+  ok(!/data-sv-ap-agent="codex"/.test(dr) && !/data-sv-ap-agent="gemini-cli"/.test(dr), '30 : aucun lecteur coché un par un');
+  /* Windsurf seul (constat 30) : le tiroir annonce Codex et Gemini CLI avant d'appliquer. */
+  V._do.setAgent('claude-code', false);
+  V._do.setAgent('windsurf', true);
+  dr = V._do.drawerHTML();
+  ok(/passent par le dossier partagé/.test(txt(dr)) && /Codex et Gemini CLI les liront aussi\./.test(txt(dr)), '30 : avant d’appliquer, les lecteurs non choisis sont annoncés : ' + sharedBox(dr));
+  srv.applyReply = (b) => {
+    /* Le serveur écrit dans ~/.agents/skills : chaque lecteur détecté voit le skill. */
+    srv.state.mine.find((r) => r.name === 'alpha').ag = { 'claude-code': 'ok', codex: 'ok', 'gemini-cli': 'ok', windsurf: 'ok' };
+    return { applied: [{ name: 'alpha', agent: 'windsurf' }], skipped: [], failed: [], backups: [], warnings: [], state: srv.state };
+  };
+  V._do.setItem('risque', false); V._do.setItem('gamma', false);
+  await V._do.submitApply();
+  eq(t.last().body, { id: ID, names: ['alpha'], agents: ['windsurf'], conflict: 'skip' }, '30 : charge de apply, Windsurf seul');
+  dr = t.drawer.html;
+  ok(/Agents qui voient maintenant ces skills/.test(dr) && /Claude Code, Codex, Gemini CLI, Windsurf/.test(txt(dr)), '30 : le bilan liste chaque agent qui voit le skill : ' + txt(dr).slice(-400));
+  ok(/Codex et Gemini CLI le lisent par le dossier partagé, sans avoir été choisis\./.test(txt(dr)), '30 : lecteurs non choisis nommés dans le bilan');
+  ok(/Gemini CLI le lisent|sans avoir été choisis/.test(txt(V.render())), '30 : le bilan reste sur l’écran');
+  clean('30 bilan', dr);
+  SA.closeDrawer();
+  /* Cocher le dossier partagé : un seul lecteur envoyé ; décocher : aucun. */
+  V._do.openApply(ID);
+  const fake = (attrs) => { const b = btn(attrs); b.attrs['aria-checked'] = attrs['aria-checked'] || 'false'; b.setAttribute = (k, v) => { b.attrs[k] = v; }; return b; };
+  const sh = fake({ 'data-sv-ap-shared': 'shared' });
+  (t.handlers.click || []).forEach((h) => h({ target: sh }));
+  ok(sh.attrs['aria-checked'] === 'true', '70 : clic sur la case : aria-checked changé sur place, le bouton garde le focus');
+  eq(Object.keys(V._do.ap().agents).filter((k) => V._do.ap().agents[k]).sort(), ['claude-code', 'codex'], '30 : dossier partagé coché = un lecteur');
+  (t.handlers.click || []).forEach((h) => h({ target: sh }));
+  eq(Object.keys(V._do.ap().agents).filter((k) => V._do.ap().agents[k]), ['claude-code'], '30 : dossier partagé décoché');
+  /* Dossier partagé choisi : ses lecteurs ne sont pas « non choisis » dans le bilan. */
+  (t.handlers.click || []).forEach((h) => h({ target: sh }));
+  V._do.setItem('risque', false); V._do.setItem('gamma', false);
+  await V._do.submitApply();
+  ok(t.last().body.agents.join() === 'claude-code,codex' && /Agents qui voient maintenant ces skills/.test(t.drawer.html) && !/sans avoir été/.test(t.drawer.html), '30 : dossier partagé coché, aucun lecteur annoncé comme non choisi : ' + JSON.stringify(t.last().body));
+  SA.closeDrawer();
+  V._do.openApply(ID);
+  const it = fake({ 'data-sv-ap-item': 'alpha', 'aria-checked': 'true' });
+  (t.handlers.click || []).forEach((h) => h({ target: it }));
+  ok(it.attrs['aria-checked'] === 'false' && V._do.ap().names.alpha === false, '70 : case d’un skill décochée au clic');
+  const rp = btn({ 'data-sv-ap-conflict': 'replace' });
+  (t.handlers.click || []).forEach((h) => h({ target: rp }));
+  ok(V._do.ap().conflict === 'replace', '70 : segment Remplacer choisi au clic');
+  SA.closeDrawer();
+  /* Constat 67 et 70 : « Supprimer » reste sur la ligne des gestes ; la question vient dans le composant commun, sous la sauvegarde. */
+  let html = V.render();
+  ok(/<p class="eye" data-st>Sauvegardes<\/p>/.test(html), '70 : sur-titre = nom de l’écran');
+  ok(/bdg tr">1 skill à regarder</.test(html) && !/[Aa]vertissement/.test(html.replace(/malgré l’avertissement/g, '')), 'verdicts : « À regarder », jamais « avertissement »');
+  V._do.askDelete(ID);
+  html = V.render();
+  const row = html.slice(html.indexOf('data-sv-restore="' + ID + '"') - 400, html.indexOf('data-sv-del-ok') + 400);
+  ok(/class="sv-act"[\s\S]*data-sv-del="20261113-090000-lot"[\s\S]*<\/div><div class="cfm sv-cf"/.test(row), '67 : « Supprimer » reste sur la ligne, la question vient dessous : ' + txt(row).slice(0, 200));
+  ok(/data-sv-del="20261113-090000-lot"[^>]* disabled/.test(html), '70 : gestes inactifs pendant la question');
+  eq(SA.state.sv.focus, 'del-no', '57 : focus sur « Annuler » de la question');
+  V._do.cancelDelete();
+  eq(SA.state.sv.focus, 'del:' + ID, '57 : Annuler rend le focus à « Supprimer »');
+  srv.failNext = { status: 409, body: { error: 'ROUGE', message: 'x', names: ['risque'] } };
+  await V._do.restore(ID);
+  ok(/class="cfm sv-cf"[^>]*><p class="cfm-t">Ce skill porte un motif à risque/.test(V.render()), '70 : question ROUGE dans le composant commun');
+  eq(SA.state.sv.focus, 'rg-no', '57 : focus sur « Annuler » de la question ROUGE');
+  V._do.cancelRestore();
+  eq(SA.state.sv.focus, 'restore:' + ID, '57 : Annuler rend le focus à « Restaurer »');
 }
 
 console.log(`${checks} checks, ${fails} failure(s)`);

@@ -37,6 +37,24 @@ window.SA = window.SA || {};
 
   SA.rm = !!(window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches);
 
+  /* Stockages du navigateur : absents, refusés ou pleins, l'interface marche sans eux. */
+  function store(kind) { try { return window[kind] || null; } catch (e) { return null; } }
+  function sget(kind, k) { try { var st = store(kind); return st ? st.getItem(k) : null; } catch (e) { return null; } }
+  function sset(kind, k, v) { try { var st = store(kind); if (st) st.setItem(k, v); } catch (e) { /* stockage refusé */ } }
+  SA.expired = function () { return !!(SA.live && SA.live.expired); };
+  /* Commande de démarrage à montrer (constat 38) : sous Windows, « npm.cmd start ». Même règle que live.js. */
+  SA.npmStart = function () {
+    var n = window.navigator || {};
+    return /Win/.test(String(n.platform || '') + ' ' + String(n.userAgent || '')) ? 'npm.cmd start' : 'npm start';
+  };
+
+  /* Thème choisi (clé sa-theme), appliqué dès le chargement. La page construite le fait déjà dans <head>. */
+  var THEME_KEY = 'sa-theme';
+  (function () {
+    var t = sget('localStorage', THEME_KEY), r = document.documentElement;
+    if ((t === 'light' || t === 'dark') && r && r.setAttribute) { try { r.setAttribute('data-theme', t); } catch (e) { /* rien */ } }
+  })();
+
   /* ------------------------------------------------------------------ helpers */
   var ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
   SA.esc = function (s) {
@@ -63,7 +81,8 @@ window.SA = window.SA || {};
     moon: '<path d="M19.5 14.6A7.75 7.75 0 0 1 9.4 4.5a7.75 7.75 0 1 0 10.1 10.1z"/>',
     copy: '<rect x="8.5" y="8.5" width="11" height="11" rx="2"/><path d="M15.5 8.5V6A1.5 1.5 0 0 0 14 4.5H6A1.5 1.5 0 0 0 4.5 6v8A1.5 1.5 0 0 0 6 15.5h2.5"/>',
     chevron: '<path d="M9.5 6l6 6-6 6"/>',
-    sliders: '<path d="M5 8h9M18 8h1M5 16h1M10 16h9"/><circle cx="16" cy="8" r="2"/><circle cx="8" cy="16" r="2"/>'
+    sliders: '<path d="M5 8h9M18 8h1M5 16h1M10 16h9"/><circle cx="16" cy="8" r="2"/><circle cx="8" cy="16" r="2"/>',
+    refresh: '<path d="M19 12a7 7 0 1 1-2.05-4.95M19 4.5V9h-4.5"/>'
   };
   SA.icon = function (name) {
     return '<svg class="ic ic-' + name + '" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">' + (IC[name] || '') + '</svg>';
@@ -102,19 +121,23 @@ window.SA = window.SA || {};
     }
     return rel ? home + '/' + rel : home;
   };
-  /* Example project folder used when the scope is "Ce projet seulement". */
+  /* Dossier du projet pour la portée « Ce projet seulement ».
+     Mode réel : State.project, ou null quand aucun projet n'est choisi (les vues demandent alors le dossier).
+     Démonstration : un dossier d'exemple. */
   SA.projRoot = function () {
-    /* Mode réel : le projet est le dossier où le serveur a été lancé. */
-    if (SA.live && SA.live.on) return String((SA.live.state || {}).cwd || 'dossier du projet en cours');
+    if (SA.live && SA.live.on) {
+      var p = (SA.live.state || {}).project;
+      return p ? String(p) : null;
+    }
     var os = (SA.state && SA.state.os) || 'mac', sep = SA.sep();
     return ((D().home || {})[os] || '') + sep + 'code' + sep + 'mon-app';
   };
-  /* Absolute path of a relative agent folder, following SA.state.scope. */
+  /* Absolute path of a relative agent folder, following SA.state.scope. Sans projet choisi : « … » à la place du dossier. */
   SA.target = function (rel) {
     if (!SA.state || SA.state.scope !== 'projet') return SA.path(rel);
-    var sep = SA.sep();
+    var sep = SA.sep(), root = SA.projRoot() || '…';
     rel = String(rel || '').replace(/\//g, sep);
-    return rel ? SA.projRoot() + sep + rel : SA.projRoot();
+    return rel ? root + sep + rel : root;
   };
 
   function goalObj() {
@@ -127,6 +150,13 @@ window.SA = window.SA || {};
   SA.item = function (id) { return SA.reco ? SA.reco.item(id) : null; };
   SA.det = function (id) { return ((SA.search || {}).details || {})[id] || null; };
   SA.offline = function () { return !!(SA.state && SA.state.pv && SA.state.pv.net === 'off'); };
+  /* Date et source de la base. Mode réel : live.js la remplit ; sinon, la copie embarquée. */
+  if (!SA.catalogInfo) SA.catalogInfo = { source: 'bundled', generatedAt: (SA.search || {}).generatedAt || '' };
+  /* « Base du 12/11/2026 · copie fournie » ou « · en ligne » : le même texte partout. */
+  SA.baseLabel = function () {
+    var c = SA.catalogInfo || {}, d = c.generatedAt ? SA.day(String(c.generatedAt)) : '';
+    return (d ? 'Base du ' + d : 'Base de date inconnue') + ' · ' + (c.source === 'online' ? 'en ligne' : 'copie fournie');
+  };
 
   /* ---- machine ---- */
   SA.mineRow = function (id) {
@@ -196,6 +226,8 @@ window.SA = window.SA || {};
     items: function () { return SA.state.cart.map(SA.item).filter(Boolean); },
     add: function (id) {
       if (!SA.item(id) || SA.mineRow(id) || SA.cart.has(id)) return false;
+      /* « Installation à la main » : l'application ne sait pas l'installer, la sélection la refuse. */
+      if (SA.reco && typeof SA.reco.manual === 'function' && SA.reco.manual(id)) return false;
       SA.state.cart.push(id);
       return true;
     },
@@ -212,6 +244,14 @@ window.SA = window.SA || {};
   SA.addBtn = function (id, wide) {
     if (SA.mineRow(id)) return '<span class="bdg ok">Installé</span>';
     var on = SA.cart.has(id), it = SA.item(id);
+    /* L'application ne sait pas l'installer : un badge et sa page skills.sh, jamais de bouton d'ajout. */
+    var why = SA.reco && typeof SA.reco.manual === 'function' ? SA.reco.manual(id) : '';
+    if (why) {
+      var url = it ? 'https://skills.sh/' + String(it[2] || '').split('/').concat([it[1]]).map(encodeURIComponent).join('/') : '';
+      return '<span class="bdg wsl" title="' + SA.esc(why) + '">Installation à la main</span>' +
+        (wide ? ' <span class="sub">' + SA.esc(why) + '</span>' : '') +
+        (url ? ' <a class="btn quiet" href="' + SA.esc(url) + '" target="_blank" rel="noopener noreferrer">Page skills.sh</a>' : '');
+    }
     return '<button type="button" class="btn add' + (on ? ' is-on' : '') + '" data-cart-add="' + SA.esc(id) + '"' + (wide ? ' data-wide' : '') +
       ' aria-pressed="' + on + '" aria-label="' + (on ? 'Retirer ' : 'Ajouter ') + SA.esc(it ? it[1] : id) + (on ? ' de' : ' à') + ' la sélection">' +
       addLabel(on, wide) + '</button>';
@@ -297,6 +337,104 @@ window.SA = window.SA || {};
   };
   SA.initState();
 
+  /* ------------------------------------------------------------------ focus après un nouveau rendu */
+  /* Avant le rendu : une clé du contrôle actif (data-fk, id, attributs data-*, sinon libellé), son rang et sa ligne.
+     Après : le même contrôle, sinon le suivant du même genre, sinon le message de résultat, sinon le titre.
+     Jamais <body>. Les valeurs sont comparées en JavaScript, jamais glissées dans un sélecteur. */
+  function act() { return document.activeElement || null; }
+  /* Focus perdu : sur <body>, sur un nœud retiré, ou sur un contrôle désactivé ou caché
+     (un navigateur laisse le focus sur un bouton qui vient d'être désactivé). */
+  function lost(root) {
+    var a = act();
+    return !a || a === document.body || a.isConnected === false || (root && root.isConnected === false) || (!!a.getAttribute && !usable(a));
+  }
+  function dataOf(el) {
+    var out = [], at = el.attributes || [];
+    for (var i = 0; i < at.length; i++) {
+      var n = at[i].name;
+      if (n.indexOf('data-') === 0 && n !== 'data-st' && n !== 'data-fk') out.push(n + '=' + at[i].value);
+    }
+    return out.sort();
+  }
+  function tagOf(el) { return String(el.localName || el.tagName || '').toLowerCase(); }
+  function labelOf(el) { return String(el.getAttribute('aria-label') || el.textContent || '').replace(/\s+/g, ' ').trim(); }
+  function rowOf(el) { var r = el.closest ? el.closest('[data-row]') : null; return r ? r.getAttribute('data-row') : null; }
+  function each(root, sel) { return root && root.querySelectorAll ? Array.prototype.slice.call(root.querySelectorAll(sel)) : []; }
+  function usable(el) {
+    if (!el || el.disabled || el.hasAttribute('disabled')) return false;
+    return !(el.closest && el.closest('[hidden], [inert]'));
+  }
+  function sameAs(k) {
+    return function (el) {
+      if (k.fk) return el.getAttribute('data-fk') === k.fk;
+      if (k.id) return el.id === k.id;
+      if (k.data.length) return dataOf(el).join('&') === k.data.join('&');
+      return (el.getAttribute('class') || '') === k.cls && labelOf(el) === k.label;
+    };
+  }
+  function kindOf(k) {
+    var pre = k.fk && k.fk.indexOf(':') > 0 ? k.fk.slice(0, k.fk.indexOf(':') + 1) : '';
+    var names = k.data.map(function (x) { return x.split('=')[0]; }).join('&');
+    return function (el) {
+      if (k.fk) return !!pre && String(el.getAttribute('data-fk') || '').indexOf(pre) === 0;
+      if (k.id || !names) return false;
+      return dataOf(el).map(function (x) { return x.split('=')[0]; }).join('&') === names;
+    };
+  }
+  function focusKey(root) {
+    var a = act();
+    if (!root || !a || a === document.body || a === root || !root.contains || !root.contains(a) || !a.getAttribute) return null;
+    var k = { tag: tagOf(a), fk: a.getAttribute('data-fk') || '', id: a.id || '', data: dataOf(a), cls: a.getAttribute('class') || '', label: labelOf(a), row: rowOf(a) };
+    var all = each(root, k.tag);
+    var same = all.filter(sameAs(k));
+    k.idx = Math.max(0, same.indexOf(a));
+    k.ridx = Math.max(0, same.filter(function (el) { return rowOf(el) === k.row; }).indexOf(a));
+    k.kidx = Math.max(0, all.filter(kindOf(k)).indexOf(a));
+    if (k.tag === 'input' || k.tag === 'textarea') k.field = { v: a.value, s: a.selectionStart, e: a.selectionEnd };
+    return k;
+  }
+  function put(el) {
+    if (!el) return false;
+    if (!el.hasAttribute('tabindex') && !/^(button|input|select|textarea|a)$/.test(tagOf(el))) el.setAttribute('tabindex', '-1');
+    safe(function () { el.focus({ preventScroll: true }); });
+    return act() === el;
+  }
+  function pick(list, i) { return list.length ? list[Math.min(i, list.length - 1)] : null; }
+  function heading(root) {
+    var h = root && root.querySelector ? root.querySelector('h1') || root.querySelector('h2') || root.querySelector('h3') : null;
+    return h && usable(h) ? h : null;
+  }
+  function viewHeading() { return heading($('view')); }
+  function restoreFocus(k, root, fallback) {
+    if (!k || !root) return false;
+    var all = each(root, k.tag), same = all.filter(sameAs(k));
+    var mine = same.filter(function (el) { return rowOf(el) === k.row; });
+    var el = mine.length ? pick(mine, k.ridx) : pick(same, k.idx);
+    if (el && usable(el)) {
+      if (put(el)) {
+        if (k.field && el.value === k.field.v && el.setSelectionRange && k.field.s != null) safe(function () { el.setSelectionRange(k.field.s, k.field.e); });
+        return true;
+      }
+    }
+    /* Disparu : le suivant du même genre (à son rang), sinon le précédent. Désactivé : on ne le remplace pas par un voisin. */
+    if (!el) {
+      var kind = all.filter(kindOf(k)).filter(usable);
+      if (put(pick(kind, k.kidx))) return true;
+    }
+    var msg = each(root, '[role="status"][tabindex], [role="alert"][tabindex]').filter(usable)[0];
+    if (put(msg)) return true;
+    if (put(heading(root))) return true;
+    if (fallback && put(fallback)) return true;
+    return put(viewHeading());
+  }
+  /* Pour les rendus partiels des vues : garde le focus dans region pendant fn(). */
+  SA.keepFocus = function (region, fn, fallback) {
+    var k = focusKey(region);
+    var r = fn ? fn() : undefined;
+    if (k && lost(region)) restoreFocus(k, region, fallback);
+    return r;
+  };
+
   /* ------------------------------------------------------------------ router */
   var busy = false;
 
@@ -320,14 +458,15 @@ window.SA = window.SA || {};
   }
 
   function placeholder() {
-    return '<p class="eye" data-st>' + SA.esc(viewId()) + '</p>' + SA.h('Vue en préparation') +
-      '<p class="lede" data-st>Cette partie du prototype n’est pas encore disponible.</p>';
+    return '<p class="eye" data-st>Skill Advisor</p>' + SA.h('Écran indisponible') +
+      '<p class="lede" data-st>Cet écran n’a pas pu s’afficher. Choisissez un autre écran dans le menu.</p>';
   }
 
   function paint(first, still) {
     /* Replace #view with a bare clone: listeners attached by a previous mount() die with the old node,
        so delegated handlers never stack and a view's timers see isConnected === false once left. */
     var old = $('view');
+    var key = still ? focusKey(old) : null;
     var v = old.cloneNode(false);
     old.parentNode.replaceChild(v, old);
     var view = curView();
@@ -349,6 +488,8 @@ window.SA = window.SA || {};
       if (h) safe(function () { h.focus({ preventScroll: true }); });
     }
     if (view && typeof view.mount === 'function') safe(function () { view.mount(v); });
+    /* Même lieu : le focus revient au contrôle utilisé, sauf si la vue l'a déjà placé elle-même. */
+    if (key && lost(v)) restoreFocus(key, v);
     if (!still) SA.countUp(v);
     else v.querySelectorAll('[data-count]').forEach(function (el) { el.textContent = SA.nb(el.getAttribute('data-count')); });
     SA.sync();
@@ -356,7 +497,7 @@ window.SA = window.SA || {};
 
   /* Redessine la vue en place, sans transition : pour un changement d'état, pas de lieu. */
   SA.repaint = function () {
-    if (busy || !$('view')) return;
+    if (busy || !$('view') || SA.expired()) return;
     var sc = $('scroll'), top = sc.scrollTop, wtop = $('work').scrollTop;
     safe(function () { paint(false, true); });
     sc.scrollTop = top;
@@ -371,14 +512,15 @@ window.SA = window.SA || {};
     v.classList.add('leave');
     safe(renderRail);
     safe(renderCrumb);
+    safe(renderTitle);
     wait(190, function () {
-      safe(function () { paint(false); });
+      if (!SA.expired()) safe(function () { paint(false); });
       busy = false;
     });
   }
 
   SA.go = function (step, dir) {
-    if (busy) return false;
+    if (busy || SA.expired()) return false;
     step = Math.max(1, Math.min(LAST, parseInt(step, 10) || 1));
     var s = SA.state;
     if (s.route === 'wizard' && s.step === step) return false;
@@ -392,7 +534,7 @@ window.SA = window.SA || {};
 
   var ORDER = { accueil: 0, wizard: 1, recherche: 2, gestion: 3, sauvegardes: 4, agents: 5 };
   SA.setRoute = function (route) {
-    if (busy || !(route in ORDER)) return false;
+    if (busy || SA.expired() || !(route in ORDER)) return false;
     var s = SA.state;
     if (s.route === route) return false;
     s.dir = ORDER[route] > ORDER[s.route] ? 1 : -1;
@@ -533,6 +675,7 @@ window.SA = window.SA || {};
     $('drawer-title').textContent = title || '';
     b.classList.remove('swap-in');
     b.innerHTML = html || '';
+    b._h = null;
     stagger(b);
     b.scrollTop = 0;
     d.hidden = false;
@@ -604,10 +747,14 @@ window.SA = window.SA || {};
       else b.removeAttribute('aria-current');
     });
     $('rail-steps').hidden = s.route !== 'wizard';
-    var local = document.querySelector('.rail-net');
-    if (local) local.textContent = SA.offline() ? 'Hors ligne · copie locale' : 'En local · 127.0.0.1';
-    var pip = document.querySelector('.rail-pip');
-    if (pip) pip.classList.toggle('is-off', SA.offline());
+    /* Mode réel : serveur joignable ou arrêté, date et source de la base (live.js). Démonstration : le réglage « Réseau ». */
+    if (SA.live && SA.live.on && SA.live.paintRail) SA.live.paintRail();
+    else {
+      var local = document.querySelector('.rail-net');
+      if (local) local.textContent = SA.offline() ? 'Hors ligne · copie locale' : 'En local · 127.0.0.1';
+      var pip = document.querySelector('.rail-pip');
+      if (pip) pip.classList.toggle('is-off', SA.offline());
+    }
     /* While an install runs, the rail cannot leave the step (same rule as Retour). */
     var lockNav = !!s.installing;
     [document.querySelector('.rail-nav'), $('rail-steps')].forEach(function (el) {
@@ -631,20 +778,33 @@ window.SA = window.SA || {};
     $('rail-ol').style.setProperty('--p', skipped ? 0 : s.step - 1);
   }
 
-  function renderCrumb() {
-    var s = SA.state, steps = D().steps || STEPS, c = $('crumb'), n = $('crumb-count');
+  /* Fil d'Ariane : { html, count }. Recherche est une entrée de premier niveau : son fil dit la date et la source de la base. */
+  function crumbParts() {
+    var s = SA.state, steps = D().steps || STEPS;
     var html, count = '';
     function two(a, b) { return '<span class="sub">' + a + '</span><span class="crumb-sep" aria-hidden="true">/</span><span>' + SA.esc(b) + '</span>'; }
     if (s.route === 'wizard') {
       html = two('Conseil', steps[s.step - 1] || '');
       count = pad(s.step) + ' / ' + pad(steps.length);
     } else if (s.route === 'accueil') html = two('Accueil', 'Ma machine');
-    else if (s.route === 'recherche') html = two('Conseil', 'Recherche');
+    else if (s.route === 'recherche') html = two('Recherche', SA.baseLabel());
     else if (s.route === 'gestion') html = two('Gestion', 'Mes skills');
     else if (s.route === 'sauvegardes') html = two('Gestion', 'Sauvegardes');
     else html = two('Gestion', 'Agents');
-    if (c._h !== html) { c.innerHTML = html; c._h = html; }
-    if (n.textContent !== count) n.textContent = count;
+    return { html: html, count: count };
+  }
+  /* Pour les essais : le fil d'Ariane sans page. */
+  SA.crumbHtml = function () { return crumbParts().html; };
+  /* Titre de la page (constat 52) : le nom de l'écran, comme dans le menu, puis « Skill Advisor ». */
+  var TITLES = { accueil: 'Ma machine', wizard: 'Conseil', recherche: 'Recherche', gestion: 'Mes skills', sauvegardes: 'Sauvegardes', agents: 'Agents' };
+  function renderTitle() {
+    var r = SA.state.route, t = (own(TITLES, r) ? TITLES[r] + ' · ' : '') + 'Skill Advisor';
+    if (document.title !== t) document.title = t;
+  }
+  function renderCrumb() {
+    var c = $('crumb'), n = $('crumb-count'), p = crumbParts();
+    if (c._h !== p.html) { c.innerHTML = p.html; c._h = p.html; }
+    if (n.textContent !== p.count) n.textContent = p.count;
   }
 
   /* ------------------------------------------------------------------ sélection : volet, bandeau, tiroir */
@@ -679,7 +839,10 @@ window.SA = window.SA || {};
     var s = SA.state, n = SA.cart.count();
     var hide = !n || (s.route === 'wizard' && s.step >= 3);
     if (band.hidden !== hide) band.hidden = hide;
-    if (dOpen && dKind === 'cart') $('drawer-body').innerHTML = '<div class="ct-drawer">' + cartHtml(plain) + '</div>';
+    if (dOpen && dKind === 'cart') {
+      var db = $('drawer-body'), dh = '<div class="ct-drawer">' + cartHtml(plain) + '</div>';
+      if (db._h !== dh) SA.keepFocus(db, function () { db.innerHTML = dh; db._h = dh; }, $('drawer-close'));
+    }
     if (hide) return;
     var txt = SA.pl(n, 'skill', 'skills') + ' dans la sélection';
     var el = band.querySelector('.cb-txt');
@@ -717,9 +880,10 @@ window.SA = window.SA || {};
         row('sc=' + s.scope, 'Portée', s.scope === 'projet' ? 'Ce projet seulement' : 'Tous les projets') +
         '</dl>';
     }
-    function agentList(prefix) {
-      var on = SA.agentsOn();
-      if (!on.length) return '<p class="ds-none">Aucun agent actif.</p>';
+    /* list : les agents à montrer. Par défaut, ceux qui recevront les installations (interrupteurs). */
+    function agentList(prefix, list) {
+      var on = list || SA.agentsOn();
+      if (!on.length) return '<p class="ds-none">' + (list ? 'Aucun agent n’a de skill.' : 'Aucun agent actif.') + '</p>';
       return '<ul class="ds-list">' + on.map(function (a) {
         var rel = a.abs ? a.abs : String(a.rel || '').replace(/\//g, SA.sep());
         if (!a.abs && s.scope === 'projet' && rel) rel = '…' + SA.sep() + rel;
@@ -751,19 +915,19 @@ window.SA = window.SA || {};
       if (sf.warn === 'sans-eleve') act.push('Sans avertissement élevé');
       if (sf.warn === 'aucun') act.push('Aucun avertissement');
       out.push(cart);
-      out.push(sec('Base en ligne', '<dl class="ds-dl">' +
-        row('sr-total', 'Skills recensés', '<span class="num">' + SA.nb(sd.total) + '</span>') +
+      /* Date et source de la base : le même texte que la vue et le pied du menu (SA.baseLabel). */
+      out.push(sec('Base de la recherche', '<dl class="ds-dl">' +
+        row('sr-total', 'Recensés par skills.sh', '<span class="num">' + SA.nb(sd.total) + '</span>') +
         row('sr-items', 'Dans la recherche', '<span class="num">' + SA.nb(sd.items.length) + '</span>') +
         row('sr-det', 'Notés et contrôlés', '<span class="num">' + SA.nb(Object.keys(sd.details).length) + '</span>') +
-        row('sr-gen', 'Copie du', SA.esc(SA.dbDate())) +
-        '</dl>'));
+        '</dl><p class="ds-note">' + SA.esc(SA.baseLabel()) + '</p>'));
       out.push(sec('Filtres actifs', act.length
         ? '<ul class="ds-list">' + act.map(function (a) { return '<li' + cls('srf:' + a, '') + '><span>' + SA.esc(a) + '</span></li>'; }).join('') + '</ul>'
         : '<p class="ds-none">Aucun filtre.</p>'));
     } else if (s.route === 'accueil' || s.route === 'gestion' || s.route === 'sauvegardes') {
       if (n) out.push(cart);
       out.push(machine());
-      out.push(sec('Agents actifs', agentList('ga:')));
+      out.push(sec('Agents actifs', agentList('ga:', holderAgents(s.mine))));
     } else if (s.route === 'agents') {
       if (n) out.push(cart);
       out.push(sec('Installation', installRows()));
@@ -807,21 +971,47 @@ window.SA = window.SA || {};
         }).join('') + '</ul><p class="ds-note">Score calculé par Skill Advisor. Ce ne sont pas des avis d’utilisateurs.</p>'));
       }
       if (s.step >= 4) {
-        var on = SA.agentsOn(), m = on.length;
-        var linked = on.filter(function (a) { return a.id !== 'cline'; }).length;
         out.push(sec('Installation', installRows()));
         if (s.step === 4 && n) {
+          /* Même plan que l'écran d'installation : dossier partagé puis un lien par agent à dossier propre coché,
+             ou, sans le dossier partagé, une copie par agent et aucun lien. */
+          /* ownN : nombre d'agents à dossier propre. Jamais « k », le compteur d'animation de ce rendu. */
+          var p = installPlan(), ownN = p.own.length, mul = '<span class="mono mut">' + n + ' × ' + ownN + '</span>';
           out.push(sec('Résumé', '<dl class="ds-dl">' +
             row('rs=' + n, 'Skills', '<span class="num">' + n + '</span>') +
-            row('ra=' + m, 'Agents', '<span class="num">' + m + '</span>') +
-            row('rd=' + n, 'Dossiers créés', '<span class="num">' + n + '</span>') +
-            row('rl=' + n + 'x' + linked, 'Liens créés', '<span class="num">' + (n * linked) + '</span> <span class="mono mut">' + n + ' × ' + linked + '</span>') +
+            row('ra=' + p.reach, 'Agents', '<span class="num">' + p.reach + '</span>') +
+            (p.shared
+              ? row('rd=' + n, 'Dossiers créés', '<span class="num">' + n + '</span>') +
+                row('rl=' + n + 'x' + ownN, 'Liens créés', '<span class="num">' + (n * ownN) + '</span> ' + mul)
+              : row('rd=' + n + 'x' + ownN, 'Dossiers créés', '<span class="num">' + (n * ownN) + '</span> ' + mul) +
+                row('rl=0', 'Liens créés', '<span class="num">0</span>')) +
             '</dl>'));
         }
       }
     }
     return { html: out.join(''), keys: next };
   }
+
+  /* Plan d'installation de l'étape 4 : celui de l'écran d'installation (SA.installPlan), sinon la même règle ici.
+     shared : le dossier partagé est écrit ; own : agents à dossier propre cochés ; reach : agents qui liront les skills. */
+  function installPlan() {
+    var p = typeof SA.installPlan === 'function' ? safe(SA.installPlan, null) : null;
+    if (p && Array.isArray(p.own)) return p;
+    var live = !!(SA.live && SA.live.on), on = SA.agentsOn();
+    var reads = function (a) { return live ? !!a.universal : a.rel === '.agents/skills'; };
+    return { shared: on.some(reads), own: on.filter(function (a) { return !reads(a); }), reach: on.length };
+  }
+  /* Agents qui ont réellement des skills (Row.ag présent ou copie différente), jamais d'après les interrupteurs. */
+  function holderAgents(rows) {
+    var ids = [];
+    if (SA.detail && typeof SA.detail.holders === 'function') ids = SA.detail.holders(rows || []);
+    else (rows || []).forEach(function (r) {
+      Object.keys((r && r.ag) || {}).forEach(function (id) { var v = r.ag[id]; if ((v === 'ok' || v === 'div') && ids.indexOf(id) < 0) ids.push(id); });
+    });
+    return SA.agents().filter(function (a) { return ids.indexOf(a.id) > -1; });
+  }
+  /* Pour les essais : le contenu du volet de droite sans page. */
+  SA.panelHtml = function () { return buildDossier(false).html; };
 
   function ghost(name, parts) {
     return '<div class="ds-card"><div><span class="ds-cname">' + name + '</span><span class="ds-cline"></span></div>' +
@@ -834,7 +1024,8 @@ window.SA = window.SA || {};
     if (sig === lastSig) return;
     lastSig = sig;
     var r = buildDossier(true);
-    el.innerHTML = r.html;
+    /* Un « Retirer » du volet : le focus va au suivant, sinon au titre de la section. */
+    SA.keepFocus(el, function () { el.innerHTML = r.html; });
     seen = r.keys;
   }
   SA._dossier = function () { return buildDossier(false).html; };
@@ -847,9 +1038,12 @@ window.SA = window.SA || {};
     if (!Array.isArray(list)) list = [];
     acts = list;
     var bar = $('actions'), inn = $('actions-in');
+    var had = !!(inn.contains && inn.contains(act()));
     if (!list.length) {
       bar.hidden = true;
       inn.innerHTML = '';
+      /* La barre disparaît sous le focus : il va au titre de la vue. */
+      if (had && lost()) put(viewHeading());
       return;
     }
     var btns = inn.querySelectorAll('button');
@@ -869,6 +1063,11 @@ window.SA = window.SA || {};
       if (b.disabled !== !!a.disabled) b.disabled = !!a.disabled;
     });
     bar.hidden = false;
+    /* Le bouton utilisé se désactive : le focus reste dans la barre, sinon il va au titre de la vue. */
+    if (had && lost()) {
+      var on = Array.prototype.slice.call(inn.querySelectorAll('button')).filter(usable);
+      if (!put(on[on.length - 1])) put(viewHeading());
+    }
   }
 
   function clickPrimary() {
@@ -944,13 +1143,73 @@ window.SA = window.SA || {};
       toggleTheme._t = setTimeout(function () { root.classList.remove('theming'); }, 420);
     }
     root.setAttribute('data-theme', nextT);
+    sset('localStorage', THEME_KEY, nextT);
     renderTheme();
+  }
+
+  /* ------------------------------------------------------------------ parcours gardé au rechargement */
+  /* sessionStorage (clé sa-journey) : l'onglet garde l'objectif, les réponses, la sélection, le lieu et l'étape.
+     Jamais l'installation en cours. Relu au démarrage : seuls les identifiants encore valides reviennent. */
+  var JOURNEY = 'sa-journey', restored = false, lastJ = null;
+  function saveJourney() {
+    if (!SA._started || !restored) return;
+    var s = SA.state;
+    var j = JSON.stringify({ v: 1, route: s.route, step: s.step, goal: s.goal, answers: s.answers, qi: s.qi, cart: s.cart,
+      preselected: s.preselected, auto: s.auto || {}, lastInstall: s.lastInstall, scope: s.scope, guideTab: s.guideTab });
+    if (j === lastJ) return;
+    lastJ = j;
+    sset('sessionStorage', JOURNEY, j);
+  }
+  function strs(a) { return Array.isArray(a) ? a.filter(function (x) { return typeof x === 'string'; }) : []; }
+  function restoreJourney() {
+    restored = true;
+    var raw = sget('sessionStorage', JOURNEY), j = null;
+    if (!raw) return;
+    try { j = JSON.parse(raw); } catch (e) { return; }
+    if (!j || typeof j !== 'object' || Array.isArray(j) || j.v !== 1) return;
+    var s = SA.state, goals = D().goals || {};
+    if (typeof j.goal === 'string' && own(goals, j.goal)) {
+      s.goal = j.goal;
+      var a = j.answers && typeof j.answers === 'object' && !Array.isArray(j.answers) ? j.answers : {}, ok = {};
+      (goals[j.goal].qs || []).forEach(function (q) {
+        var ids = (q.opts || []).map(function (o) { return o[0]; }), v = own(a, q.id) ? a[q.id] : null;
+        if (q.multi) { var l = strs(v).filter(function (x) { return ids.indexOf(x) > -1; }); if (l.length) ok[q.id] = l; }
+        else if (typeof v === 'string' && ids.indexOf(v) > -1) ok[q.id] = v;
+      });
+      s.answers = ok;
+      if (typeof j.qi === 'number' && j.qi >= 0 && j.qi % 1 === 0) s.qi = j.qi;
+    }
+    s.cart = [];
+    strs(j.cart).forEach(function (id) { SA.cart.add(id); });
+    /* Choix automatiques (constat 26) : posés après la sélection, car SA.cart.add marque chaque ajout comme un choix à la main.
+       Seuls les ids encore dans la sélection et marqués true reviennent. */
+    s.auto = {};
+    if (j.auto && typeof j.auto === 'object' && !Array.isArray(j.auto)) {
+      Object.keys(j.auto).forEach(function (id) { if (j.auto[id] === true && s.cart.indexOf(id) > -1) s.auto[id] = true; });
+    }
+    s.lastInstall = strs(j.lastInstall).filter(function (id) { return !!(SA.item(id) || SA.mineRow(id)); });
+    if (j.scope === 'global' || j.scope === 'projet') s.scope = j.scope;
+    if (j.preselected && typeof j.preselected === 'object' && !Array.isArray(j.preselected)) {
+      s.preselected = {};
+      Object.keys(j.preselected).forEach(function (k) { if (j.preselected[k] === true) s.preselected[k] = true; });
+    }
+    if (typeof j.guideTab === 'number' && j.guideTab >= 0 && j.guideTab % 1 === 0) s.guideTab = j.guideTab;
+    if (typeof j.route === 'string' && own(ORDER, j.route)) {
+      s.route = j.route;
+      var st = parseInt(j.step, 10);
+      if (st >= 1 && st <= LAST) s.step = st;
+      /* Une étape qui ne s'ouvre plus : la plus avancée qui s'ouvre. */
+      if (!safe(function () { return SA.canStep(s.step); }, false)) s.step = SA.reach();
+    }
   }
 
   /* ------------------------------------------------------------------ sync */
   SA.sync = function () {
+    if (SA.expired()) return;
+    safe(saveJourney);
     safe(renderRail);
     safe(renderCrumb);
+    safe(renderTitle);
     safe(renderDossier);
     safe(renderActions);
     safe(renderBand);
@@ -973,13 +1232,23 @@ window.SA = window.SA || {};
       lastBtn = e.target && e.target.closest ? e.target.closest('button, a[href]') : null;
     }, true);
     $('theme-btn').addEventListener('click', toggleTheme);
-    $('pv-btn').innerHTML = SA.icon('sliders') + '<span>Aperçu</span>';
-    $('pv-btn').addEventListener('click', openPv);
-    /* Mode réel : pas de réglages d'aperçu, la machine affichée est la vôtre. */
+    var pvb = $('pv-btn'), rb = $('refresh-btn'), sample = document.querySelector('.rail-sample');
     if (SA.live && SA.live.on) {
-      $('pv-btn').hidden = true;
-      var sample = document.querySelector('.rail-sample');
-      if (sample) sample.textContent = 'Base réelle · votre machine';
+      /* Mode réel : pas de réglages d'aperçu, la machine affichée est la vôtre ; « Actualiser » relit son état. */
+      if (pvb) pvb.hidden = true;
+      if (rb) {
+        rb.innerHTML = SA.icon('refresh') + '<span>Actualiser</span>';
+        rb.hidden = false;
+        rb.addEventListener('click', function () { if (SA.live.manual) SA.live.manual(); });
+      }
+    } else {
+      if (pvb) {
+        pvb.innerHTML = SA.icon('sliders') + '<span>Aperçu</span>';
+        pvb.hidden = false;
+        pvb.addEventListener('click', openPv);
+      }
+      if (rb) rb.hidden = true;
+      if (sample) sample.textContent = 'Base réelle · machine d’exemple';
     }
     if (window.matchMedia) {
       var mq = window.matchMedia('(prefers-color-scheme: dark)');
@@ -1039,6 +1308,7 @@ window.SA = window.SA || {};
     });
 
     document.addEventListener('keydown', function (e) {
+      if (SA.expired()) return;
       /* Une fenêtre modale (rapport, aperçu) gère elle-même son clavier. */
       if (document.querySelector('dialog[open]')) return;
       if (dOpen) {
@@ -1049,11 +1319,24 @@ window.SA = window.SA || {};
       var t = e.target && e.target.closest ? e.target : document.body;
       var typing = !!t.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"]');
       if (typing) {
-        /* Échap rend la main au clavier global sans effacer le texte saisi. */
-        if (e.key === 'Escape' && t.blur) t.blur();
+        /* Échap dans un champ de recherche : vide le champ et le filtre (événement input, écouté par la vue).
+           Le focus reste dans le champ. Le navigateur ne vide pas le champ en silence. */
+        if (e.key === 'Escape' && t.matches && t.matches('input[type="search"]')) {
+          e.preventDefault();
+          if (t.value !== '') {
+            t.value = '';
+            safe(function () { t.dispatchEvent(new window.Event('input', { bubbles: true })); });
+          }
+        }
         return;
       }
       if (e.metaKey || e.ctrlKey || e.altKey) return;
+      /* Raccourcis à une touche (« / » et chiffres) : seulement quand le focus est sur <body> ou sur le conteneur #view
+         (constat 53). Jamais depuis un titre, un message ou un contrôle.
+         Exception : les chiffres sur une puce de réponse, où le questionnaire laisse le focus. */
+      var free = t === document.body || t === document.documentElement || t === $('view');
+      var pill = !!t.closest('.opt');
+      if (e.key === '/' && !free) return;
       /* « / » : chercher, depuis n'importe quel écran. */
       if (e.key === '/' && !busy && !SA.state.installing) {
         e.preventDefault();
@@ -1082,6 +1365,7 @@ window.SA = window.SA || {};
         return;
       }
       if (busy) return;
+      if (!free && !(pill && /^[0-9]$/.test(e.key))) return;
       var view = curView();
       if (view && typeof view.keys === 'function') {
         var handled = safe(function () { return view.keys(e); }, false);
@@ -1097,10 +1381,13 @@ window.SA = window.SA || {};
       document.addEventListener('DOMContentLoaded', SA.start);
       return;
     }
-    if (!$('app')) return;
+    if (!$('app') || SA.expired()) return;
     SA._started = true;
     if (!document.documentElement.getAttribute('lang')) document.documentElement.setAttribute('lang', 'fr');
     if (!SA.state) SA.initState();
+    safe(restoreJourney);
+    /* La coquille s'affiche : fin de l'écran de chargement. */
+    $('app').classList.remove('is-boot');
     /* Démo : la machine d'exemple a déjà quelques sauvegardes. En mode réel, elles viennent du serveur. */
     if (!(SA.live && SA.live.on) && !(SA.state.backups || []).length && SA.state.mine.length) SA.state.backups = SA.demoBackups();
     buildRail();
