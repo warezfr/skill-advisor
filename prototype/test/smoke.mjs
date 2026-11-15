@@ -63,7 +63,7 @@ const pv = (o) => Object.assign({ machine: 'pleine', net: 'on', agents: 'ok', in
 for (const it of SA.search.items) if (BAD.test(it[1] + ' ' + it[2])) fail('skill name trips the check: ' + it[0]);
 
 // ---- every view is registered
-for (const v of ['accueil', 'objectif', 'questions', 'resultats', 'confirmation', 'guide', 'gestion', 'recherche', 'agents']) {
+for (const v of ['accueil', 'objectif', 'questions', 'resultats', 'confirmation', 'guide', 'gestion', 'sauvegardes', 'recherche', 'agents']) {
   if (!V[v] || typeof V[v].render !== 'function') fail('view missing: ' + v);
 }
 
@@ -77,8 +77,69 @@ set({ mine: [] }); check('accueil/vide', V.accueil);
 set({ pv: pv({ net: 'off' }) }); check('accueil/hors-ligne', V.accueil);
 set({ pv: pv({ agents: 'none' }) }); check('accueil/aucun-agent', V.accueil);
 
+// ---- objectifs : un par catégorie du catalogue (site-design → site), les trois premiers inchangés
+const OLD = ['site', 'app', 'data'];
+const catGoal = (c) => (c === 'site-design' ? 'site' : c);
+for (const c of SA.search.cats) if (!D.goals[catGoal(c.id)]) fail(`no goal for category ${c.id}`);
+if (goals.slice(0, 3).join() !== OLD.join()) fail('first goals are not site, app, data: ' + goals.slice(0, 3).join());
+for (const g of goals) {
+  const G0 = D.goals[g], m = SA.reco.map[g];
+  for (const k of ['title', 'short', 'hint', 'tag']) if (typeof G0[k] !== 'string' || !G0[k]) fail(`goal ${g} has no ${k}`);
+  if (!m) { fail(`goal ${g} has no MAP entry`); continue; }
+  if (!Array.isArray(m.base) || !m.base.length) fail(`MAP ${g} has no base`);
+  for (const c of m.base) if (!SA.search.cats.some((x) => x.id === c)) fail(`MAP ${g} base: unknown category ${c}`);
+  const ids = G0.qs.map((q) => q.id);
+  for (const k of Object.keys(m)) if (k !== 'base' && !ids.includes(k)) fail(`MAP ${g}.${k} matches no question`);
+  for (const q of G0.qs) {
+    if (q.opts.length > 9) fail(`goal ${g}/${q.id}: more than 9 options, digit keys cannot reach them`);
+    if (q.multi && q.opts.slice(0, 2).some((o) => o[0] === 'nsp')) fail(`goal ${g}/${q.id}: the first two options must be real answers`);
+    for (const o of q.opts) {
+      if (o[0] === 'nsp') continue;
+      if (!m[q.id] || !m[q.id][o[0]]) fail(`MAP ${g}.${q.id}.${o[0]} missing`);
+      for (const c of (m[q.id] && m[q.id][o[0]] && m[q.id][o[0]].cats) || []) if (!SA.search.cats.some((x) => x.id === c)) fail(`MAP ${g}.${q.id}.${o[0]}: unknown category ${c}`);
+    }
+  }
+  if (OLD.includes(g)) continue;
+  // nouveaux objectifs : 2 à 4 questions, la dernière à choix multiple, « Je ne sais pas » partout
+  if (G0.qs.length < 2 || G0.qs.length > 4) fail(`goal ${g}: ${G0.qs.length} questions, expected 2 to 4`);
+  const last = G0.qs[G0.qs.length - 1];
+  if (!last.multi || last.id !== 'needs') fail(`goal ${g}: the last question is not the multi-choice "needs"`);
+  for (const q of G0.qs) {
+    if (!q.opts.some((o) => o[0] === 'nsp' && o[1] === 'Je ne sais pas')) fail(`goal ${g}/${q.id}: no "Je ne sais pas"`);
+    // chaque réponse retient au moins un skill noté du catalogue
+    for (const o of q.opts) if (o[0] !== 'nsp' && !SA.reco.rank(g, { [q.id]: o[0] }).some((r) => r.why.includes(o[1]))) fail(`goal ${g}/${q.id}/${o[0]}: matches no rated skill`);
+  }
+}
+
 // ---- objectif, questions
-set({ route: 'wizard' }); check('objectif/none', V.objectif);
+set({ route: 'wizard' });
+const obHtml = check('objectif/none', V.objectif);
+if (obHtml) {
+  for (const g of goals) { const n = (obHtml.match(new RegExp('data-goal="' + g + '"', 'g')) || []).length; if (n !== 1) fail(`objectif: goal ${g} shown ${n} times`); }
+  // constat 68 : une seule grille, rangée sous 3 ou 4 titres courts (le titre « Autres projets » a disparu avec les grandes lignes)
+  const heads = [...obHtml.matchAll(/<h2 class="ob-gh"[^>]*>([^<]+)<\/h2>/g)].map((x) => x[1]);
+  if (heads.length < 3 || heads.length > 4) fail('objectif: expected 3 or 4 group headings, got ' + heads.join(' | '));
+  if (/class="ob-row"/.test(obHtml)) fail('objectif: full-width rows are back');
+  const shownOrder = [...obHtml.matchAll(/data-goal="([^"]+)"/g)].map((x) => x[1]);
+  if (shownOrder.slice(0, 3).join() !== OLD.join()) fail('objectif: the first three rows are not site, app, data');
+  const order = V.objectif.order ? V.objectif.order() : [];
+  if (order.join() !== shownOrder.join()) fail('objectif: number keys do not follow the display order');
+  // la touche 9 choisit le neuvième objectif affiché, dans la grille ; SA.go est neutralisé (pas de DOM ici)
+  const go0 = SA.go; SA.go = () => true;
+  try {
+    if (V.objectif.keys({ key: 'x' }) !== false) fail('objectif: a letter key was taken');
+    if (V.objectif.keys({ key: '9' }) !== true || SA.state.goal !== shownOrder[8]) fail(`objectif: key 9 chose ${SA.state.goal}, expected ${shownOrder[8]}`);
+  } finally { SA.go = go0; }
+}
+// « Je ne sais pas » exclut les autres réponses d'une question à choix multiple, et inversement
+{
+  const q = D.goals.frontend.qs.find((x) => x.multi), t = V.questions.toggle;
+  if (typeof t !== 'function') fail('questions: no toggle()');
+  else {
+    const steps = [[[], 'perf', 'perf'], [['perf'], 'anim', 'perf,anim'], [['perf', 'anim'], 'nsp', 'nsp'], [['nsp'], 'types', 'types'], [['anim', 'perf'], 'perf', 'anim'], [['nsp'], 'nsp', '']];
+    for (const [from, v, want] of steps) { const got = t(q, from, v).join(); if (got !== want) fail(`questions: toggle(${from}, ${v}) gave "${got}", expected "${want}"`); }
+  }
+}
 for (const g of goals) {
   const qs = D.goals[g].qs;
   set({ route: 'wizard', goal: g, answers: fullAnswers(g) }); check(`objectif/${g}`, V.objectif);
@@ -88,9 +149,11 @@ for (const g of goals) {
     set({ route: 'wizard', goal: g, step: 2, qi, answers: part }); check(`questions/${g}/partial/qi${qi}`, V.questions);
     set({ route: 'wizard', goal: g, step: 2, qi, answers: fullAnswers(g) }); check(`questions/${g}/full/qi${qi}`, V.questions);
   }
+  const nsp = {}; qs.forEach((q) => { if (q.opts.some((o) => o[0] === 'nsp')) nsp[q.id] = q.multi ? ['nsp'] : 'nsp'; });
+  set({ route: 'wizard', goal: g, step: 2, qi: -1, answers: nsp }); check(`questions/${g}/nsp`, V.questions);
 }
 
-// ---- recommendation engine: ten or more for every combination of answers, « je ne sais pas » included
+// ---- recommendation engine: twelve or more for every combination of answers, « je ne sais pas » included
 function* combos(qs, i = 0, acc = {}) {
   if (i === qs.length) { yield { ...acc }; return; }
   const q = qs[i];
@@ -101,15 +164,23 @@ function* combos(qs, i = 0, acc = {}) {
 }
 const recoStats = {};
 for (const g of goals) {
-  let n = 0, min = Infinity, thin = 0;
+  let n = 0, min = Infinity, thin = 0, offTop = 0;
   for (const a of combos(D.goals[g].qs)) {
     const r = SA.reco.rank(g, a); n++;
     min = Math.min(min, r.length);
-    if (r.length < 10) fail(`reco/${g} fewer than 10 for ${JSON.stringify(a)}: ${r.length}`);
+    if (r.length < 12) fail(`reco/${g} fewer than 12 for ${JSON.stringify(a)}: ${r.length}`);
     if (r.slice(0, 12).filter((x) => x.why.length).length < 6) thin++;
     for (const x of r.slice(0, 12)) if (x.it[6] == null) fail(`reco/${g} proposes an unrated skill: ${x.id}`);
+    // constat 90 : ordre du classement. Les skills d'une autre option à la fin ; sinon points × 12 + note, puis installations.
+    for (let i = 1; i < r.length; i++) {
+      const p = r[i - 1], q = r[i], po = p.off.length > 0, qo = q.off.length > 0;
+      const kp = p.rel * 12 + p.it[6], kq = q.rel * 12 + q.it[6];
+      if (po && !qo) { fail(`reco/${g} ${JSON.stringify(a)}: ${q.id} comes after a skill tied to another option`); break; }
+      if (po === qo && (kp < kq || (kp === kq && p.it[3] < q.it[3]))) { fail(`reco/${g} ${JSON.stringify(a)}: order broken between ${p.id} and ${q.id}`); break; }
+    }
+    if (r.slice(0, 3).some((x) => x.off.length)) offTop++;
   }
-  recoStats[g] = `${n} combinaisons, minimum ${min} propositions, ${thin} où moins de 6 des 12 premières répondent à une réponse précise`;
+  recoStats[g] = `${n} combinaisons, minimum ${min} propositions, ${thin} où moins de 6 des 12 premières répondent à une réponse précise, ${offTop} avec une autre option dans les 3 premières`;
 }
 if (SA.reco.rank('app', { os: 'ios' }).some((r) => /axios/.test(r.it[1]) && r.why.includes('iOS'))) fail('reco: "ios" matched inside "axios"');
 
@@ -122,6 +193,10 @@ for (const g of goals) {
   const html = check(`resultats/${g}/pret`, V.resultats);
   if (html && (html.match(/class="rs-row/g) || []).length < 10) fail(`resultats/${g} shows fewer than 10 rows`);
   if (SA.cart.count() !== 3) fail(`resultats/${g} preselects ${SA.cart.count()} skills, expected 3`);
+  for (const id of SA.cart.list()) {
+    const r = SA.reco.rank(g, fullAnswers(g)).find((x) => x.id === id);
+    if (!r || r.off.length || SA.reco.manual(id)) fail(`resultats/${g} preselects ${id}, tied to another option or not installable`);
+  }
   if (html && !/Pourquoi pour vous/.test(html)) fail(`resultats/${g} has no "pourquoi pour vous"`);
   set({ ...common, dbReady: true, cart: top(g, 5), recoShown: 36 }); check(`resultats/${g}/plus`, V.resultats);
   set({ ...common, dbReady: true, pv: pv({ net: 'off' }) }); check(`resultats/${g}/hors-ligne`, V.resultats);
@@ -173,6 +248,12 @@ set({ route: 'gestion', backups: [Object.assign({}, D.mine[0])] }); check('gesti
 set({ route: 'gestion', mine: [], backups: [Object.assign({}, D.mine[0])] }); check('gestion/vide-avec-sauvegarde', V.gestion);
 set({ route: 'gestion', pv: pv({ net: 'off' }) }); check('gestion/hors-ligne', V.gestion);
 set({ route: 'gestion', pv: pv({ agents: 'none' }) }); check('gestion/aucun-agent', V.gestion);
+
+// ---- sauvegardes
+set({ route: 'sauvegardes' }); check('sauvegardes/vide', V.sauvegardes);
+for (const os of oses) { set({ route: 'sauvegardes', os, backups: SA.demoBackups() }); check(`sauvegardes/demo/${os}`, V.sauvegardes); }
+set({ route: 'sauvegardes', backups: [Object.assign({}, D.mine[0])].concat(SA.demoBackups()) }); check('sauvegardes/ancienne-forme', V.sauvegardes);
+set({ route: 'sauvegardes', backups: SA.demoBackups(), sv: { msg: 'Fait.', err: 'Refusé.', warns: ['Un motif.'], busy: '', del: SA.data.backups[0].id, ap: null, focus: '' } }); check('sauvegardes/messages-et-suppression', V.sauvegardes);
 
 // ---- recherche
 set({ route: 'recherche' }); check('recherche/lecture', V.recherche);

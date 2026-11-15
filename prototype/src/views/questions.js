@@ -125,6 +125,17 @@
     }
   }
 
+  // Choix multiple : coche ou décoche v, renvoie une nouvelle liste.
+  function toggle(q, prev, v) {
+    var arr = Array.isArray(prev) ? prev.slice() : [];
+    var at = arr.indexOf(v);
+    if (at > -1) arr.splice(at, 1); else arr.push(v);
+    // « Je ne sais pas » exclut les autres réponses, et inversement.
+    if (at < 0) arr = v === 'nsp' ? ['nsp'] : arr.filter(function (x) { return x !== 'nsp'; });
+    // Keep the options' order, whatever the click order was.
+    return q.opts.map(function (o) { return o[0]; }).filter(function (id) { return arr.indexOf(id) > -1; });
+  }
+
   function choose(root, i, v) {
     var list = qs();
     var q = list[i];
@@ -132,11 +143,7 @@
     var s = SA.state;
     s.answers = s.answers || {};
     if (q.multi) {
-      var arr = Array.isArray(s.answers[q.id]) ? s.answers[q.id].slice() : [];
-      var at = arr.indexOf(v);
-      if (at > -1) arr.splice(at, 1); else arr.push(v);
-      // Keep the options' order, whatever the click order was.
-      s.answers[q.id] = q.opts.map(function (o) { return o[0]; }).filter(function (id) { return arr.indexOf(id) > -1; });
+      s.answers[q.id] = toggle(q, s.answers[q.id], v);
       paint(root);
       SA.sync();
       return;
@@ -174,6 +181,7 @@
   }
 
   SA.views.questions = {
+    toggle: toggle,
     render: function () {
       var g = goal();
       var list = g.qs;

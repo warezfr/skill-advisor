@@ -7,6 +7,12 @@
 
   var esc = function (s) { return SA.esc(s); };
   function mine() { return SA.state.mine || []; }
+  /* Non contrôlé : sans note d'avertissement, ou, en mode réel, sans résultat du contrôle (scan: null). */
+  function unscanned(r) { return r.warn == null || (!!(SA.live && SA.live.on) && !r.scan); }
+  function checkedDiff(r) { return !!(r.diff && r.diff.scan); }
+  /* Agents qui ont au moins un skill de la machine (Row.ag), pas les agents cochés pour une installation. */
+  function holderCount() { return SA.detail.holders(mine()).length; }
+  function riskyDiff(r) { return !!(r.diff && r.diff.scan && r.diff.scan.level === 2); }
   function agentName(id) {
     var out = id;
     SA.agents().forEach(function (a) { if (a.id === id) out = a.name; });
@@ -29,7 +35,7 @@
     m.filter(function (r) { return r.warn === 2 && !r.real; }).forEach(function (r) {
       out.push({ lvl: 'bad', t: r.name + ' : motifs à risque dans un skill ' + (r.kind === 'manuel' ? 'copié à la main' : 'installé'), d: (r.local || []).map(function (f) { return f.label; }).join(' · '), a: 'Voir le contrôle', attr: 'data-local="' + esc(r.id) + '"' });
     });
-    var risky = m.filter(function (r) { return r.st === 'maj' && r.diff && r.diff.scan.level === 2; });
+    var risky = m.filter(function (r) { return r.st === 'maj' && riskyDiff(r); });
     risky.forEach(function (r) {
       out.push({ lvl: 'bad', t: r.name + ' : la mise à jour ajoute un motif à risque', d: r.diff.scan.text, a: 'Voir ce qui change', attr: 'data-hm-diff="' + esc(r.id) + '"' });
     });
@@ -44,8 +50,10 @@
     m.filter(function (r) { return r.dup; }).forEach(function (r) {
       out.push({ lvl: 'tr', t: r.name + ' existe deux fois', d: 'Une copie manuelle porte le nom d’un skill géré.', a: 'Voir', attr: 'data-local="' + esc(r.id) + '"' });
     });
-    var maj = m.filter(function (r) { return r.st === 'maj'; }).length - risky.length;
-    if (maj > 0) out.push({ lvl: 'up', t: SA.pl(maj, 'mise à jour disponible', 'mises à jour disponibles') + ' sans motif nouveau', d: 'Chaque mise à jour montre ce qui change avant d’écrire.', a: 'Voir les mises à jour', attr: 'data-hm-f="maj"' });
+    /* « sans motif nouveau » seulement quand la nouvelle version a été contrôlée (r.diff.scan) ; sinon la vérité : elle le sera avant d'être écrite. */
+    var calm = m.filter(function (r) { return r.st === 'maj' && !riskyDiff(r); });
+    var checked = calm.every(checkedDiff);
+    if (calm.length) out.push({ lvl: 'up', t: SA.pl(calm.length, 'mise à jour disponible', 'mises à jour disponibles') + (checked ? ' sans motif nouveau' : ''), d: checked ? 'Chaque mise à jour montre ce qui change avant d’écrire.' : 'La nouvelle version est contrôlée avant d’être écrite.', a: 'Voir les mises à jour', attr: 'data-hm-f="maj"' });
     var long = m.filter(function (r) { return r.on !== false && r.chars > SA.detail.CUT; });
     if (long.length) out.push({ lvl: 'no', t: SA.pl(long.length, 'description dépasse', 'descriptions dépassent') + ' ' + SA.nb(SA.detail.CUT) + ' caractères', d: long.map(function (r) { return r.name; }).join(', ') + ' : Claude Code la coupe dans sa liste.', a: 'Voir le coût en contexte', attr: 'data-hm-s="ctx"' });
     return out;
@@ -75,7 +83,7 @@
 
   SA.views.accueil = {
     render: function () {
-      var c = stats(), n = SA.agentsOn().length, found = SA.agents().filter(function (a) { return a.st !== 'no'; }).length;
+      var c = stats(), n = holderCount(), found = SA.agents().filter(function (a) { return a.st !== 'no'; }).length;
       if (!c.total) {
         return '<p class="eye" data-st>Ma machine</p>' + SA.h('Aucun skill sur cette machine') +
           '<p class="lede" data-st>' + (found ? SA.pl(found, 'agent trouvé', 'agents trouvés') + ', aucun skill installé. ' : '') + 'Commencez par un conseil : quelques questions, puis les skills les mieux notés pour votre projet.</p>' +
@@ -84,8 +92,8 @@
       }
       var iss = issues();
       var tok = Math.round(c.chars / 4 / 100) * 100;
-      var ok = mine().filter(function (r) { return r.warn === 0; }).length;
-      var un = mine().filter(function (r) { return r.warn == null; }).length;
+      var ok = mine().filter(function (r) { return r.warn === 0 && !unscanned(r); }).length;
+      var un = mine().filter(unscanned).length;
       return '<p class="eye" data-st>Ma machine</p>' +
         SA.h(SA.pl(c.total, 'skill', 'skills') + ' dans ' + SA.pl(n, 'agent', 'agents')) +
         '<p class="lede" data-st>Ce que vos agents ont sous la main, et ce qui demande votre attention.</p>' +
@@ -110,12 +118,12 @@
           '<ul class="ledger hm-gs">' +
             gesture(1, 'Conseiller un projet', 'Quelques questions, puis les skills les mieux notés pour ce projet.', 'data-go-step="1"') +
             gesture(2, 'Contrôler ce qui est installé', 'Tout l’inventaire, avec le contrôle de sécurité et la présence par agent.', 'data-hm-f="tous"') +
-            gesture(3, 'Mettre à jour', c.maj ? SA.pl(c.maj, 'mise à jour attend', 'mises à jour attendent') + ' : voyez ce qui change avant d’écrire.' : 'Tout est à jour.', 'data-hm-f="maj"') +
+            gesture(3, 'Mettre à jour', c.maj ? SA.pl(c.maj, 'mise à jour attend', 'mises à jour attendent') + (mine().filter(function (r) { return r.st === 'maj'; }).every(checkedDiff) ? ' : voyez ce qui change avant d’écrire.' : '. Chaque version est contrôlée avant d’être écrite.') : 'Tout est à jour.', 'data-hm-f="maj"') +
           '</ul>' +
           '<p class="hm-search mut" data-st>Ou cherchez dans la base : touche <span class="kbd">/</span></p>' +
         '</section>' +
         '<section class="hm-sec" aria-labelledby="hm-t3" data-st><h2 class="h2" id="hm-t3">Contrôle de sécurité</h2>' +
-          '<p class="sub">' + SA.pl(c.total - un, 'skill lu', 'skills lus') + ' sur cette machine : ' + ok + ' sans motif connu, ' + c.review + ' à relire' + (un ? ', ' + un + ' non contrôlés' : '') + '.</p>' +
+          '<p class="sub">' + SA.pl(c.total - un, 'skill lu', 'skills lus') + ' sur cette machine : ' + ok + ' sans motif connu, ' + c.review + ' à relire' + (un ? ', ' + un + (un > 1 ? ' non contrôlés' : ' non contrôlé') : '') + '.</p>' +
           '<p class="mut hm-note">Le contrôle lit le texte des fichiers et signale des motifs, pas une intention. Il ne retire jamais rien de lui-même.</p></section>';
     },
 

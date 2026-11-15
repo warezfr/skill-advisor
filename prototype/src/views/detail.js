@@ -20,6 +20,51 @@
   var curId = null, pop = null, bound = false;
 
   var esc = function (s) { return SA.esc(s); };
+
+  /* Sélection : deux règles du conseil posées sur le panier de core.js (chargé juste avant ce fichier).
+     1. Une entrée que l'application ne sait pas installer n'y entre jamais.
+     2. Les ajouts automatiques (présélection) sont notés dans SA.state.auto : un geste de l'utilisateur sur le même skill
+        en fait un choix à lui, et un changement d'objectif retire les ajouts automatiques restés tels quels. */
+  (function () {
+    var c = SA.cart;
+    if (!c || c._conseil) return;
+    var add0 = c.add, rm0 = c.remove, auto = false;
+    function marks() { var s = SA.state || {}; if (!s.auto) s.auto = {}; return s.auto; }
+    c.add = function (id) {
+      if (SA.reco && SA.reco.manual && SA.reco.manual(id)) return false;
+      var ok = add0(id);
+      if (ok) { if (auto) marks()[id] = true; else delete marks()[id]; }
+      return ok;
+    };
+    c.remove = function (id) {
+      var ok = rm0(id);
+      if (ok) delete marks()[id];
+      return ok;
+    };
+    c.addAuto = function (id) {
+      auto = true;
+      try { return c.add(id); } finally { auto = false; }
+    };
+    c.dropAuto = function () {
+      var m = marks();
+      Object.keys(m).forEach(function (id) { rm0(id); });
+      SA.state.auto = {};
+    };
+    c._conseil = true;
+  })();
+
+  /* Agents qui ont réellement ces skills, d'après les lignes de la machine (Row.ag) : jamais d'après les interrupteurs. */
+  function holders(rows) {
+    var seen = {}, out = [];
+    (rows || []).forEach(function (r) {
+      Object.keys((r && r.ag) || {}).forEach(function (id) {
+        var v = r.ag[id];
+        if ((v === 'ok' || v === 'div') && !seen[id]) { seen[id] = true; out.push(id); }
+      });
+    });
+    return out;
+  }
+
   SA.au = function (s) { return '<!--a-->' + SA.esc(s) + '<!--/a-->'; };
 
   function files() { return SA.files || {}; }
@@ -52,14 +97,14 @@
       '<p class="dt-big"><span class="num">' + SA.nb(chars) + '</span><span class="mut"> caractères, soit environ ' + SA.nb(tok) + ' jetons</span></p>' +
       '<p class="sub">C’est la longueur du nom et de la description. Dans Claude Code, ce texte reste en contexte tant que le skill est actif ; le reste du fichier n’est lu que lorsque le skill sert.</p>' +
       (chars > CUT ? '<p class="dt-flag"><span class="bdg tr">Description coupée</span><span>Au-delà de ' + SA.nb(CUT) + ' caractères, Claude Code coupe la description dans sa liste.</span></p>' : '') +
-      '<p class="mut dt-note">Estimation à 4 caractères par jeton. Pour les autres agents, le comportement reste à établir.</p></section>';
+      '<p class="mut dt-note">Estimation à 4 caractères par jeton. La règle de coupure ci-dessus est celle de Claude Code.</p></section>';
   }
 
   /* ---------- le fichier ---------- */
   function fileSection(id, k) {
     var f = files()[id];
     if (!f) {
-      return '<section class="dt-sec"><h3 class="h2">Le fichier</h3><p class="sub">Extrait non repris dans ce prototype : licence non permissive, ou fichier introuvable dans le dépôt. Le produit affichera le fichier tel qu’il sera écrit sur votre machine.</p>' +
+      return '<section class="dt-sec"><h3 class="h2">Le fichier</h3><p class="sub">Ce fichier n’est pas dans la copie de la base : licence fermée, ou fichier introuvable. Lisez-le sur skills.sh avant d’installer.</p>' +
         '<p><a class="lnk" href="https://skills.sh/' + esc(id) + '" target="_blank" rel="noopener">Lire le fichier sur skills.sh</a></p></section>';
     }
     /* Les lignes relevées sont retrouvées par leur texte, pas par leur numéro : le dépôt a pu changer depuis le contrôle. */
@@ -112,7 +157,12 @@
       (it[6] == null ? 'Il n’est pas encore noté ni contrôlé : il le sera dès qu’il entrera dans une catégorie du catalogue.'
         : 'Sa note est de ' + it[6] + ' sur 100. Le détail de la note, la description, le contrôle et les audits ne sont pas dans cette copie de la base : lisez sa fiche sur skills.sh avant de l’installer.') + '</p>';
     if (why) h += '<p class="dt-why"><span class="dt-why-l">Pourquoi pour vous</span><span>' + esc(why) + '</span></p>';
-    h += '<p class="dt-cta">' + SA.addBtn(id, true) + (row ? '<button type="button" class="btn" data-go-route="gestion">Voir dans Mes skills</button>' : '') + '</p>';
+    /* Entrée que l'application ne sait pas installer : la raison et le lien, jamais le bouton d'ajout. */
+    var man = !row && SA.reco && SA.reco.manual ? SA.reco.manual(id) : '';
+    h += man
+      ? '<div class="dt-cta dt-man"><p><span class="bdg no">Installation à la main</span></p><p class="sub">' + esc(man) + '</p>' +
+        '<p><a class="btn" href="https://skills.sh/' + esc(id) + '" target="_blank" rel="noopener">Ouvrir sa page sur skills.sh</a></p></div>'
+      : '<p class="dt-cta">' + SA.addBtn(id, true) + (row ? '<button type="button" class="btn" data-go-route="gestion">Voir dans Mes skills</button>' : '') + '</p>';
     if (k) {
       h += '<section class="dt-sec"><h3 class="h2">Score Skill Advisor</h3><p class="dt-big"><span class="num">' + it[6] + '</span><span class="mut"> sur 100</span></p>' +
         SA.scoreBar(k.sc) +
@@ -162,16 +212,19 @@
         ? '<p class="sub">Des motifs à risque ont été trouvés dans les fichiers présents sur cette machine.</p>' +
           findings(row.local.map(function (f) { return [f.label, f.file, f.line, f.excerpt]; }))
         : '<p class="sub">Aucun motif connu trouvé dans les fichiers présents sur cette machine.</p>') +
-      '<p class="mut dt-note">Skill fictif de la machine d’exemple : ces constats illustrent le contrôle local.</p></section>' +
+      (SA.live && SA.live.on ? '' : '<p class="mut dt-note">Skill fictif de la machine d’exemple : ces constats illustrent le contrôle local.</p>') + '</section>' +
       ctxSection(row.chars) + '</div>';
     SA.openDrawer(h, 'Détail du skill', 'detail');
   }
 
   /* ---------- guide d'usage (étape Guide et Mes skills) ---------- */
-  function guideHtml(name, desc, real) {
-    var on = SA.agentsOn();
-    var claude = on.filter(function (a) { return a.id === 'claude'; });
-    var others = on.filter(function (a) { return a.id !== 'claude'; });
+  /* row : la ligne de la machine quand le skill y est. Les agents cités sont alors ceux qui l'ont (Row.ag). */
+  function guideHtml(name, desc, real, row) {
+    var on = row ? SA.agents().filter(function (a) { return holders([row]).indexOf(a.id) > -1; }) : SA.agentsOn();
+    var off = !!(row && row.on === false);
+    var isClaude = function (a) { return a.id === 'claude' || a.id === 'claude-code'; };
+    var claude = off ? [] : on.filter(isClaude);
+    var others = off ? [] : on.filter(function (a) { return !isClaude(a); });
     var lines = '';
     if (claude.length) {
       lines += '<li class="gd-ag" data-copy-scope><div><p class="gd-ag-n">Claude Code</p>' +
@@ -182,14 +235,23 @@
       lines += '<li class="gd-ag"><div><p class="gd-ag-n">' + esc(others.map(function (a) { return a.name; }).join(', ')) + '</p>' +
         '<p class="gd-ag-t sub">Décrivez la tâche. L’agent choisit le skill d’après sa description. La commande directe, quand elle existe, varie d’un agent à l’autre.</p></div></li>';
     }
-    return '<section class="gd-sec" data-st><h2 class="h2">Quand votre agent s’en sert</h2>' +
-        (desc
-          ? '<p class="gd-when"' + (real ? ' lang="en"' : '') + '>' + (real ? SA.au(desc) : esc(desc)) + '</p>' +
-            '<p class="mut dt-note">C’est la description écrite par l’auteur' + (real ? ', non traduite' : '') + '. L’agent la lit pour décider de charger le skill.</p>'
-          : '<p class="gd-when">L’agent décide de charger un skill d’après la description écrite par son auteur.</p>' +
-            '<p class="mut dt-note">Cette description n’est pas dans la copie de la base ; elle se lit dans le fichier du skill.</p>') + '</section>' +
+    /* Fichier du skill sur la machine, quand on le connaît : la description s'y lit. */
+    var file = row && row.path ? String(row.path).replace(/[\\\/]+$/, '') + (String(row.path).indexOf('\\') > -1 ? '\\' : '/') + 'SKILL.md' : '';
+    var when;
+    if (off) {
+      when = '<p class="gd-when">Ce skill est désactivé : aucun agent ne le charge. Réactivez-le dans Mes skills.</p>';
+    } else if (desc) {
+      when = '<p class="gd-when"' + (real ? ' lang="en"' : '') + '>' + SA.au(desc) + '</p>' +
+        '<p class="mut dt-note">C’est la description écrite par l’auteur' + (real ? ', non traduite' : '') + '. L’agent la lit pour décider de charger le skill.</p>';
+    } else if (file) {
+      when = '<p class="gd-when">L’agent lit la description écrite en tête du fichier SKILL.md, puis décide de charger le skill.</p>' +
+        '<p class="mut dt-note">Ce fichier est ici : <span class="mono">' + esc(file) + '</span></p>';
+    } else {
+      when = '<p class="gd-when">L’agent lit la description écrite en tête du fichier SKILL.md, puis décide de charger le skill.</p>';
+    }
+    return '<section class="gd-sec" data-st><h2 class="h2">Quand votre agent s’en sert</h2>' + when + '</section>' +
       '<section class="gd-sec" data-st><h2 class="h2">Comment l’appeler</h2>' +
-        (lines ? '<ul class="ledger gd-ags">' + lines + '</ul>' : '<p class="mut">Aucun agent n’est activé.</p>') + '</section>' +
+        (lines ? '<ul class="ledger gd-ags">' + lines + '</ul>' : '<p class="mut">' + (off ? 'Aucun agent ne le charge tant qu’il est désactivé.' : row ? 'Aucun agent n’a ce skill pour le moment.' : 'Aucun agent n’est activé.') + '</p>') + '</section>' +
       '<section class="gd-sec" data-st data-copy-scope><h2 class="h2">Pour essayer</h2>' +
         '<div class="gd-try"><p class="gd-q" data-copy-text>Utilise le skill ' + esc(name) + ' pour cette tâche.</p>' +
         '<button type="button" class="btn quiet" data-gd-copy="Utilise le skill ' + esc(name) + ' pour cette tâche." aria-label="Copier la phrase">Copier</button></div></section>';
@@ -197,9 +259,9 @@
   function guide(id) {
     var row = SA.mineRow(id), it = SA.item(id), k = SA.det(id);
     var name = it ? it[1] : row ? row.name : id;
-    var desc = k && k.d ? k.d : row ? row.desc : '';
+    var desc = k && k.d ? k.d : row && row.desc ? String(row.desc) : '';
     bind();
-    SA.openDrawer('<div class="dt"><p class="eye">Guide</p><p class="dt-name mono">' + esc(name) + '</p>' + guideHtml(name, desc, !!(k && k.d)) + '</div>', 'Guide d’usage', 'guide');
+    SA.openDrawer('<div class="dt"><p class="eye">Guide</p><p class="dt-name mono">' + esc(name) + '</p>' + guideHtml(name, desc, !!(k && k.d), row) + '</div>', 'Guide d’usage', 'guide');
   }
 
   /* ---------- fenêtres de rapport ---------- */
@@ -296,7 +358,7 @@
   }
 
   SA.detail = {
-    open: open, warnings: warnings, guide: guide, guideHtml: guideHtml, badge: badge, ctxText: ctxText,
+    open: open, warnings: warnings, guide: guide, guideHtml: guideHtml, badge: badge, ctxText: ctxText, holders: holders,
     html: detailHtml, bind: bind, CUT: CUT,
     local: function (id) { var r = SA.mineRow(id); if (r) openLocal(r); }
   };

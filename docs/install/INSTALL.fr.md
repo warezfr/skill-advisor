@@ -2,29 +2,33 @@
 
 [English](INSTALL.md) · **Français** · [Español](INSTALL.es.md) · [العربية](INSTALL.ar.md)
 
-Ce manuel vous mène de zéro à un skill vérifié et installé dans votre agent. Chaque étape comporte une action et un résultat attendu. Vous pouvez vous arrêter à n'importe quelle étape : les étapes 1 à 4 demandent seulement un navigateur web.
+Ce manuel vous mène de rien à un skill contrôlé et installé dans vos agents, puis à travers chaque écran de Skill Advisor 1.0. Chaque étape a une action et un résultat attendu.
 
-> [!IMPORTANT]
-> Skill Advisor est un prototype. L'interface montre une machine d'exemple et n'écrit rien sur votre disque. Les étapes 7 et 8 utilisent de vraies commandes qui écrivent de vrais fichiers. Chacune de ces étapes le signale.
+> [!WARNING]
+> Skill Advisor travaille sur votre vraie machine. Ce que vous y installez, mettez à jour, désactivez ou désinstallez modifie les dossiers de skills de vos agents, par exemple `~/.claude/skills` et `~/.agents/skills`. Chaque étape qui écrit le dit.
 
 ## Sommaire
 
-| Étape | Ce que vous faites | Durée | Il faut |
+| Étape | Ce que vous faites | Durée | Besoin |
 |---|---|---|---|
-| 1 | Vérifier ce qu'il vous faut | 2 min | - |
-| 2 | Télécharger Skill Advisor | 1 min | Navigateur ou git |
-| 3 | Ouvrir la démonstration | 1 min | Navigateur |
-| 4 | Parcourir le trajet | 5 min | Navigateur |
-| 5 | Construire et tester (facultatif) | 1 min | Node.js |
-| 6 | Vérifier un skill | 2 min | Node.js |
-| 7 | Essayer un vrai skill dans un dossier de test | 3 min | Node.js, internet |
-| 8 | Installer un skill pour tous vos projets | 2 min | Node.js, internet |
+| 1 | Vérifier ce qu'il vous faut | 2 min | Terminal |
+| 2 | Installer Skill Advisor | 2 min | Node.js, Internet |
+| 3 | Lancer l'application | 1 min | Node.js |
+| 4 | Lire « Ma machine » | 1 min | Navigateur |
+| 5 | Obtenir un conseil et installer un skill | 5 min | Internet |
+| 6 | Gérer vos skills | 3 min | - |
+| 7 | Sauvegarder, exporter, importer et appliquer | 5 min | - |
+| 8 | Gérer vos agents | 3 min | - |
+| 9 | Chercher dans la base | 2 min | - |
+| 10 | Contrôler un skill depuis le terminal | 2 min | Node.js |
+
+L'interface est en français. Chaque étape reprend les noms tels qu'ils s'affichent à l'écran.
 
 ---
 
 ## Voie rapide · Le script d'installation
 
-Le script fait les étapes 1 à 3 pour vous : il vérifie vos outils, télécharge Skill Advisor et ouvre la démonstration. Il demande votre langue, français ou anglais. Il n'installe aucun logiciel système et ne demande aucun droit d'administrateur. Lisez-le avant de le lancer : [install.sh](../../install.sh), [install.ps1](../../install.ps1).
+Le script fait les étapes 1 à 3 pour vous : il vérifie vos outils, télécharge Skill Advisor, installe ses dépendances, lance les tests et démarre l'application. Il vous demande votre langue, français ou anglais. Il n'installe aucun logiciel système et ne demande aucun droit d'administrateur. Lisez-le avant de le lancer : [install.sh](../../install.sh), [install.ps1](../../install.ps1).
 
 macOS et Linux :
 
@@ -42,271 +46,313 @@ powershell -ExecutionPolicy Bypass -File install.ps1
 
 L'option `-ExecutionPolicy Bypass` vaut pour ce seul lancement. Elle ne change pas les réglages de votre système.
 
-**Résultat attendu :** quatre étapes numérotées dans le terminal, puis l'écran « Ma machine » dans votre navigateur.
+**Résultat attendu :** cinq étapes numérotées dans le terminal, puis la ligne `Skill Advisor: http://127.0.0.1:<port>/?c=<code>` et l'écran « Ma machine » dans votre navigateur. L'application continue de tourner dans ce terminal. Passez à l'étape 4.
 
 ![Le script d'installation](../assets/screenshots/15-terminal-install-fr.png)
+
+*Ici, le script a été lancé avec `--no-open` : le navigateur ne s'est pas ouvert, et l'adresse est affichée à la fin.*
 
 | macOS, Linux | Windows | Effet |
 |---|---|---|
 | `--lang fr`, `--lang en` | `-Lang fr`, `-Lang en` | Choisir la langue sans la question |
 | `--dir <dossier>` | `-Dir <dossier>` | Installer dans un autre dossier. Par défaut : `skill-advisor` dans votre dossier personnel |
-| `--no-git` | `-NoGit` | Télécharger l'archive même si git est installé |
-| `--no-open` | `-NoOpen` | Ne pas ouvrir le navigateur à la fin |
+| `--no-git` | `-NoGit` | Télécharger l'archive même quand git est installé |
+| `--no-open` | `-NoOpen` | Ne pas ouvrir le navigateur. L'application affiche quand même son adresse |
+| `--no-start` | `-NoStart` | Installer l'application sans la lancer |
+| `--demo` | `-Demo` | Ouvrir seulement la démonstration : une machine d'exemple. Aucune dépendance n'est installée et rien n'est écrit dans vos agents |
 
 Ce que fait le script :
 
-1. Il regarde si git et Node.js sont présents. Aucun des deux n'est obligatoire.
-2. Il télécharge Skill Advisor avec git, ou sous forme d'archive si git est absent.
-3. Il lance le test de l'interface si Node.js 22 ou plus récent est présent.
-4. Il ouvre `prototype/dist/preview.html` dans votre navigateur.
+1. Il vérifie si git, Node.js et npm sont présents. L'application demande Node.js 22.20 ou plus récent, avec npm. git est facultatif.
+2. Il télécharge Skill Advisor avec git, ou en archive quand git est absent.
+3. Il installe les dépendances, les paquets `skills` et `tar`, dans le dossier `node_modules`, avec `npm ci --omit=dev --no-audit --no-fund`.
+4. Il lance les tests avec `npm test` quand les dépendances sont installées. Sinon, il lance seulement le test de l'interface.
+5. Il démarre l'application avec `node app/server.mjs`.
 
-Le script a été testé sur macOS, Debian 12 et Windows 11. Relancez-le pour mettre à jour une copie installée avec git. Continuez ensuite à l'étape 4.
+Sans Node.js 22.20 ou plus récent et npm, le script ne peut pas démarrer l'application. Il ouvre la démonstration à la place, et vous dit où trouver Node.js.
 
 ---
 
 ## Étape 1 · Vérifier ce qu'il vous faut
 
-| Outil | Utile pour | Comment vérifier | Où le trouver |
+| Outil | Sert à | Comment vérifier | Où le trouver |
 |---|---|---|---|
-| Un navigateur web | Étapes 3 et 4 | - | Déjà sur votre machine |
-| Node.js 22 ou plus récent | Étapes 5 à 8 | `node -v` | [nodejs.org](https://nodejs.org) |
-| git | Étape 2 (option B). Recommandé pour les étapes 7 et 8 | `git --version` | [git-scm.com](https://git-scm.com) |
+| Node.js 22.20 ou plus récent, avec npm | L'application | `node -v`, `npm -v` | [nodejs.org](https://nodejs.org) |
+| git | Facultatif. Des mises à jour de Skill Advisor plus simples, et des installations qui continuent quand GitHub limite les téléchargements anonymes | `git --version` | [git-scm.com](https://git-scm.com) |
+| Un navigateur web | L'interface | - | Déjà sur votre machine |
 
-Ouvrez un terminal (Terminal sur macOS et Linux, PowerShell sur Windows) et lancez :
+Ouvrez un terminal (Terminal sous macOS et Linux, PowerShell sous Windows) et lancez :
 
 ```bash
 node -v
+npm -v
 git --version
 ```
 
-**Résultat attendu :** deux numéros de version. Le numéro de Node.js commence par 22 ou plus. Les commandes de ce manuel ont été testées avec Node.js 26. Les commandes des étapes 5 à 7 ont été rejouées sur macOS. Les commandes d'installation de l'étape 8 ont été testées sur Windows 11, Linux et macOS.
+**Résultat attendu :** trois numéros de version. Celui de Node.js vaut v22.20 ou plus, par exemple `v26.13.0`.
 
-Pourquoi git est recommandé : sans git, l'installation s'arrête quand GitHub limite les téléchargements anonymes (60 requêtes par heure pour une adresse publique). Avec git, l'installation continue.
+## Étape 2 · Installer Skill Advisor
 
-## Étape 2 · Télécharger Skill Advisor
-
-Choisissez une option.
-
-**Option A, sans git.** Téléchargez le fichier ZIP et décompressez-le :
-
-<https://github.com/warezfr/skill-advisor/archive/refs/heads/main.zip>
-
-Le dossier décompressé s'appelle `skill-advisor-main`. Renommez-le en `skill-advisor`.
-
-**Option B, avec git.**
+Utilisez le script de la voie rapide, ou installez à la main :
 
 ```bash
 git clone https://github.com/warezfr/skill-advisor.git
-```
-
-Entrez ensuite dans le dossier :
-
-```bash
 cd skill-advisor
+npm ci --omit=dev
 ```
 
-**Résultat attendu :** un dossier `skill-advisor` qui contient `prototype`, `catalog`, `tools` et `README.md`.
+Sans git, téléchargez <https://github.com/warezfr/skill-advisor/archive/refs/heads/main.zip>, décompressez-le, renommez le dossier `skill-advisor-main` en `skill-advisor`, entrez-y et lancez `npm ci --omit=dev`.
 
-## Étape 3 · Ouvrir la démonstration
+**Résultat attendu :** un dossier `skill-advisor` qui contient `app`, `prototype`, `catalog`, `tools`, `node_modules` et `README.md`. npm affiche une ligne de la forme `added 9 packages`.
 
-Ouvrez le fichier `prototype/dist/preview.html` dans votre navigateur. Double-cliquez dessus, ou utilisez la commande de votre système.
+## Étape 3 · Lancer l'application
 
-macOS :
+macOS et Linux :
 
 ```bash
-open prototype/dist/preview.html
+cd ~/skill-advisor
+npm start
 ```
 
-Windows :
+Windows, dans PowerShell :
 
 ```powershell
-start prototype\dist\preview.html
+cd $HOME\skill-advisor
+npm.cmd start
 ```
 
-Linux :
+Sous Windows, lancez `npm.cmd start` : la stratégie d'exécution par défaut de PowerShell peut refuser `npm start`, car elle bloque `npm.ps1`. Si vous avez installé à la main à l'étape 2, allez dans le dossier `skill-advisor` créé par `git clone`, là où vous l'avez lancé.
 
-```bash
-xdg-open prototype/dist/preview.html
-```
+**Résultat attendu :** la ligne `Skill Advisor: http://127.0.0.1:<port>/?c=<code>`, puis l'interface dans votre navigateur. Si le navigateur ne s'ouvre pas, copiez cette adresse dedans dans les 10 minutes.
 
-**Résultat attendu :** l'écran « Ma machine ». Le coin en bas à gauche indique « machine d'exemple » : les 50 skills affichés sont des exemples, pas les vôtres.
+À propos de cette adresse :
+
+- Elle marche une fois. L'onglet qui l'a ouverte garde la session, et le recharger marche encore.
+- Un autre onglet, ou la même adresse utilisée de nouveau, affiche « Session expirée ». Arrêtez l'application avec Ctrl+C et relancez `npm start` : vous obtenez une nouvelle adresse.
+- L'application écoute sur `127.0.0.1` seulement. Les autres machines ne peuvent pas l'atteindre. Ne partagez pas cette adresse.
+
+Pour arrêter l'application, appuyez sur Ctrl+C dans son terminal. Les options de `npm start` sont plus bas, dans « Options de l'application ».
+
+## Étape 4 · Lire « Ma machine »
+
+« Ma machine » compte vos skills et vos agents, les mises à jour disponibles, les skills à relire et le contexte qu'ils coûtent. « Ce qui demande votre attention » liste ce qu'il faut regarder d'abord. Le volet de droite liste les agents qui ont des skills.
 
 ![L'écran Ma machine](../assets/screenshots/01-ma-machine.png)
 
-Remarques :
+Le bas du menu indique « En local · 127.0.0.1 » et la date de la base. « Actualiser » relit vos dossiers. L'application le fait aussi quand vous revenez sur sa fenêtre.
 
-- La page n'a besoin ni de serveur ni de compte. Elle charge ses polices depuis internet.
-- L'interface est en français : vous n'avez rien à traduire.
+**Résultat attendu :** les skills que vos agents ont déjà, y compris ceux que vous avez copiés à la main (« copie manuelle »).
 
-## Étape 4 · Parcourir le trajet
+## Étape 5 · Obtenir un conseil et installer un skill
 
-**4.1 Choisir un objectif.** Cliquez sur « Conseil » dans le menu de gauche, puis sur « Créer un site ».
+> [!WARNING]
+> L'étape 5.4 écrit dans les vrais dossiers de vos agents.
+
+**5.1 Choisir un objectif.** Cliquez sur « Conseil » dans le menu de gauche. Choisissez un des 17 objectifs, par exemple « Créer un site ».
 
 ![Choisir un objectif](../assets/screenshots/02-objectif.png)
 
-**4.2 Répondre à quatre questions.** Type de site, technologie, hébergement, besoins. Le panneau de droite se remplit au fil de vos réponses. Cliquez sur « Voir les recommandations ».
+**5.2 Répondre aux questions.** Pour un site : type de site, technologie, hébergement, besoins. Le volet de droite se remplit au fil des réponses. Cliquez sur « Voir les recommandations ».
 
-![Quatre questions](../assets/screenshots/03-questions.png)
+![Les questions](../assets/screenshots/03-questions.png)
 
-**4.3 Lire les recommandations.** Chaque skill a une note sur 100 et une ligne « Pourquoi pour vous ». Cochez les skills que vous voulez. Les skills déjà installés portent la mention « Installé ».
+**5.3 Lire les recommandations.** Chaque skill a une note sur 100 et une ligne « Pourquoi pour vous ». Les meilleurs sont cochés. Décochez ce que vous ne voulez pas. « Voir le détail » explique la note : popularité 40, réputation de la source 25, fraîcheur 15, sécurité 20. Cliquez sur « Installer ».
 
 ![Recommandations](../assets/screenshots/04-recommandations.png)
 
-**4.4 Ouvrir le détail d'un skill.** Cliquez sur « Voir le détail ». Vous voyez comment la note est construite : popularité 40, réputation de la source 25, fraîcheur 15, sécurité 20.
+**5.4 Vérifier avant d'écrire.** L'écran « Vérifiez avant d'écrire » liste les skills, les agents qui les reçoivent, les dossiers qui seront créés et la portée : « Tous les projets » ou « Ce projet seulement ». Pour un projet, donnez son dossier dans le champ « Dossier du projet ». Cliquez sur « Installer 1 skill dans 4 agents », ou le même bouton avec vos nombres.
 
-![Détail d'un skill](../assets/screenshots/05-detail.png)
+![Vérifier avant d'écrire](../assets/screenshots/05-installation.png)
 
-**4.5 Vérifier avant d'écrire.** Cliquez sur « Installer 3 skills ». L'écran « Vérifiez avant d'écrire » liste les skills, les agents qui les recevront et la portée : tous les projets ou ce projet seulement.
+Où vont les fichiers :
 
-![Vérifier avant d'écrire](../assets/screenshots/06-installation.png)
+- Avec le « Dossier partagé » activé, le skill va dans `~/.agents/skills/<nom>`. Les agents qui lisent ce dossier le voient tout de suite ; l'écran les nomme, par exemple « Lu par Cursor, Gemini CLI ». Chaque autre agent choisi reçoit un lien vers lui, une jonction sous Windows.
+- Avec le dossier partagé désactivé, chaque agent choisi reçoit sa propre copie, et rien n'est écrit dans le dossier partagé.
 
-**4.6 Lire le guide.** Confirmez. Dans le prototype, rien n'est écrit sur le disque. Le guide explique quand l'agent utilise chaque skill et comment l'appeler.
+Ce qui peut arrêter un skill :
 
-![Guide](../assets/screenshots/07-guide.png)
+| Ce qui arrive | Ce que vous voyez | Ce que vous pouvez faire |
+|---|---|---|
+| Le contrôle trouve un motif à risque élevé | Le skill est retenu : rien n'est écrit pour lui | Lisez le rapport. « Installer malgré l'avertissement » l'installe |
+| Un skill du même nom est déjà là, copié à la main ou venu d'une autre source | Un conflit : rien n'est écrit pour lui | « Garder l'existant », ou « Remplacer (une sauvegarde est faite) » |
+| Pas de connexion, limite de GitHub, source introuvable | Un message en français dit laquelle | Vérifiez la connexion, ou attendez puis réessayez |
 
-**4.7 Gérer.** « Mes skills » liste ce qui est installé, avec les mises à jour, les alertes et le coût en contexte. « Agents » montre les agents trouvés sur la machine et l'endroit où chacun garde ses skills.
+**5.5 Lire le guide.** Après l'installation, le guide dit quand l'agent se sert de chaque skill et comment l'appeler. Il reste disponible dans « Mes skills ».
 
-![Mes skills](../assets/screenshots/08-mes-skills.png)
+**Résultat attendu :** le skill apparaît dans « Mes skills » avec l'état « À jour ». Relancez votre agent pour qu'il relise son dossier de skills.
+
+## Étape 6 · Gérer vos skills
+
+« Mes skills » liste chaque skill, avec ses agents, son état, le résultat de son contrôle et son coût en contexte. Cliquez sur le nom d'un skill pour ouvrir son détail.
+
+![Mes skills avec le volet de détail](../assets/screenshots/06-mes-skills.png)
+
+- **Mettre à jour.** Cliquez sur « Rechercher les mises à jour ». Pour un skill qui a une mise à jour, « Ce qui change » liste les fichiers ajoutés, retirés et modifiés, et le contrôle de la nouvelle version. Cliquez ensuite sur « Mettre à jour ». Une nouvelle version qui contient un motif à risque élevé est retenue jusqu'à ce que vous la forciez. Après la mise à jour, les mêmes agents voient le skill.
+- **Désactiver et activer.** L'interrupteur de la colonne « Actif » range le skill dans `~/.skill-advisor/disabled` et l'en ressort. Un skill désactivé reste sur le disque, mais l'agent ne le charge plus.
+- **Désinstaller.** « Désinstaller » demande une confirmation. La case « Garder une sauvegarde » est cochée par défaut.
+- **Plusieurs à la fois.** Cochez plusieurs skills : la barre propose « Désactiver », « Activer », « Sauvegarder » et « Désinstaller ».
+
+Un skill copié à la main (« copie manuelle ») n'est pas mis à jour : pour le mettre à jour, réinstallez-le depuis sa source. Un skill installé pour un projet est affiché, mais vous le gérez depuis le dossier du projet.
+
+**Résultat attendu :** chaque action modifie les dossiers de vos agents, et la liste montre le nouvel état.
+
+## Étape 7 · Sauvegarder, exporter, importer et appliquer
+
+> [!WARNING]
+> Restaurer et appliquer une sauvegarde écrivent dans les vrais dossiers de vos agents.
+
+**7.1 Faire une sauvegarde.** Dans « Mes skills », cochez un ou plusieurs skills et cliquez sur « Sauvegarder ». Ajoutez un nom et une note si vous voulez : 80 et 500 caractères au plus. Une désinstallation avec « Garder une sauvegarde » fait aussi une sauvegarde.
+
+**7.2 Lire vos sauvegardes.** « Sauvegardes » les liste, de la plus récente à la plus ancienne, avec leur date, leur origine, leur taille, leurs skills et les résultats de leurs contrôles. Elles sont gardées dans `~/.skill-advisor/backups`.
+
+![Sauvegardes](../assets/screenshots/07-sauvegardes.png)
+
+**7.3 Restaurer.** « Restaurer » remet chaque copie d'où elle vient. Quand quelque chose est déjà à un de ces endroits, rien n'est écrit. Un skill qui contient un motif à risque demande « Restaurer malgré tout ».
+
+**7.4 Exporter et importer.** « Exporter » enregistre la sauvegarde en un seul fichier nommé `skill-advisor-<id>.tar.gz`. Sur une autre machine, « Importer une sauvegarde » lit ce fichier, contrôle de nouveau chaque skill et le range dans une nouvelle sauvegarde. Rien n'est encore installé. L'import refuse un fichier qui contient autre chose que des fichiers et des dossiers, un chemin qui sort de la sauvegarde, plus de 200 Mo ou plus de 100 000 entrées, un fichier sans manifeste Skill Advisor valide, ou un nom de skill invalide.
+
+**7.5 Appliquer à d'autres agents.** « Appliquer à d'autres agents » ouvre un volet. Choisissez les skills, puis les agents : les agents détectés, le dossier partagé, ou tout autre agent connu, trouvé par son nom. Choisissez ensuite ce qui se passe quand un agent a déjà le skill.
+
+![Appliquer à d'autres agents](../assets/screenshots/08-appliquer.png)
+
+| Ce que l'agent contient | « Passer » | « Remplacer » |
+|---|---|---|
+| Rien | Le skill est copié | Le skill est copié |
+| Le même contenu | Rien ne change | Rien ne change |
+| Une autre version | Elle reste en place | Elle est sauvegardée, puis remplacée |
+
+Un skill qui contient un motif à risque n'est appliqué que si vous cochez « Appliquer malgré l'avertissement ».
+
+**Résultat attendu :** un message comme `safe-notes : 1 application faite, 0 passée, 0 échec`. Le skill apparaît dans les agents choisis, dans « Mes skills ». Chaque version remplacée a sa propre nouvelle sauvegarde.
+
+## Étape 8 · Gérer vos agents
+
+« Agents » liste les 78 agents que Skill Advisor connaît. Les filtres montrent « Tous », « Détectés », « Ciblés » et « Masqués ».
 
 ![Agents](../assets/screenshots/09-agents.png)
 
-**4.8 Chercher.** « Recherche » explore toute la base, avec des filtres par type de projet, par installations et par alertes.
+- **Cibles.** Les interrupteurs choisissent les agents qui reçoivent les installations. Le dossier partagé tient sur une ligne, avec les agents qui le lisent.
+- **Ajouter un agent à la main.** « Ajouter un agent » : donnez un nom et le chemin complet de son dossier de skills. Cet agent reçoit sa propre copie de chaque skill. Il ne peut pas recevoir une installation pour un seul projet.
+- **Masquer un agent.** « Actions », puis « Masquer ». « Afficher » le fait revenir.
+- **Vider un agent.** « Actions », puis « Retirer tous ses skills », avec une sauvegarde au choix. Pour un agent qui lit le dossier partagé, l'application nomme tous les agents qui le lisent et propose « Retirer du dossier partagé pour tous ces agents ».
+- **Dossier du projet.** Le champ « Dossier du projet » est aussi sur cet écran.
+
+**Résultat attendu :** le filtre « Tous » compte les 78 agents connus.
+
+## Étape 9 · Chercher dans la base
+
+« Recherche » cherche parmi les 1 551 skills les plus installés des 92 899 recensés par skills.sh, avec des filtres par type de projet, installations et avertissements. La barre de titre montre la date et la source de la base : « Base du 12/11/2026 · copie fournie » désigne la copie livrée avec Skill Advisor. « Ajouter » met un skill dans votre sélection, prêt pour l'étape 5.4.
 
 ![Recherche](../assets/screenshots/10-recherche.png)
 
-**4.9 Essayer les autres états.** Le bouton « Aperçu », en bas à gauche, montre les mêmes écrans dans d'autres états, par exemple sur une machine vide. L'icône de lune passe au thème sombre.
+Le bouton en forme de lune, en bas à gauche, passe au thème sombre. Skill Advisor retient votre choix.
 
 ![Thème sombre](../assets/screenshots/11-theme-sombre.png)
 
-**Résultat attendu :** vous avez vu tout le trajet, de l'objectif jusqu'à un skill installé et géré.
+## Étape 10 · Contrôler un skill depuis le terminal
 
-## Étape 5 · Construire et tester (facultatif)
-
-Le fichier `preview.html` est déjà construit. Faites cette étape seulement si vous modifiez les fichiers de `prototype/src/`.
-
-```bash
-npm run build
-npm test
-```
-
-**Résultat attendu :** la construction affiche la taille de deux fichiers, et le test se termine par `558 render checks, 0 failure(s)`.
-
-![Construction et test](../assets/screenshots/12-terminal-build-test.png)
-
-Ces deux commandes n'installent rien : le projet n'a aucune dépendance.
-
-## Étape 6 · Vérifier un skill
-
-Le contrôle lit les fichiers d'un skill comme du texte et cherche 11 motifs risqués. Il n'exécute jamais le skill. Le dossier `examples/skills` contient deux skills d'exemple : un sûr, un écrit pour échouer.
+L'application lance ce contrôle pour vous. Vous pouvez aussi le lancer vous-même, depuis le dossier `skill-advisor`. Il lit les fichiers d'un skill comme du texte et cherche 11 motifs à risque. Il n'exécute jamais le skill. Le dossier `examples/skills` contient deux skills d'exemple : un sain, un écrit pour échouer.
 
 ```bash
 node tools/skill-scan.mjs examples/skills
 ```
 
-**Résultat attendu :** une ligne rouge pour `risky-installer`, et un total de 2 skills : 1 `vert`, 1 `rouge`.
+**Résultat attendu :** une ligne rouge pour `risky-installer`, et le total `Total 2 · vert 1 · vert-remarques 0 · orange 0 · rouge 1`.
 
 ![Résultat du contrôle](../assets/screenshots/14-terminal-scan.png)
 
-| Verdict | Signification | Ce qu'il faut faire |
+| Verdict | Dans l'interface | Que faire |
 |---|---|---|
-| `vert` | Aucun motif connu trouvé | Lisez le skill, puis décidez |
-| `vert-remarques` (vert avec remarques) | Seulement des constats de gravité faible | Lisez les remarques |
-| `orange` | Au moins un constat de gravité moyenne | Lisez chaque constat avant d'installer |
-| `rouge` | Un constat de gravité élevée | N'installez pas, sauf si vous comprenez chaque ligne |
+| `vert` | Aucun motif connu | Lisez le skill, puis décidez |
+| `vert-remarques` | Remarques | Lisez les remarques |
+| `orange` | À regarder | Lisez chaque constat avant d'installer |
+| `rouge` | Motif à risque | N'installez pas sans comprendre chaque ligne |
 
-Pour voir chaque constat avec son fichier et son numéro de ligne, ajoutez `--json` :
+Pour voir chaque constat avec son fichier et son numéro de ligne, ajoutez `--json` :
 
 ```bash
 node tools/skill-scan.mjs examples/skills --json
 ```
 
-Pour vérifier vos propres skills, donnez le dossier qui contient un sous-dossier par skill. Les skills installés avec l'outil `skills` sont stockés dans `.agents/skills`, dans votre dossier personnel :
+Pour contrôler les skills du dossier partagé :
 
 ```bash
 node tools/skill-scan.mjs ~/.agents/skills
 ```
 
-Sous Windows PowerShell, écrivez `$HOME\.agents\skills` à la place de `~/.agents/skills`.
-
-Le contrôle ignore les dossiers liés. Donnez-lui le dossier qui contient les vrais fichiers.
+Dans PowerShell sous Windows, écrivez `$HOME\.agents\skills` à la place de `~/.agents/skills`. Le contrôle saute les dossiers liés : donnez-lui le dossier qui contient les vrais fichiers.
 
 > [!WARNING]
-> Un verdict vert signifie « aucun motif connu trouvé ». Il ne signifie pas « sûr ». Le contrôle ne trouve que les motifs connus.
-
-## Étape 7 · Essayer un vrai skill dans un dossier de test
-
-Cette étape écrit des fichiers, mais seulement dans un dossier de test que vous pouvez supprimer. Elle utilise [`skills`](https://skills.sh), l'outil open source en ligne de commande sur lequel Skill Advisor s'appuie pour installer.
-
-Créez un dossier de test à côté de `skill-advisor` et entrez-y :
-
-```bash
-mkdir ../try
-cd ../try
-```
-
-Installez un skill pour ce dossier seulement, puis vérifiez-le :
-
-```bash
-npx -y skills@1.8.1 add vercel-labs/agent-skills --skill web-design-guidelines -a claude-code -y
-node ../skill-advisor/tools/skill-scan.mjs .claude/skills
-```
-
-**Résultat attendu :** le skill est copié dans `.claude/skills/web-design-guidelines`, à l'intérieur du dossier de test, et le contrôle affiche `Total 1 · vert 1`.
-
-![Installer dans un dossier de test, puis vérifier](../assets/screenshots/13-terminal-try-a-skill.png)
-
-Ce que signifient les options :
-
-| Option | Signification |
-|---|---|
-| `vercel-labs/agent-skills` | Le dépôt GitHub qui contient le skill |
-| `--skill web-design-guidelines` | Le skill à installer depuis ce dépôt |
-| `-a claude-code` | L'agent qui le reçoit. Autres valeurs : `cursor`, `gemini-cli` |
-| `-y` | Ne pas demander de confirmation |
-
-Pour trouver le dépôt et le nom d'un skill, ouvrez [catalog/CATALOGUE.md](../../catalog/CATALOGUE.md) : chaque ligne donne le skill et sa source.
-
-Pour tout retirer de cette étape, supprimez le dossier `try`.
-
-## Étape 8 · Installer un skill pour tous vos projets
-
-> [!WARNING]
-> Cette étape écrit dans vos vrais dossiers d'agent, par exemple `~/.claude/skills`. Faites-la seulement pour un skill que vous avez vérifié à l'étape 7.
-
-Ajoutez `-g` (global) pour installer pour tous vos projets :
-
-```bash
-npx -y skills@1.8.1 add vercel-labs/agent-skills --skill web-design-guidelines -g -a claude-code -y
-```
-
-Les quatre commandes dont vous avez besoin ensuite :
-
-| Action | Commande |
-|---|---|
-| Lister ce qui est installé | `npx -y skills@1.8.1 list -g` |
-| Chercher des mises à jour | `npx -y skills@1.8.1 check -g` |
-| Tout mettre à jour | `npx -y skills@1.8.1 update -g -y` |
-| Supprimer un skill | `npx -y skills@1.8.1 remove --skill web-design-guidelines -g -y` |
-
-**Résultat attendu :** `list -g` affiche `web-design-guidelines`. Redémarrez votre agent pour qu'il relise son dossier de skills.
-
-Où vont les fichiers : le skill est stocké une seule fois dans `~/.agents/skills/`, et le dossier de votre agent y pointe. Sur macOS et Linux, le pointeur est un lien symbolique. Sur Windows, c'est une jonction.
+> Un verdict vert veut dire « aucun motif connu trouvé ». Il ne veut pas dire « sans risque ». Le contrôle ne trouve que des motifs connus.
 
 ---
+
+## Options de l'application
+
+Passez-les après `npm start --`, par exemple `npm start -- --no-open --port 4317`.
+
+| Option | Effet |
+|---|---|
+| `--port <n>` | Écouter sur ce port. Sans elle, le système choisit un port libre |
+| `--no-open` | Ne pas ouvrir le navigateur. L'adresse est quand même affichée |
+| `--project <dossier>` | Prendre ce dossier comme dossier du projet |
+| `--home <dossier>` | Pour les tests seulement : prendre ce dossier comme dossier personnel |
+| `--version` | Afficher la version, puis s'arrêter |
+| `--help` | Afficher l'aide, puis s'arrêter |
+
+## Lancer les tests
+
+Les tests demandent les dépendances, installées par `npm ci`. Le script et l'étape 2 les installent déjà. Sous Windows, écrivez `npm.cmd` à la place de `npm`.
+
+```bash
+npm ci
+npm test
+npm run test:e2e
+```
+
+`npm test` lance toutes les suites par `test/run-all.mjs`, sans réseau : le serveur et sa bibliothèque, l'interface, et la vérification que `prototype/dist` correspond à ses sources. Les tests utilisent des dossiers jetables dans le dossier temporaire du système, jamais les dossiers de vos agents. Sans git, les tests qui en ont besoin sont sautés.
+
+`npm run test:e2e` lance les essais de bout en bout dans un navigateur sans fenêtre. Il demande Chrome ou Chromium. S'il n'est pas trouvé, donnez son chemin dans la variable `CHROME_PATH`. Sans navigateur, ces essais sont sautés.
+
+**Résultat attendu :** `npm test` se termine par un bloc `=== Bilan ===` : une ligne par suite, `réussi` ou `ÉCHEC`, avec sa durée.
+
+## Arrêter, mettre à jour, désinstaller
+
+**Arrêter.** Appuyez sur Ctrl+C dans le terminal où tourne l'application.
+
+**Mettre à jour.** Relancez le script d'installation. Une copie installée avec git est mise à jour avec `git pull`. Une copie installée sans git est gardée telle quelle, et le script le dit : supprimez d'abord le dossier `skill-advisor`, puis lancez le script, ou installez dans un autre dossier avec `--dir` (`-Dir` sous Windows). Vos réglages et vos sauvegardes, dans `~/.skill-advisor`, restent.
+
+**Désinstaller.** Skill Advisor n'installe rien sur votre système.
+
+1. Réactivez vos skills désactivés, sinon ils sont supprimés avec `~/.skill-advisor`.
+2. Exportez les sauvegardes que vous voulez garder (étape 7.4).
+3. Désinstallez les skills dont vous ne voulez plus (étape 6). Les autres restent dans vos agents.
+4. Supprimez le dossier d'installation et le dossier `~/.skill-advisor`. Sous macOS et Linux :
+
+```bash
+rm -rf ~/skill-advisor ~/.skill-advisor
+```
+
+Sous Windows, supprimez les dossiers `skill-advisor` et `.skill-advisor` de votre profil utilisateur.
 
 ## En cas de problème
 
-| Ce que vous voyez | Cause | Ce qu'il faut faire |
+| Ce que vous voyez | Cause | Que faire |
 |---|---|---|
 | `node: command not found` | Node.js n'est pas installé | Installez-le depuis [nodejs.org](https://nodejs.org), puis ouvrez un nouveau terminal |
-| `[SKILLS_GIT_CLONE_FAILED] ... spawn git ENOENT` | GitHub a limité les téléchargements anonymes et git n'est pas installé | Installez git, ou attendez une heure et recommencez |
-| `skill-scan.mjs` affiche `ENOENT ... scandir` | Le dossier donné n'existe pas | Donnez un dossier qui contient un sous-dossier par skill |
-| Sur Windows, l'installateur indique « symlinked » | L'outil emploie un seul mot pour les deux types de lien | Rien à faire : il a créé une jonction, qui fonctionne sans droits d'administrateur |
+| `trop ancien (22.20 ou plus récent requis pour l'application)` | Node.js est plus ancien que 22.20 | Installez un Node.js plus récent, puis relancez le script |
+| `npm a échoué` à l'étape 3 du script | npm ne joint pas son registre | Vérifiez la connexion à Internet et relancez le script |
+| PowerShell refuse `npm start` | La stratégie d'exécution bloque `npm.ps1` | Lancez `npm.cmd start` |
+| « Session expirée » | L'adresse a déjà servi, ou date de plus de 10 minutes | Appuyez sur Ctrl+C, relancez `npm start` et ouvrez la nouvelle adresse |
+| `Le port <n> est déjà pris` | Un autre programme utilise ce port | Choisissez-en un autre avec `--port`, ou retirez l'option |
+| Le terminal n'affiche plus rien après l'adresse | L'application tourne | C'est normal. Appuyez sur Ctrl+C pour l'arrêter |
+| Une installation s'arrête sur une limite de GitHub | GitHub limite les téléchargements anonymes | Installez git, ou attendez une heure et réessayez |
+| `Dossier introuvable` avec `skill-scan.mjs` | Le dossier donné n'existe pas | Donnez un dossier qui contient un sous-dossier par skill |
 
-## Supprimer Skill Advisor
+## Signaler un problème
 
-Skill Advisor n'installe rien sur votre système. Supprimez le dossier `skill-advisor`. Les skills installés à l'étape 8 restent en place : retirez-les avec la commande `remove` de l'étape 8.
+Signalez les bogues dans les [tickets GitHub](https://github.com/warezfr/skill-advisor/issues). Pour un problème de sécurité, n'ouvrez pas de ticket public : ouvrez un [avis de sécurité privé](https://github.com/warezfr/skill-advisor/security/advisories/new).
 
 ---
 
-[Retour au README](../../README.fr.md) · Site web : [span.observer](https://span.observer)
+[Retour au README](../../README.fr.md) · Site : [span.observer](https://span.observer)

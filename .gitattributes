@@ -1,0 +1,24 @@
+# Fins de ligne : LF partout, y compris dans un checkout Windows (core.autocrlf=true).
+# Un fichier en CRLF casse l'interface (empreintes CSP) et install.sh (« set: -^M »). Constat 1.
+* text=auto eol=lf
+
+# install.ps1 reste en LF : Windows PowerShell 5.1 et PowerShell 7 lisent les scripts LF,
+# et le fichier servi par GitHub (irm ... | iex) est déjà en LF.
+# Seuls les fichiers de commandes cmd.exe ont besoin de CRLF.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# Fichiers binaires : jamais de conversion ni de diff texte.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.mp4 binary
+*.tar.gz binary
+*.tgz binary
+*.zip binary
+*.pdf binary
+*.woff binary
+*.woff2 binary

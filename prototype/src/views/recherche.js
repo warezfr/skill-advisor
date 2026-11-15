@@ -25,6 +25,8 @@
     if (!s.search) s.search = fresh();
     return s.search;
   }
+  /* Date et source de la base cherchée : le même texte partout (SA.baseLabel, rempli par live.js en mode réel). */
+  function baseLine() { return SA.baseLabel(); }
   function active(f) { return !!(f.q || f.cat || f.min || f.off || f.warn !== 'tous'); }
 
   /* Texte cherché : nom et source pour tous, plus la description de l'auteur pour les skills notés. */
@@ -60,25 +62,31 @@
   }
 
   function rowHtml(it) {
-    var d = db();
+    var d = db(), man = SA.reco.manual(it[0]), inst = !!SA.mineRow(it[0]);
     var tags = it[4].slice(0, 2).map(function (i) { return '<span class="tag">' + esc(SHORT[d.cats[i].id] || d.cats[i].label) + '</span>'; }).join('');
     return '<li class="sr-row" data-row>' +
       '<div class="sr-main"><p class="sr-l1"><button type="button" class="sr-name mono" data-detail="' + esc(it[0]) + '">' + esc(it[1]) + '</button>' +
         '<span class="sr-src mono mut">' + esc(it[2]) + (it[5] ? ' · officielle' : '') + '</span></p>' +
-        '<p class="sr-tags">' + tags + SA.detail.badge(it[7], it[0]) + '</p></div>' +
+        '<p class="sr-tags">' + tags + SA.detail.badge(it[7], it[0]) + (inst || !man ? '' : '<span class="bdg no">Installation à la main</span>') + '</p>' +
+        (man && !inst ? '<p class="sr-man sub">' + esc(man) + '</p>' : '') + '</div>' +
       '<p class="sr-inst mono"><span class="num">' + SA.short(it[3]) + '</span><span class="mut sr-u">installations</span></p>' +
       '<p class="sr-score">' + (it[6] != null ? '<span class="num">' + it[6] + '</span><span class="sr-u mut">sur 100</span>' : '<span class="sr-u mut">pas encore noté</span>') + '</p>' +
-      '<div class="sr-act">' + SA.addBtn(it[0]) + '</div></li>';
+      /* « Installation à la main » : le badge est dans la ligne, la colonne d'action garde un seul lien court vers skills.sh
+         (SA.addBtn n'est pas appelé pour ces lignes : il ajouterait un second badge et un second lien). */
+      '<div class="sr-act">' + (man && !inst
+        ? '<a class="btn quiet sr-man-l" href="https://skills.sh/' + esc(it[0]) + '" target="_blank" rel="noopener" aria-label="Ouvrir la page de ' + esc(it[1]) + ' sur skills.sh">skills.sh</a>'
+        : SA.addBtn(it[0])) + '</div></li>';
   }
 
   function listing() {
     var r = results(), f = st(), shown = r.slice(0, f.shown);
     return {
       count: r.length,
-      status: SA.nb(r.length) + (r.length > 1 ? ' résultats' : ' résultat') + ' · base du ' + SA.dbDate(),
+      status: SA.nb(r.length) + (r.length > 1 ? ' résultats' : ' résultat') + ' · ' + baseLine().replace(/^Base/, 'base'),
+      /* Vide : le skill peut exister hors de cette liste. Le bouton « Effacer les filtres » est déjà dans la barre d'état. */
       html: shown.length ? shown.map(rowHtml).join('')
-        : '<li class="sr-none"><p class="sub">Aucun skill ne correspond à ces filtres.</p>' +
-          (active(f) ? '<p class="empty-a"><button type="button" class="btn" data-sr-reset>Effacer les filtres</button></p>' : '') + '</li>',
+        : '<li class="sr-none"><p class="sub">Aucun résultat parmi ces ' + SA.nb(db().items.length) + ' skills. Le skill existe peut-être sur skills.sh, qui en recense ' + SA.nb(db().total) + '.</p>' +
+          '<p class="empty-a"><a class="btn" href="https://skills.sh/" target="_blank" rel="noopener">Chercher sur skills.sh</a></p></li>',
       more: r.length > f.shown
     };
   }
@@ -109,8 +117,9 @@
     render: function () {
       var f = st(), d = db(), ready = SA.state.dbReady, L = ready ? listing() : null;
       return '<p class="eye" data-st>Recherche</p>' +
-        SA.h1('Chercher parmi ' + SA.nb(d.total) + ' skills') +
-        (SA.offline() ? '<div class="note note-warn" role="status" data-st><p class="note-t">Hors ligne</p><p class="sub">La base en ligne ne répond pas : vous cherchez dans la copie locale du ' + esc(SA.dbDate()) + '.</p></div>' : '') +
+        SA.h1('Chercher parmi les ' + SA.nb(d.items.length) + ' skills les plus installés') +
+        '<p class="sr-sub sub" data-st>Sur ' + SA.nb(d.total) + ' skills recensés par skills.sh. ' + esc(baseLine()) + '.</p>' +
+        (SA.offline() ? '<div class="note note-warn" role="status" data-st><p class="note-t">Hors ligne</p><p class="sub">Pas de réseau. La recherche continue dans la base déjà chargée.</p></div>' : '') +
         '<div class="sr-qbox" data-st><label class="vh" for="sr-q">Nom, source, technologie ou description</label>' +
           '<input id="sr-q" class="fld sr-q" type="search" placeholder="Nom, source, technologie ou description" autocomplete="off" spellcheck="false" value="' + esc(f.q) + '">' +
           '<span class="kbd sr-qk" aria-hidden="true">/</span></div>' +

@@ -1,9 +1,9 @@
 {
   "name": "skill-advisor",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Skill Advisor: advise, check, install and manage Agent Skills (SKILL.md) for AI coding agents. Prototype.",
+  "description": "Skill Advisor: advise, check, install and manage Agent Skills (SKILL.md) for AI coding agents, from a local application on your own machine.",
   "license": "MIT",
   "homepage": "https://span.observer",
   "repository": {
@@ -11,11 +11,19 @@
     "url": "git+https://github.com/warezfr/skill-advisor.git"
   },
   "engines": {
-    "node": ">=22"
+    "node": ">=22.20.0"
   },
   "scripts": {
     "build": "node prototype/build.mjs",
-    "test": "node prototype/test/smoke.mjs",
-    "scan": "node tools/skill-scan.mjs"
+    "test": "node test/run-all.mjs",
+    "test:e2e": "node test/run-all.mjs --e2e",
+    "test:net": "node test/run-all.mjs --net",
+    "test:smoke": "node prototype/test/smoke.mjs",
+    "scan": "node tools/skill-scan.mjs",
+    "start": "node app/server.mjs"
+  },
+  "dependencies": {
+    "skills": "1.8.1",
+    "tar": "7.5.23"
   }
 }

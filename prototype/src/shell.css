@@ -1009,3 +1009,48 @@ small, .small { font-size: 13px; }
   .rail-nav { overflow-x: auto; scrollbar-width: none; }
   .rail-link { white-space: nowrap; }
 }
+
+/* Démarrage et session expirée : seule la vue s'affiche (nom du produit et message), pas une coquille à moitié construite. */
+.app.is-boot .rail-nav,
+.app.is-boot .rail-steps,
+.app.is-boot .rail-foot,
+.app.is-boot .stage-head,
+.app.is-boot .dossier-pane,
+.app.is-boot .cart-band,
+.app.is-boot .ac-bar { display: none !important; }
+
+/* Mode réel : « Actualiser » et le serveur arrêté. */
+.rail-refresh { gap: 6px; padding: 0 8px; margin-left: -8px; font-size: 13px; color: var(--ink-2); }
+.rail-refresh[aria-busy="true"] .ic { animation: rail-spin 900ms linear infinite; }
+@keyframes rail-spin { to { transform: rotate(360deg); } }
+.rail-pip.is-down { background: var(--bad); border-radius: 1px; }
+
+/* Couleurs forcées (contraste élevé de Windows) : les fonds disparaissent, on dessine avec les couleurs du système. */
+@media (forced-colors: active) {
+  .sw::before { border: 1px solid ButtonText; background: Canvas; }
+  .sw::after { background: ButtonText; }
+  .sw[aria-checked="true"]::before { border-color: Highlight; background: Highlight; forced-color-adjust: none; }
+  .sw[aria-checked="true"]::after { background: HighlightText; forced-color-adjust: none; }
+  .sw:disabled::before { border-color: GrayText; }
+  .sw:disabled::after { background: GrayText; }
+  .cb::before { border: 1px solid ButtonText; }
+  .cb[aria-checked="true"]::before { background: Highlight; border-color: Highlight; forced-color-adjust: none; }
+  .rail-link[aria-current="page"] { background: Highlight; color: HighlightText; border-color: Highlight; forced-color-adjust: none; }
+  .rail-link[aria-current="page"] .rail-ico { color: HighlightText; }
+  .seg > button[aria-pressed="true"] { background: Highlight; color: HighlightText; border-color: Highlight; forced-color-adjust: none; }
+  .rail-step[aria-current="step"] { outline: 2px solid Highlight; }
+  /* Préfixe html : ces règles passent avant celles de views/v2.css, chargé après. */
+  .rail-pip, .bdg.ok::before { forced-color-adjust: none; background: CanvasText; }
+  html .rail-pip.is-down, html .rail-pip.is-off { background: Canvas; border: 2px solid CanvasText; }
+  html .gs-d { forced-color-adjust: none; border: 1.5px solid CanvasText; }
+  html .gs-d-ok, html .gs-d-div, html .gs-d-ko { background: CanvasText; }
+  html .gs-d-no { background: Canvas; }
+  .bar i { forced-color-adjust: none; border: 1px solid CanvasText; }
+}
+
+/* Écran étroit : « Actualiser » en icône seule (le nom reste dans aria-label), pour que la barre du haut tienne. */
+@media (max-width: 760px) {
+  .rail-refresh { width: 44px; padding: 0; margin: 0; justify-content: center; }
+  .rail-refresh > span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .rail-tools { width: auto; gap: 0; }
+}

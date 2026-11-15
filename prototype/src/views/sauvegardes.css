@@ -1,0 +1,90 @@
+/* Skill Advisor · écran Sauvegardes (classes sv-, sous .sv et dans le tiroir .sv-ap),
+   plus le panneau « Sauvegarder » et le résumé de Mes skills (gs-save, gs-bk-a). Jetons seulement. */
+
+.sv .sv-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 24px; }
+.sv .gs-msg { margin: 16px 0 0; }
+.sv .sv-err, .sv .sv-warns { margin: 16px 0 0; }
+.sv .sv-wl { margin: 4px 0 0; padding-left: 18px; font-size: 14px; color: var(--ink-2); }
+.sv .sv-wl li + li { margin-top: 2px; }
+
+.sv .sv-list { margin-top: 24px; container-type: inline-size; }
+.sv .sv-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px 24px;
+  padding: 16px 0;
+}
+.sv .sv-main { display: grid; gap: 4px; min-width: 0; }
+.sv .sv-l1 { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin: 0; }
+.sv .sv-label { font-weight: 500; color: var(--ink); overflow-wrap: anywhere; }
+.sv .sv-meta { display: flex; flex-wrap: wrap; gap: 2px 16px; margin: 0; font-size: 13px; }
+.sv .sv-note { margin: 0; font-size: 14px; color: var(--ink-2); max-width: 64ch; overflow-wrap: anywhere; }
+.sv .sv-items { display: flex; flex-wrap: wrap; gap: 2px 12px; margin: 4px 0 0; padding: 0; list-style: none; font-size: 13px; color: var(--ink-2); }
+.sv .sv-items .mono { overflow-wrap: anywhere; }
+/* Les quatre gestes tiennent sur une ligne ; « Supprimer » ne passe jamais seul dessous. */
+.sv .sv-act { display: flex; flex-wrap: nowrap; justify-content: flex-end; align-items: center; gap: 8px; }
+.sv .sv-act .btn { white-space: nowrap; }
+/* Question (supprimer, restaurer malgré tout) : composant commun .cfm, sous la sauvegarde, sur toute la largeur. */
+.sv .sv-cf { grid-column: 1 / -1; }
+.sv .sv-why { margin-top: 48px; }
+
+/* Tiroir « Appliquer à d'autres agents » : hors de #view, sous .sv-ap. */
+.sv-ap .sv-cks { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.sv-ap .sv-cks > li { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; }
+.sv-ap .ckl .mono { overflow-wrap: anywhere; }
+.sv-ap .sv-force { flex-basis: 100%; margin-left: 32px; font-size: 13px; color: var(--bad); }
+.sv-ap .sv-rd { flex-basis: 100%; margin: -8px 0 4px 32px; }
+.sv-ap .sv-seg { margin-top: 4px; }
+.sv-ap .sv-via { margin: 8px 0 0; padding: 8px 12px; border-left: 2px solid var(--accent); background: var(--accent-soft); font-size: 13px; color: var(--ink); }
+.sv-ap .sv-gh { margin: 8px 0 0; font: 500 13px/20px var(--f-b); color: var(--ink-2); }
+.sv-ap .sv-q { width: 100%; max-width: 320px; margin: 4px 0; }
+.sv-ap .sv-hint { margin: 4px 0 0; font-size: 13px; }
+.sv-ap .sv-ap-err { margin: 16px 0 0; }
+.sv-ap .sv-shared { margin: 8px 0 0; padding: 8px 12px; border-left: 2px solid var(--warn); background: var(--warn-soft); font-size: 13px; color: var(--ink); }
+.sv-ap .sv-warns { margin: 16px 0 0; }
+.sv-ap .sv-wl { margin: 4px 0 0; padding-left: 18px; font-size: 14px; color: var(--ink-2); }
+/* Bilan d'une application : dans le tiroir, puis gardé sur l'écran. */
+.sv .sv-res { margin: 8px 0 0; max-width: 48rem; }
+.sv-ap .sv-res li, .sv .sv-res li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 7rem; align-items: center; gap: 4px 12px; padding: 8px 0; }
+.sv-ap .sv-res .bdg, .sv .sv-res .bdg { justify-self: start; }
+/* Qui voit chaque skill après l'application. */
+.sv .sv-seen, .sv-ap .sv-seen { margin: 4px 0 0; max-width: 48rem; }
+.sv .sv-seen li, .sv-ap .sv-seen li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 4px 12px; padding: 8px 0; }
+.sv-seen-a { color: var(--ink-2); overflow-wrap: break-word; }
+.sv .sv-gh { margin: 16px 0 0; font: 500 13px/20px var(--f-b); color: var(--ink-2); }
+/* Tiroir long : le bouton « Appliquer » reste visible en bas. */
+/* Le bas du tiroir a 48 px de marge intérieure : le pied colle au bord réel et la couvre. */
+.sv-ap .dt-cta { position: sticky; bottom: -48px; z-index: 1; margin-bottom: -48px; padding: 12px 0 60px; border-top: 1px solid var(--line); background: var(--bg); }
+.sv-ap .sv-res-n, .sv .sv-res-n { font-weight: 500; color: var(--ink); overflow-wrap: anywhere; }
+.sv-ap .sv-res-a, .sv .sv-res-a { color: var(--ink-2); }
+.sv-ap .sv-res-t, .sv .sv-res-t { grid-column: 1 / -1; font-size: 13px; overflow-wrap: anywhere; }
+.sv-ap .sv-fail, .sv .sv-fail { color: var(--bad); }
+
+/* Mes skills : nom et note d'une sauvegarde à la demande, résumé des sauvegardes. */
+.gs-save {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 16px;
+  margin-top: 12px;
+  padding: 12px 16px;
+  border-left: 2px solid var(--accent);
+  border-radius: 0 var(--r1) var(--r1) 0;
+  background: var(--bg-2);
+}
+.gs-save .gs-bulk-n { flex-basis: 100%; margin: 0; }
+.gs-save .gs-bulk-n .mono { overflow-wrap: anywhere; }
+.gs-save-f { display: grid; gap: 4px; flex: 1 1 220px; min-width: 0; font-size: 13px; color: var(--ink-2); }
+.gs-save-f .fld { width: 100%; }
+.gs-save-a { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; }
+.gs-bk-a { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 12px 0 0; }
+
+/* Liste étroite : les actions passent sous la sauvegarde. */
+@container (max-width: 720px) {
+  .sv .sv-row { grid-template-columns: minmax(0, 1fr); }
+  .sv .sv-act { flex-wrap: wrap; justify-content: flex-start; }
+}
+@media (max-width: 760px) {
+  .sv-ap .sv-q { max-width: none; }
+}

@@ -15,30 +15,43 @@
     return r.why.length ? 'Correspond à vos réponses : ' + r.why.join(', ') + '.' : 'Bien noté dans la catégorie « ' + r.base + ' ».';
   }
 
-  /* Pré-sélection : les trois premiers sans avertissement élevé, une fois par jeu de réponses,
-     et seulement si la sélection est vide. Une sélection vidée exprès n'est pas remplie de nouveau. */
+  /* Pré-sélection : les trois premiers qui répondent à une réponse précise, sans avertissement élevé, ni liés à une autre option, ni à installer à la main,
+     une fois par jeu de réponses. De nouvelles réponses retirent d'abord les ajouts automatiques restés tels quels ;
+     ensuite, rien n'est ajouté si la sélection n'est pas vide. Une sélection vidée exprès n'est pas remplie de nouveau. */
+  function eligible(r) { return r.why.length > 0 && r.it[7] !== 2 && !(r.off && r.off.length) && !SA.mineRow(r.id) && !SA.reco.manual(r.id); }
   function ensurePreselect(list) {
     var st = SA.state, key = st.goal + ':' + JSON.stringify(st.answers);
     if (st.preselected[key]) return;
     st.preselected[key] = true;
+    if (SA.cart.dropAuto) SA.cart.dropAuto();
     if (SA.cart.count()) return;
-    list.filter(function (r) { return r.it[7] !== 2 && !SA.mineRow(r.id); }).slice(0, 3).forEach(function (r) { SA.cart.add(r.id); });
+    list.filter(eligible).slice(0, 3).forEach(function (r) { (SA.cart.addAuto || SA.cart.add)(r.id); });
+  }
+  /* Nouveau projet ou autre objectif : la présélection de l'ancien part, les choix faits à la main restent. */
+  function resetAuto() {
+    if (SA.cart.dropAuto) SA.cart.dropAuto();
+    SA.state.preselected = {};
   }
 
   function row(r) {
-    var it = r.it, id = r.id, k = SA.det(id), inst = !!SA.mineRow(id), on = !inst && SA.cart.has(id);
+    var it = r.it, id = r.id, k = SA.det(id), inst = !!SA.mineRow(id), man = !inst && SA.reco.manual(id), on = !inst && !man && SA.cart.has(id);
     var why = r.why.length
       ? r.why.map(function (w) { return '<span class="tag rs-chip">' + SA.esc(w) + '</span>'; }).join('')
       : '<span class="rs-base sub">Bien noté dans « ' + SA.esc(r.base) + ' »</span>';
-    return '<li class="rs-row' + (on ? ' is-on' : '') + (inst ? ' rs-inst' : '') + '" data-row data-id="' + SA.esc(id) + '" data-st>' +
-      (inst
-        ? '<button type="button" class="cb rs-cb" role="checkbox" aria-checked="false" disabled aria-label="' + SA.esc(it[1]) + ' : déjà installé">' + SA.icon('check') + '</button>'
-        : '<button type="button" class="cb rs-cb" role="checkbox" aria-checked="' + on + '" data-cart-add="' + SA.esc(id) + '" aria-label="Sélectionner ' + SA.esc(it[1]) + '">' + SA.icon('check') + '</button>') +
+    var cb = inst
+      ? '<button type="button" class="cb rs-cb" role="checkbox" aria-checked="false" disabled aria-label="' + SA.esc(it[1]) + ' : déjà installé">' + SA.icon('check') + '</button>'
+      : man
+        ? '<button type="button" class="cb rs-cb" role="checkbox" aria-checked="false" disabled aria-label="' + SA.esc(it[1]) + ' : installation à la main">' + SA.icon('check') + '</button>'
+        : '<button type="button" class="cb rs-cb" role="checkbox" aria-checked="' + on + '" data-cart-add="' + SA.esc(id) + '" aria-label="Sélectionner ' + SA.esc(it[1]) + '">' + SA.icon('check') + '</button>';
+    return '<li class="rs-row' + (on ? ' is-on' : '') + (inst ? ' rs-inst' : '') + (man ? ' rs-man' : '') + (r.off && r.off.length ? ' rs-off' : '') + '" data-row data-id="' + SA.esc(id) + '" data-st>' +
+      cb +
       '<div class="rs-main">' +
-        '<div class="rs-head"><span class="rs-name mono">' + SA.esc(it[1]) + '</span>' + (inst ? '<span class="bdg ok">Installé</span>' : '') + '</div>' +
+        '<div class="rs-head"><span class="rs-name mono">' + SA.esc(it[1]) + '</span>' + (inst ? '<span class="bdg ok">Installé</span>' : man ? '<span class="bdg no">Installation à la main</span>' : '') + '</div>' +
         '<p class="rs-src mono mut">' + SA.esc(it[2]) + (it[5] ? ' · officielle' : '') + '</p>' +
+        (man ? '<p class="rs-man-t sub">' + SA.esc(man) + ' <a class="lnk" href="https://skills.sh/' + SA.esc(id) + '" target="_blank" rel="noopener">Ouvrir skills.sh</a></p>' : '') +
         (k && k.d ? '<p class="rs-desc sub" lang="en">' + SA.au(k.d) + '</p>' : '') +
         '<p class="rs-why"><span class="rs-why-l">Pourquoi pour vous</span>' + why + '</p>' +
+        (r.off && r.off.length ? '<p class="rs-offt sub">Concerne plutôt : ' + SA.esc(r.off.join(', ')) + '. Il passe donc après les autres.</p>' : '') +
         '<div class="rs-meta"><span class="mono"><span class="num">' + SA.short(it[3]) + '</span> <span class="mut">installations</span></span>' + SA.detail.badge(it[7], id) + '</div>' +
       '</div>' +
       '<div class="rs-score">' +
@@ -53,14 +66,14 @@
     var one = '<li class="rs-row rs-skl" aria-hidden="true"><span class="rs-skl-cb skl"></span><div class="rs-main"><p class="skl rs-skl-a">nom</p><p class="skl rs-skl-b">description</p><p class="skl rs-skl-c">raison</p></div><div class="rs-score"><p class="skl rs-skl-d">00</p></div></li>';
     return '<p class="eye" data-st>Étape 03 · Recommandations</p>' +
       SA.h('Lecture de la base') +
-      '<p class="lede" role="status" data-st>' + SA.nb((SA.search || {}).total || 0) + ' skills recensés. Classement d’après vos réponses…</p>' +
+      '<p class="lede" role="status" data-st>' + SA.nb(Object.keys((SA.search || {}).details || {}).length) + ' skills notés. Classement d’après vos réponses…</p>' +
       '<ul class="ledger rs-list">' + one + one + one + one + '</ul>';
   }
 
   function banner() {
     if (!SA.offline()) return '';
     return '<div class="note note-warn" role="status" data-st><p class="note-t">Hors ligne</p>' +
-      '<p class="sub">La base en ligne ne répond pas. Ces propositions viennent de la copie locale du ' + SA.esc(SA.dbDate()) + '. L’installation demandera le réseau.</p></div>';
+      '<p class="sub">Pas de réseau. Ces propositions viennent de la base déjà chargée : ' + SA.esc(SA.baseLabel()) + '. L’installation demandera le réseau.</p></div>';
   }
 
   function onClick(e) {
@@ -75,7 +88,7 @@
     if (e.target.closest('#rs-more')) { SA.state.recoShown = shown() + PAGE; SA.repaint(); return; }
     /* The whole row is the toggle target; buttons and links inside keep their own action. */
     var r = e.target.closest('.rs-row');
-    if (r && !r.classList.contains('rs-inst') && !e.target.closest('button, a')) {
+    if (r && !r.classList.contains('rs-inst') && !r.classList.contains('rs-man') && !e.target.closest('button, a')) {
       var sel = window.getSelection && window.getSelection();
       if (sel && String(sel).length) return;
       SA.cart.toggle(r.getAttribute('data-id'));
@@ -84,6 +97,7 @@
   }
 
   SA.views.resultats = {
+    resetAuto: resetAuto,
     render: function () {
       var st = SA.state;
       if (!st.goal || !SA.answered()) {
@@ -99,7 +113,7 @@
       var rest = list.length - n;
       return '<p class="eye" data-st>Étape 03 · Recommandations</p>' +
         SA.h(SA.pl(n, 'skill', 'skills') + ' pour votre projet') +
-        '<p class="lede" data-st>' + SA.nb(list.length) + ' skills notés correspondent. Ils sont classés d’après vos réponses, puis par note. Ouvrez un skill pour lire son fichier avant de l’installer.</p>' +
+        '<p class="lede" data-st>' + SA.nb(list.length) + ' skills notés correspondent. Ils sont classés d’après vos réponses, puis par note. Ouvrez un skill pour lire le détail de sa note et de ses contrôles.</p>' +
         banner() +
         '<ul class="ledger rs-list">' + list.slice(0, n).map(row).join('') + '</ul>' +
         '<p class="rs-foot" data-st>' +

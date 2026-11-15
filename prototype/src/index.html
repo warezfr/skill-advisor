@@ -1,4 +1,5 @@
-<div class="app" id="app">
+<!-- is-boot : coquille masquée tant que l'interface n'a pas démarré (core.js retire la classe). -->
+<div class="app is-boot" id="app">
   <aside class="rail" id="rail" aria-label="Navigation principale">
     <div class="rail-brand">
       <!-- Logo : le nom, souligné par la barre de note du produit. Ses quatre segments ont les poids réels de la note : 40, 25, 15, 20. -->
@@ -25,6 +26,10 @@
         <span class="rail-ico"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4" y="4.5" width="16" height="6" rx="1.5"/><rect x="4" y="13.5" width="16" height="6" rx="1.5"/></svg></span>
         <span>Mes skills</span>
       </button>
+      <button type="button" class="rail-link" data-route="sauvegardes">
+        <span class="rail-ico"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4" y="5" width="16" height="4.5" rx="1.5"/><path d="M5.5 9.5v8A1.5 1.5 0 0 0 7 19h10a1.5 1.5 0 0 0 1.5-1.5v-8M10 13h4"/></svg></span>
+        <span>Sauvegardes</span>
+      </button>
       <button type="button" class="rail-link" data-route="agents">
         <span class="rail-ico"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="4" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="4" width="6.5" height="6.5" rx="1.5"/><rect x="4" y="13.5" width="6.5" height="6.5" rx="1.5"/><rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.5"/></svg></span>
         <span>Agents</span>
@@ -39,10 +44,15 @@
     <div class="rail-foot">
       <div class="rail-status">
         <p class="rail-local"><span class="rail-pipbox" aria-hidden="true"><i class="rail-pip"></i></span><span class="mono rail-net">En local · 127.0.0.1</span></p>
-        <p class="rail-sample">Base réelle · machine d’exemple</p>
+        <p class="rail-sample"></p>
       </div>
+      <!-- Hors de .rail-status, masqué sur écran étroit : l'annonce d'« Actualiser » reste lue partout. -->
+      <p class="vh" id="rail-live" role="status"></p>
       <div class="rail-tools">
-        <button type="button" class="btn quiet rail-pv" id="pv-btn" aria-haspopup="dialog" aria-label="Aperçu du prototype : voir chaque état"></button>
+        <!-- Mode réel seulement : relit l'état de la machine. -->
+        <button type="button" class="btn quiet rail-refresh" id="refresh-btn" aria-label="Actualiser l’état de la machine" title="Actualiser" hidden><span>Actualiser</span></button>
+        <!-- Démonstration seulement : core.js l'affiche hors mode réel. -->
+        <button type="button" class="btn quiet rail-pv" id="pv-btn" aria-haspopup="dialog" aria-label="Aperçu de la démonstration : voir chaque état" hidden></button>
         <button type="button" class="btn quiet rail-theme" id="theme-btn" aria-label="Passer en thème sombre"></button>
       </div>
     </div>
