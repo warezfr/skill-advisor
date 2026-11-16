@@ -10,7 +10,7 @@ import { fileURLToPath } from 'node:url';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const DIST_TEST = path.join('app', 'test', 'dist.test.mjs');
 // Suites d'interface : scripts autonomes, dans cet ordre.
-const UI = ['smoke', 'live', 'agents', 'backups-ui', 'conseil', 'shell'].map((n) => path.join('prototype', 'test', n + '.mjs'));
+const UI = ['smoke', 'live', 'agents', 'mcp-ui', 'plugins-ui', 'backups-ui', 'conseil', 'shell'].map((n) => path.join('prototype', 'test', n + '.mjs'));
 
 // Fichiers *.test.mjs d'un dossier, triés : chemins explicites, valables sous Node 22 comme 26.
 function testFiles(dir, pattern = /\.test\.mjs$/) {

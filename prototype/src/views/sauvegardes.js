@@ -160,12 +160,32 @@
     return (red.length ? red : inB).filter(function (n, k, l) { return l.indexOf(n) === k; });
   }
   var ASK = {};
+  /* Sauvegarde de serveurs MCP (kind: "mcp") : mêmes gestes, routes /api/mcp/*, pas de contrôle de skill. */
+  function isMcp(b) { return !!b && b.kind === 'mcp'; }
+  function unit(b, n) { return isMcp(b) ? SA.pl(n, 'serveur MCP', 'serveurs MCP') : SA.pl(n, 'skill', 'skills'); }
+  function varsOf(b) {
+    var out = [];
+    (b.items || []).forEach(function (i) { if (i.secrets === 'vars') (i.vars || []).forEach(function (v) { if (out.indexOf(v) < 0) out.push(v); }); });
+    return out;
+  }
+  function count(res, k) { return Array.isArray(res && res[k]) ? res[k].length : 0; }
   function restore(id, force) {
     var i = indexOf(id), b = find(id);
     if (i < 0) return Promise.resolve(false);
     if (st().busy) return Promise.resolve(false);
     var said = force ? st().rgNames : null;
     st().del = null; st().rg = null; st().rgNames = null;
+    if (isMcp(b)) {
+      if (!live()) return say(b.label + ' : ' + unit(b, b.items.length) + ' remis dans les réglages de leurs agents (démonstration).');
+      return run('Restauration en cours…', function () { return SA.live.call('POST', '/api/mcp/restore', { id: b.id }); }, function (res) {
+        var s = st(), f = Array.isArray(res.failed) ? res.failed : [];
+        s.warns = (Array.isArray(res.warnings) ? res.warnings : []).filter(function (w) { return typeof w === 'string' && w; });
+        s.wt = 'À relire après la restauration';
+        s.msg = b.label + ' : ' + SA.pl(count(res, 'applied'), 'serveur remis', 'serveurs remis') + ', ' + SA.pl(count(res, 'skipped'), 'passé', 'passés') +
+          ' (déjà présent ou projet fermé), ' + SA.pl(f.length, 'échec', 'échecs') + '.' +
+          (f.length ? ' ' + f.map(function (x) { return (x.agent ? agentName(x.agent) + ' : ' : '') + (x.message || 'échec'); }).join(' ; ') + '.' : '');
+      });
+    }
     if (live()) {
       var body = { id: b.id };
       if (force) body.force = forceNames(b, said);
@@ -236,7 +256,8 @@
     }, function (res) {
       var s = st(), b = res.backup ? SA.normBackup(res.backup) : null;
       s.warns = (Array.isArray(res.warnings) ? res.warnings : []).map(String);
-      s.msg = 'Sauvegarde importée' + (b ? ' : ' + b.label + ', ' + SA.pl(b.items.length, 'skill', 'skills') : '') + '. Skill Advisor a contrôlé de nouveau chaque skill.';
+      s.msg = 'Sauvegarde importée' + (b ? ' : ' + b.label + ', ' + unit(b, b.items.length) : '') + '.' +
+        (isMcp(b) ? ' Relisez les commandes lancées avant de l’appliquer.' : ' Skill Advisor a contrôlé de nouveau chaque skill.');
     });
   }
 
@@ -277,7 +298,8 @@
     targets().forEach(function (k) { if (known[k] && (known[k].detected || known[k].custom)) ags[k] = true; });
     /* Plusieurs lecteurs du dossier partagé parmi les cibles : une seule cible, le dossier. */
     var uni = Object.keys(ags).filter(function (k) { return known[k].universal && !known[k].custom; });
-    uni.slice(1).forEach(function (k) { delete ags[k]; });
+    if (!isMcp(b)) uni.slice(1).forEach(function (k) { delete ags[k]; });
+    else Object.keys(ags).forEach(function (k) { if (known[k].custom) delete ags[k]; });
     st().ap = { id: b.id, names: names, agents: ags, conflict: 'skip', force: bag(), q: '', result: null, warns: [], err: '', busy: false };
     st().del = null; st().rg = null;
     bindDoc();
@@ -340,7 +362,8 @@
   }
   function othersHTML() {
     var a = ap(), q = a.q.trim().toLowerCase();
-    var others = agentsAll().filter(function (x) { return !x.custom && !x.detected && !x.universal; });
+    var b = find(a.id), mcp = isMcp(b);
+    var others = agentsAll().filter(function (x) { return !x.custom && !x.detected && (mcp || !x.universal); });
     var shown = others.filter(function (x) {
       return a.agents[x.id] === true || (q && (x.name.toLowerCase().indexOf(q) > -1 || x.id.indexOf(q) > -1));
     });
@@ -348,7 +371,33 @@
       : !q ? SA.pl(others.length, 'autre agent connu', 'autres agents connus') + '. Cherchez-en un par son nom.' : '';
     return (shown.length ? '<ul class="sv-cks">' + shown.map(agentBox).join('') + '</ul>' : '') + (hint ? '<p class="mut sv-hint">' + hint + '</p>' : '');
   }
+  function formMcpHTML(b) {
+    var a = ap(), all = agentsAll(), vars = varsOf(b);
+    var det = all.filter(function (x) { return x.detected && !x.custom; });
+    return '<section class="dt-sec"><h3 class="h2">Serveurs à appliquer</h3><ul class="sv-cks">' + b.items.map(function (i) {
+        return '<li>' + box('data-sv-ap-item', i.name, a.names[i.name] === true, '<span class="mono">' + esc(i.name) + '</span>') +
+          (i.scope === 'project' ? '<span class="bdg no">Projet</span>' : '') + '</li>';
+      }).join('') + '</ul>' +
+      (vars.length ? '<p class="mut sv-hint">Valeurs secrètes remplacées par des variables : ' + esc(vars.join(', ')) + '. Chaque agent les reçoit dans sa propre forme.</p>' : '') +
+      '</section>' +
+      '<section class="dt-sec"><h3 class="h2">Agents</h3>' +
+        (det.length ? '<p class="sv-gh">Détectés sur cette machine</p><ul class="sv-cks">' + det.map(agentBox).join('') + '</ul>' : '<p class="mut sv-hint">Aucun agent détecté.</p>') +
+        '<p class="sv-gh">Autres agents</p>' +
+        '<label class="vh" for="sv-ap-q">Chercher un autre agent</label>' +
+        '<input id="sv-ap-q" class="fld sv-q" type="search" autocomplete="off" spellcheck="false" placeholder="Chercher un agent" value="' + esc(a.q) + '">' +
+        '<div id="sv-ap-others">' + othersHTML() + '</div>' +
+      '</section>' +
+      '<section class="dt-sec"><h3 class="h2" id="sv-ap-cf-t">Si le serveur existe déjà</h3>' +
+        '<div class="seg sv-seg" role="group" aria-labelledby="sv-ap-cf-t">' +
+          '<button type="button" data-sv-ap-conflict="skip" aria-pressed="' + (a.conflict === 'skip') + '">Passer</button>' +
+          '<button type="button" data-sv-ap-conflict="replace" aria-pressed="' + (a.conflict === 'replace') + '">Remplacer</button></div>' +
+        '<p class="mut sv-hint">Passer : le serveur présent reste. Remplacer : Skill Advisor sauvegarde d’abord le serveur présent.</p></section>' +
+      (a.err ? '<div class="note note-bad sv-ap-err" role="alert" id="sv-ap-err" tabindex="-1"><p class="sub">' + esc(a.err) + '</p></div>' : '') +
+      '<p class="dt-cta"><button type="button" class="btn primary" data-sv-ap-go' + (a.busy ? ' disabled' : '') + '>' + (a.busy ? 'Application en cours…' : 'Appliquer') + '</button>' +
+      '<button type="button" class="btn" data-sv-ap-cancel' + (a.busy ? ' disabled' : '') + '>Annuler</button></p>';
+  }
   function formHTML(b) {
+    if (isMcp(b)) return formMcpHTML(b);
     var a = ap(), all = agentsAll();
     var det = all.filter(function (x) { return x.detected && !x.custom && !x.universal; }), cus = all.filter(function (x) { return x.custom; });
     return '<section class="dt-sec"><h3 class="h2">Skills à appliquer</h3><ul class="sv-cks">' + b.items.map(function (i) {
@@ -380,17 +429,22 @@
   }
   /* Lignes du bilan, dans l'ordre des skills : gardées aussi sur l'écran après la fermeture du tiroir. */
   var MARK = { ok: '<span class="bdg ok">Appliqué</span>', no: '<span class="bdg no">Passé</span>', bad: '<span class="bdg bad">Échec</span>' };
-  function resRows(r, order) {
+  /* plain : bilan de serveurs MCP, les agents sont nommés sans « (dossier partagé) » et la raison du serveur est gardée. */
+  function resRows(r, order, plain) {
     var rows = [];
-    r.applied.forEach(function (x) { rows.push({ name: x.name, agent: x.agent, k: 'ok', t: '' }); });
-    r.skipped.forEach(function (x) { rows.push({ name: x.name, agent: x.agent, k: 'no', t: SA.own(REASON, x.reason) ? REASON[x.reason] : 'laissé de côté' }); });
-    r.failed.forEach(function (x) { rows.push({ name: x.name, agent: x.agent, k: 'bad', t: typeof x.message === 'string' && x.message ? x.message : 'échec' }); });
+    r.applied.forEach(function (x) { rows.push({ name: x.name, agent: x.agent, k: 'ok', t: '', plain: !!plain }); });
+    r.skipped.forEach(function (x) {
+      var t = SA.own(REASON, x.reason) ? REASON[x.reason] : plain && typeof x.reason === 'string' && x.reason ? x.reason : 'laissé de côté';
+      rows.push({ name: x.name, agent: x.agent, k: 'no', t: t, plain: !!plain });
+    });
+    r.failed.forEach(function (x) { rows.push({ name: x.name, agent: x.agent, k: 'bad', t: typeof x.message === 'string' && x.message ? x.message : 'échec', plain: !!plain }); });
     rows.sort(function (p, q) { return order.indexOf(p.name) - order.indexOf(q.name); });
     return rows;
   }
   function resList(rows) {
     return '<ul class="ledger sv-res">' + rows.map(function (p) {
-      return '<li><span class="mono sv-res-n">' + esc(p.name) + '</span><span class="sv-res-a">' + (p.agent === null ? '' : esc(agentName(p.agent))) + '</span>' + MARK[p.k] +
+      var who = p.agent === null ? '' : p.plain ? (agentsAll().filter(function (x) { return x.id === p.agent; })[0] || { name: p.agent }).name : agentName(p.agent);
+      return '<li><span class="mono sv-res-n">' + esc(p.name) + '</span><span class="sv-res-a">' + esc(who) + '</span>' + MARK[p.k] +
         (p.t ? '<span class="sv-res-t' + (p.k === 'bad' ? ' sv-fail' : ' mut') + '">' + esc(p.t) + '</span>' : '') + '</li>';
     }).join('') + '</ul>';
   }
@@ -425,7 +479,7 @@
       l.map(function (w) { return '<li>' + esc(w) + '</li>'; }).join('') + '</ul></div>';
   }
   function resultHTML() {
-    var a = ap(), r = a.result, rows = resRows(r, Object.keys(a.names));
+    var a = ap(), r = a.result, rows = resRows(r, Object.keys(a.names), isMcp(find(a.id)));
     var nb = r.backups.length;
     return '<section class="dt-sec"><h3 class="h2" id="sv-ap-res" tabindex="-1">Résultat</h3>' +
       '<p class="sub">' + SA.pl(r.applied.length, 'application faite', 'applications faites') + ', ' + SA.pl(r.skipped.length, 'passée', 'passées') + ', ' + SA.pl(r.failed.length, 'échec', 'échecs') + '.</p>' +
@@ -441,7 +495,8 @@
     var meta = [when(b.at), SA.ORIGIN[b.origin]].filter(Boolean).join(' · ');
     return '<div class="dt sv-ap"><p class="eye">Sauvegarde</p><p class="dt-name">' + esc(b.label) + '</p>' +
       (meta ? '<p class="dt-src mut">' + esc(meta) + '</p>' : '') +
-      '<p class="sub">Copie les skills choisis dans le dossier de chaque agent choisi. Les autres skills de ces agents ne bougent pas.</p>' +
+      '<p class="sub">' + (isMcp(b) ? 'Écrit les serveurs choisis dans les réglages de chaque agent choisi, dans la forme propre à cet agent. Ses autres serveurs ne bougent pas.'
+        : 'Copie les skills choisis dans le dossier de chaque agent choisi. Les autres skills de ces agents ne bougent pas.') + '</p>' +
       (a.result ? resultHTML() : formHTML(b)) + '</div>';
   }
   function paintDrawer(focusId) {
@@ -489,10 +544,12 @@
     var rouge = bag();
     b.items.forEach(function (i) { if (i.verdict === 'rouge') rouge[i.name] = true; });
     var force = names.filter(function (n) { return rouge[n] === true && a.force[n] === true; });
-    a.err = !names.length ? 'Choisissez au moins un skill.'
+    var mcp = isMcp(b);
+    if (mcp) force = [];
+    a.err = !names.length ? (mcp ? 'Choisissez au moins un serveur.' : 'Choisissez au moins un skill.')
       : !agents.length ? 'Choisissez au moins un agent.'
       : !agents.every(function (k) { return AGENT.test(k) && all.indexOf(k) > -1; }) ? 'Un agent choisi n’est plus connu. Rechargez la page.'
-      : live() && !names.every(function (n) { return NAME.test(n); }) ? 'Cette sauvegarde contient un nom de skill non valide : Skill Advisor ne peut pas l’appliquer.'
+      : live() && !mcp && !names.every(function (n) { return NAME.test(n); }) ? 'Cette sauvegarde contient un nom de skill non valide : Skill Advisor ne peut pas l’appliquer.'
       : '';
     if (a.err) { paintDrawer('sv-ap-err'); return Promise.resolve(false); }
     var conflict = a.conflict === 'replace' ? 'replace' : 'skip';
@@ -509,17 +566,22 @@
       a.result = r;
       a.warns = warns;
       var put = names.filter(function (n) { return r.applied.some(function (x) { return x.name === n; }); });
-      a.seen = seenRows(put, agents);
+      a.seen = mcp ? [] : seenRows(put, agents);
       s.busy = ''; s.err = '';
       /* Le bilan par skill reste sur l'écran une fois le tiroir fermé, échecs compris. */
       s.warns = warns.slice(); s.wt = 'À relire après l’application';
-      s.res = resRows(r, Object.keys(a.names));
+      s.res = resRows(r, Object.keys(a.names), mcp);
       s.seen = a.seen;
       s.msg = b.label + ' : ' + SA.pl(r.applied.length, 'application faite', 'applications faites') + ', ' + SA.pl(r.skipped.length, 'passée', 'passées') + ', ' + SA.pl(r.failed.length, 'échec', 'échecs') + '.';
       if (SA.sync) SA.sync();
       repaint();
       paintDrawer('sv-ap-res');
       return true;
+    }
+    if (!live() && mcp) {
+      var demo = { applied: [], skipped: [], failed: [], backups: [] };
+      names.forEach(function (n) { agents.forEach(function (ag) { demo.applied.push({ name: n, agent: ag }); }); });
+      return Promise.resolve(finish(demo));
     }
     if (!live()) return Promise.resolve(finish(applyDemo(b, names, agents, conflict, force)));
     var body = { id: b.id, names: names, agents: agents, conflict: conflict };
@@ -530,7 +592,7 @@
     s.msg = ''; s.err = ''; s.warns = []; s.wt = ''; s.res = null; s.seen = null; s.del = null; s.rg = null;
     repaint();
     paintDrawer();
-    return Promise.resolve().then(function () { return SA.live.call('POST', '/api/backups/apply', body); }).then(function (res) {
+    return Promise.resolve().then(function () { return SA.live.call('POST', mcp ? '/api/mcp/apply' : '/api/backups/apply', body); }).then(function (res) {
       return finish(res || {});
     }).catch(function (e) {
       s.busy = '';
@@ -626,7 +688,7 @@
     var s = st(), id = esc(b.id), dis = s.busy ? ' disabled' : '';
     var red = b.items.filter(function (i) { return i.verdict === 'rouge'; }).length;
     var orange = b.items.filter(function (i) { return i.verdict === 'orange'; }).length;
-    var meta = [when(b.at), SA.pl(b.items.length, 'skill', 'skills'), b.size ? SA.size(b.size) : ''].filter(Boolean);
+    var meta = [when(b.at), unit(b, b.items.length), b.size ? SA.size(b.size) : ''].filter(Boolean);
     var ask = s.del === b.id
       ? '<div class="cfm sv-cf" role="group" aria-label="Supprimer ' + esc(b.label) + '"><p class="cfm-t">Supprimer cette sauvegarde ? Vous ne pourrez pas la récupérer.</p>' +
         '<p class="cfm-a"><button type="button" class="btn danger" data-sv-del-ok data-fk="del-ok"' + dis + '>Supprimer</button>' +
@@ -649,7 +711,8 @@
           (orange ? '<span class="bdg tr">' + SA.pl(orange, 'skill à regarder', 'skills à regarder') + '</span>' : '') + '</p>' +
         '<p class="sv-meta mut">' + meta.map(function (m) { return '<span>' + esc(m) + '</span>'; }).join('') + '</p>' +
         (b.note ? '<p class="sv-note">' + esc(b.note) + '</p>' : '') +
-        '<ul class="sv-items" aria-label="Skills de la sauvegarde">' + b.items.map(function (i) {
+        (isMcp(b) && varsOf(b).length ? '<p class="sv-note mut">Variables à définir après une restauration : <span class="mono">' + esc(varsOf(b).join(', ')) + '</span></p>' : '') +
+        '<ul class="sv-items" aria-label="' + (isMcp(b) ? 'Serveurs MCP de la sauvegarde' : 'Skills de la sauvegarde') + '">' + b.items.map(function (i) {
           return '<li><span class="mono">' + esc(i.name) + '</span>' + (i.verdict === 'rouge' || i.verdict === 'orange' ? '<span class="vh"> : ' + (i.verdict === 'rouge' ? 'motif à risque' : 'à regarder') + '</span>' : '') + '</li>';
         }).join('') + '</ul>' +
       '</div>' +
@@ -663,7 +726,7 @@
     return '<div class="sv">' +
       '<p class="eye" data-st>Sauvegardes</p>' +
       SA.h1(n ? SA.pl(n, 'sauvegarde', 'sauvegardes') : 'Aucune sauvegarde') +
-      '<p class="lede" data-st>Une sauvegarde garde une copie de skills tels qu’ils étaient. Restaurez-la à sa place, appliquez-la à d’autres agents, ou exportez-la vers une autre machine.</p>' +
+      '<p class="lede" data-st>Une sauvegarde garde une copie de skills ou de serveurs MCP tels qu’ils étaient. Restaurez-la à sa place, appliquez-la à d’autres agents, ou exportez-la vers une autre machine.</p>' +
       '<div class="sv-bar" data-st>' +
         '<button type="button" class="btn" data-sv-import data-fk="import"' + (s.busy ? ' disabled' : '') + '>Importer une sauvegarde</button>' +
         '<input type="file" id="sv-file" class="vh" accept=".tar.gz,.tgz,application/gzip" tabindex="-1" aria-hidden="true">' +
@@ -680,6 +743,7 @@
         '<p class="sub"><strong>Restaurer</strong> remet chaque skill dans les dossiers d’où il vient. Si un skill du même nom y est déjà, Skill Advisor n’écrit rien.</p>' +
         '<p class="sub"><strong>Appliquer</strong> copie les skills choisis dans d’autres agents. Pour un skill présent mais différent, vous choisissez : le passer, ou le remplacer après une sauvegarde de la version présente.</p>' +
         '<p class="sub"><strong>Exporter</strong> crée une archive .tar.gz. <strong>Importer</strong> la lit sur une autre machine et contrôle de nouveau chaque skill.</p>' +
+        '<p class="sub"><strong>Serveurs MCP</strong> : sans la case « Inclure les valeurs secrètes », les clés et jetons sont remplacés par des variables (${NOM}). Définissez-les dans votre environnement après une restauration.</p>' +
       '</section>' +
     '</div>';
   }

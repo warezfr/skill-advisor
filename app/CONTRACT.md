@@ -209,3 +209,86 @@ These rules replace any earlier text they contradict. Review findings are in `do
 - Restored and applied skills get ordinary modes (folders 0755, file modes from the backup); only `~/.skill-advisor` stays private.
 - `install`, `update` and `apply` may return `warnings: [text]`.
 - `node app/server.mjs --version` and `--help` print and exit 0 without writing anything.
+
+## MCP servers, step 2a: read-only inventory (16/11/2026)
+
+- `app/lib/mcp.mjs` reads the MCP settings of 25 agents through `add-mcp@2.6.1` (exact version), in a child process (`app/lib/mcp-worker.mjs`, `session({ worker: 'mcp' })`): add-mcp reads `homedir()` when it is imported. `childEnv` passes `CLINE_DIR`, `COPILOT_HOME`, `JUNIE_HOME`, `KIMI_CODE_HOME` and `PI_CODING_AGENT_DIR` for the real home only.
+- `mcpPaths({ home, cwd })` → `[{ id, name, format: "json"|"yaml"|"yaml-1.1"|"toml", key, localKey, transports, global, local|null }]` (add-mcp ids).
+- `mcpState({ home, project })` → `Mcp`. Nothing is written. Every value that may be secret is masked in the child, before it leaves it (`app/lib/mcp-mask.mjs`): `env` and `headers` values, the value after a sensitive flag (`--api-key x`), `--token=x` and `KEY=x` forms, recognisable tokens (`ghp_…`, `sk-…`, JWT…), credentials and sensitive query parameters of addresses (in `url`, in arguments and in `identity`). References to variables (`${NAME}`, `${env:NAME}`, `{env:NAME}`, `$NAME`, `%NAME%`, `${{ secrets.X }}`) are kept.
+- add-mcp reads a broken JSON file without error (tolerant parser). Each file is therefore also parsed strictly (`jsonc-parser`, `@iarna/toml`, `yaml`, exact versions): a broken file gets `error: "Fichier de réglages mal formé : Skill Advisor le lit sans y écrire."`, and no write will ever go to it.
+- Ids: add-mcp ids are mapped to the ids of the `skills` package (`MCP_TO_AGENT`: `cline-cli`→`cline`, `factory-droid`→`droid`, `github-copilot-cli` and `vscode`→`github-copilot`, `grok-build`→`grok`, `hermes`→`hermes-agent`, `kilo-code`→`kilo`, `kimi-code`→`kimi-code-cli`). `claude-desktop`, `mastracode` and `mcporter` have no skills agent (`mcpOnly: true`).
+- `State.mcp` = `Mcp`; on failure `{ error, detected: [], agents: [], servers: [] }` (the skills state is still returned). `Agent.mcp` = number of MCP servers of the agent, all its settings files together.
+
+```
+Mcp       = { detected: [agentId], agents: McpAgent[], servers: McpServer[] }
+McpAgent  = { id, mcpId, name, scope: "global"|"project", path, error: string|null, mcpOnly: bool, count }
+McpServer = { id: name | "project:"+name, name, scope, identity, kind: "stdio"|"http"|"sse", command|null, args: [text], url|null,
+              env: { NAME: masked }, headers: { Name: masked }, secrets: number, on: bool, differs: bool,
+              ag: { [agentId]: [{ mcpId, path, on, same }] } }
+```
+
+- `McpServer.on`: false when every entry has `disabled: true` or `enabled: false`. `differs`: the entries of the same name do not have the same command, arguments, address and variable names. `same`: this entry matches the first one read.
+- Agents screen: each agent row says how many MCP servers it has ("3 skills · 2 serveurs MCP"); its Actions menu lists their names, read-only. The demo machine has four fictitious servers.
+
+## MCP servers, step 2b: manage, back up, apply (16/11/2026)
+
+- Writes (`app/lib/mcp-write.mjs`): one server entry is added or removed, nothing else. JSON and JSONC are edited with `jsonc-parser` (comments kept), YAML as a document (comments kept), TOML as text (the `[key.name]` table and its sub-tables; comments kept). The result is parsed again and must equal the old object with only that entry changed (an emptied parent table may disappear); otherwise the whole file is rewritten from the expected object (`lossy: true`, reported), and if that check fails too nothing is written (`WRITE_FAILED`). A strictly unreadable file is never written (`BROKEN_CONFIG`). Before writing: a copy of the old file in `~/.skill-advisor/mcp-copies/` (0600, the 40 latest kept); the new text goes to a temporary file; the file is read again and the write is refused with `CONFLICT` if it changed since it was read (an open agent rewrote it); then rename. A link (dotfiles) is followed to its target and stays a link.
+- Disable (`mcpDisable`): the raw entry is set aside in `~/.skill-advisor/disabled-mcp/<mcpId>/<global|p-<hash of project>>/<hash of name>.json` (0600, it may hold secrets), then removed from the agent file. Enable puts it back unchanged (`EXISTS` if a server of that name was added meanwhile). An entry that the agent itself marks off (`disabled: true`, `enabled: false`) is shown off and is not set aside again. Remove (`removeMcp`): file entries and set-aside copies; with `backup`, the backup is written before any change.
+- Install into an agent (`mcpUpsert`, used by apply): add-mcp only builds the agent's native entry (`transformConfig`, in the child process: OpenCode key `mcp` or `mcp.servers`, Claude Code project refused when servers live in `.github/mcp.json`, fx files 0600); Skill Advisor writes it as above (add-mcp itself rewrites whole TOML and YAML files and drops comments). Codex: `NAME = "${NAME}"` in `env` becomes `env_vars = ["NAME"]`. New servers are never written to the old Cline VS Code file nor to Windsurf (`INSTALL_BLOCKED`: Cline writes go to `~/.cline`; Windsurf moved to Devin Desktop, path not verified yet).
+- MCP backups: `~/.skill-advisor/backups/<id>/` with `meta.json` (`kind: "mcp"`) and `servers.json` (0600, the raw entries per agent). By default every secret value is replaced by a variable reference in the syntax of its agent (`${NAME}` Claude Code, Copilot CLI, Gemini CLI, Kiro; `${env:NAME}` Cursor, VS Code, Windsurf; `{env:NAME}` OpenCode, Kilo; `${NAME}` with a warning elsewhere); `secrets: true` keeps them. `listBackups` returns both kinds; `restoreBackup`, `applyBackup`, `exportBackup` and `importBackup` dispatch on `kind`. Restore puts each entry back into its agent (paths from add-mcp, never from the backup), off entries come back off; an existing entry is skipped, or replaced after a backup of the present one with `conflict: "replace"`. Apply converts each entry for the chosen agents (`toCanonical`, then `mcpUpsert`). Import checks `servers.json` (4 MB at most, 200 servers, valid names and agent ids) and warns with the command each server runs.
+
+```
+MCP Backup = Backup + { kind: "mcp", items: [{ name, scope, src: "", agents, verdict: null, secrets: "vars"|"kept", vars: [name] }] }
+```
+
+| Method and path | Body | Response |
+|---|---|---|
+| `POST /api/mcp/disable` | `{ name, scope?: "global"\|"project", agents?: [id] }` | `{ done: [{ agent, mcpId, lossy }], failed: [{ agent, mcpId, code, message }], state }` |
+| `POST /api/mcp/enable` | same | same |
+| `POST /api/mcp/remove` | `{ name, scope?, agents?, backup: bool, secrets: bool }` | `{ removed, failed, backups: [Backup], state }` |
+| `POST /api/mcp/backup` | `{ servers: [{ name, scope? }] (1 to 200), label?, note?, secrets: bool }` | `{ backup, failed: [{ name, scope, message }], state }` |
+| `POST /api/mcp/apply` | `{ id, names?: [name], agents: [id], conflict: "skip"\|"replace" }` | `{ applied: [{ name, agent }], skipped: [{ name, agent, reason }], failed: [{ name, agent, message }], backups, warnings, state }` |
+| `POST /api/mcp/restore` | `{ id, conflict?: "skip"\|"replace" }` | same as apply |
+
+- Server names: 1 to 200 characters without control characters. New error codes: `BROKEN_CONFIG` 409, `CONFLICT` 409, `UNSUPPORTED` 400, `WRITE_FAILED` 500; their French message goes to the page.
+- Interface: new screen « Serveurs MCP » (route `mcp`, between « Mes skills » and « Sauvegardes »): search, filters (Tous, Actifs, Désactivés, Réglages différents), state per agent, masked secrets count; actions Désactiver, Réactiver, Sauvegarder, Retirer (« Garder une sauvegarde » ticked, « Inclure les valeurs secrètes » not ticked), selection and « Sauvegarder la sélection ». The Sauvegardes screen shows MCP backups ("N serveurs MCP", variables to define) and restores and applies them through `/api/mcp/*`.
+
+## MCP catalogue and install, step 2c (16/11/2026)
+
+- `tools/mcp-catalog.mjs` builds `catalog/mcp.json` from public sources, without an account: the official MCP registry (`registry.modelcontextprotocol.io/v0.1`, latest active versions; deprecated entries, Smithery and run.tools remotes, `http://` and templated addresses dropped), GitHub GraphQL (stars, last push, owner, licence, archived; token `GITHUB_TOKEN` or `GH_TOKEN`; pauses between batches and a one-minute wait after a 403), npm downloads of the last month, the Docker catalogue (`docker/mcp-registry`), OSV (known vulnerabilities and malicious versions) and npm provenance. Cache in `--work` (default `.cache/mcp-catalog`, ignored by git). It also writes `prototype/src/mcp-catalog-data.js` (the 60 best, `SA.mcpCatalog`, for the demo and the first display).
+- Install of a catalogue entry: npm → `npx -y <pkg>@<version>`, PyPI → `uvx <pkg>@<version>`, Docker → `docker run -i --rm [-e NAME]… <image>:<version>`, remote → `{ type: http|sse, url, headers }`. Always an exact version. Candidates: 50 GitHub stars, 2 000 npm downloads a month, the Docker catalogue, or a verified domain namespace. Categories: the 16 project types, read in the short name, title and description (not in the `io.github.*` namespace, not in the words "Model Context Protocol" or "AI agents").
+- Score out of 100: popularity 40 (percentile of stars or downloads; Docker catalogue at least 60 %), source 25 (domain namespace 10, GitHub namespace matching the repository owner 5, Docker catalogue 7, organisation 4, licence 4), freshness 15 (90, 180, 365 days), security 20 (description checked with the skill rules: "Motif à risque" 0, "À regarder" -8; known vulnerability -15; npm without provenance -3; remote outside a verified domain -4).
+
+```
+McpCatalog = { generatedAt, kind: "mcp", weights, sources, counts: { registry, installable, candidates, servers, github }, categories: [{ id, count }],
+               servers: [{ id, title, description, version, repo, website, install, cats, docker, stars, downloads, license, pushedAt, org, provenance,
+                           vulns: [id], verdict, findings: [rule], score: { total, popularite, source, fraicheur, securite }, verified: "domain"|"github"|null }] }
+install = { type: "npm"|"pypi"|"oci", id, version, runtime: "npx"|"uvx"|"docker", env: [{ name, secret, required, description }], args }
+        | { type: "remote", url, transport: "http"|"sse", headers: [{ name, secret, required, description }] }
+```
+
+| Method and path | Body | Response |
+|---|---|---|
+| `GET /api/mcp/catalog` | – | `McpCatalog` (outside the write queue) |
+| `POST /api/mcp/install` | `{ id, agents: [id], scope?, values?: { NAME: text (4096 at most) }, name?, replace?: bool, force?: bool }` | `{ installed: [{ agent, mcpId }], skipped, failed, held: null\|{ verdict, vulns }, backups, warnings, name, state }` |
+
+- The page sends only the catalogue id, the agents and the values the user typed: the command is always built by the server from `catalog/mcp.json`. An empty value is written as a variable reference in the agent's syntax, and the warning lists the variables to define. A server with "Motif à risque" or a known vulnerability is held (`held`) unless `force`. An existing server of the same name is skipped, or replaced after a backup with `replace`.
+- Interface: the « Serveurs MCP » screen has two tabs, « Installés » and « Catalogue » (search, project type, score, signals, check, pinned command, « Installer… » with agents, variables — secret ones in password fields — and the warning to accept). The live page loads the full catalogue on demand. The advice results show « Serveurs MCP conseillés » (`SA.reco.mcp`: categories and keywords of the goal and answers, then score; never a "Motif à risque" server), with « Voir dans le catalogue MCP ».
+
+## Plugins, step 3a: inventory and actions (16/11/2026)
+
+- `app/lib/plugins.mjs` reads, without writing: Claude Code (`~/.claude/plugins/installed_plugins.json` version 2, state from `enabledPlugins` of `~/.claude/settings.json` and of the open project's `.claude/settings.json` and `.claude/settings.local.json`), Codex (`~/.codex/plugins/cache/<marketplace>/<plugin>/<version>/`, state from `[plugins."id"]` of `~/.codex/config.toml`), Gemini CLI (`~/.gemini/extensions/<name>/`, state from `extension-enablement.json`: the last rule starting with `!` disables), Copilot CLI (`~/.copilot/installed-plugins/<marketplace>/<plugin>/` and `_direct/`; state not documented) and Antigravity (`~/.gemini/config/plugins/<name>/`; state not documented). A path outside the home folder is never read. Cursor is left out: where it stores plugins is not documented.
+- For each plugin: manifest (name, description, version, author, homepage) and what it brings (skills, commands, sub-agents, hooks by event name, MCP server names; their values are never read). One row per plugin name across agents.
+- Actions through each agent's own CLI (`app/lib/plugins-cli.mjs`), found in `PATH`, run without a shell (Windows `.cmd` launchers go through `cmd.exe` only with plain arguments): Claude Code `claude plugin enable|disable|uninstall|update <id> --scope user|project`; Codex `codex plugin remove <id>` (no enable or disable command); Gemini CLI `gemini extensions enable|disable <name> --scope user`, `uninstall`, `update`; Copilot CLI `copilot plugin enable|disable|uninstall|update <name>`; Antigravity `agy plugin enable|disable|uninstall <name>`. Skill Advisor never writes the agents' activation lists itself.
+
+```
+Plugins   = { agents: [{ id, name, count, error, verbs: ["enable"|"disable"|"uninstall"|"update"] }], plugins: Plugin[] }
+Plugin    = { id: name, name, title, on: bool, otherOnly: bool, contents: { title, description, version, author, homepage, skills, commands, agents, hooks: [event], mcp: [name] } | null,
+              ag: { [agentId]: [{ pluginId, scope: "global"|"project", project: folder name|null, other: bool, version, on: true|false|null, read: bool }] } }
+```
+
+| Method and path | Body | Response |
+|---|---|---|
+| `POST /api/plugins/action` | `{ name, verb: "enable"\|"disable"\|"uninstall"\|"update", agents?: [id] }` | `{ done: [{ agent, pluginId }], failed: [{ agent, pluginId, message }], state }` |
+
+- `State.plugins` = `Plugins`; `Agent.plugins` = number of plugins of the agent. New screen « Plugins » (route `plugins`, after « Serveurs MCP »): search, filters (Tous, Actifs, Désactivés, Avec hooks), state per agent, hooks named, actions offered only when the agent's CLI has them, confirmation before uninstalling. The Agents screen lists the MCP servers and plugins of each agent in its Actions menu.

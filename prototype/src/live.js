@@ -106,6 +106,10 @@
     SA.data.home = { mac: home, win: home, linux: home };
     SA.data.agents = st.agents.map(function (a) { return agent(a, home); });
     SA.data.mine = unique(st.mine.map(row));
+    /* Serveurs MCP des agents (lecture seule) : { agents, servers }, valeurs secrètes déjà masquées par le serveur local. */
+    SA.data.mcp = st.mcp && Array.isArray(st.mcp.servers) ? st.mcp : { agents: [], servers: [] };
+    /* Plugins des agents (lecture seule, gestes par le CLI de chaque agent). */
+    SA.data.plugins = st.plugins && Array.isArray(st.plugins.plugins) ? st.plugins : { agents: [], plugins: [] };
     var s = SA.state;
     if (!SA.live.loaded || !s) return;
     s.mine = SA.data.mine.map(copy);

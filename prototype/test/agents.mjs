@@ -95,6 +95,22 @@ render('demo/masque');
 T.show('cursor');
 ok(T.visible().some((a) => a.id === 'cursor'), 'demo : Afficher');
 
+// serveurs MCP de la machine d'exemple : compte sur la ligne, liste dans le menu d'actions
+{
+  const cl = T.list().top.filter((a) => a.id === 'claude')[0];
+  eq(cl.mcp, ['fetch', 'github'], 'demo : serveurs MCP de Claude Code, triés');
+  const cu = T.list().top.filter((a) => a.id === 'cursor')[0];
+  eq(cu.mcp, ['filesystem', 'github'], 'demo : serveurs MCP de Cursor');
+  const row = (h, id) => h.slice(h.indexOf('data-id="' + id + '"'), h.indexOf('</li>', h.indexOf('data-id="' + id + '"')));
+  html = render('demo/mcp');
+  ok(/2 serveurs MCP/.test(row(html, 'claude')), 'demo : « 2 serveurs MCP » sur la ligne de Claude Code');
+  ok(!/serveur/.test(row(html, 'antigravity')), 'demo : rien sur un agent sans serveur MCP');
+  SA.state.ag.menu = 'claude';
+  html = render('demo/mcp-menu');
+  ok(/class="ag-mcp"[^>]*>.*Serveurs MCP.*<span class="mono">fetch<\/span>, <span class="mono">github<\/span>/.test(row(html, 'claude')), 'demo : liste des serveurs MCP dans le menu');
+  SA.state.ag.menu = null;
+}
+
 // vider un agent
 const before = SA.state.mine.filter((r) => r.ag && r.ag.cursor).length;
 ok(before > 0, 'demo : Cursor a des skills');
@@ -242,7 +258,20 @@ const last = () => calls[calls.length - 1];
 const sorted = (a) => a.slice().sort();
 
 const demoAgents = SA.data.agents;
+const demoMcp = SA.data.mcp;
+// Mode réel : un serveur vu par deux fichiers du même agent (Copilot dans VS Code et Copilot CLI) ne compte qu'une fois.
+SA.data.mcp = { agents: [], servers: [
+  { id: 'gh', name: 'gh', scope: 'global', ag: { 'github-copilot': [{ mcpId: 'vscode' }, { mcpId: 'github-copilot-cli' }], 'claude-code': [{ mcpId: 'claude-code' }] } },
+  { id: 'project:loc', name: 'loc', scope: 'project', ag: { 'claude-code': [{ mcpId: 'claude-code' }] } },
+] };
 liveSet();
+{
+  const by = (id) => T.list().top.concat(T.list().others).filter((a) => a.id === id)[0];
+  eq(by('github-copilot').mcp, ['gh'], 'live : un serveur lu dans deux fichiers compte une fois');
+  eq(by('claude-code').mcp, ['gh', 'loc (projet)'], 'live : serveur de projet marqué');
+  eq(by('cursor').mcp, [], 'live : agent sans serveur MCP');
+}
+SA.data.mcp = { agents: [], servers: [] };
 L = T.list();
 eq(ids(L.top), TOP.map((t) => t[0]), 'live : agents principaux dans l’ordre TOP_AGENTS');
 eq(L.others.map((a) => a.name), NAMES.slice().sort((a, b) => a.localeCompare(b, 'fr', { sensitivity: 'base' })), 'live : autres agents par nom');
@@ -579,6 +608,7 @@ liveSet();
 }
 
 SA.data.agents = demoAgents;
+SA.data.mcp = demoMcp;
 SA.live = undefined;
 console.log(`${runs} vérifications, ${fails} échec(s)`);
 process.exit(fails ? 1 : 0);

@@ -9,11 +9,11 @@ const root = dirname(fileURLToPath(import.meta.url));
 
 const FONTS = 'https://fonts.googleapis.com/css2?family=Inter+Tight:wght@500;600&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@400;500&display=swap';
 
-const CSS = ['shell.css', 'views/wizard-a.css', 'views/wizard-b.css', 'views/recherche.css', 'views/v2.css', 'views/agents.css', 'views/sauvegardes.css'];
+const CSS = ['shell.css', 'views/wizard-a.css', 'views/wizard-b.css', 'views/recherche.css', 'views/v2.css', 'views/agents.css', 'views/sauvegardes.css', 'views/mcp.css'];
 const JS = [
-  'data.js', 'search-data.js', 'file-data.js', 'reco.js', 'machine-data.js', 'live.js', 'core.js', 'views/detail.js',
+  'data.js', 'search-data.js', 'mcp-catalog-data.js', 'plugin-catalog-data.js', 'file-data.js', 'reco.js', 'machine-data.js', 'live.js', 'core.js', 'views/detail.js',
   'views/accueil.js', 'views/objectif.js', 'views/questions.js', 'views/resultats.js', 'views/confirmation.js',
-  'views/guide.js', 'views/gestion.js', 'views/sauvegardes.js', 'views/recherche.js', 'views/agents.js'
+  'views/guide.js', 'views/gestion.js', 'views/sauvegardes.js', 'views/recherche.js', 'views/agents.js', 'views/mcp.js', 'views/plugins.js'
 ];
 const REQUIRED = new Set(['index.html', 'shell.css', 'core.js']);
 

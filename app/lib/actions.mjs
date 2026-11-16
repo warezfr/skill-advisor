@@ -3,7 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { cli, mapError, parseOutdated, session } from './worker.mjs';
 import { agentMap, listAgents } from './registry.mjs';
-import { createBackup, loadMeta, writeLockEntry } from './backups.mjs';
+import { backupKind, createBackup, loadMeta, writeLockEntry } from './backups.mjs';
 import { checkFile } from './inventory.mjs';
 import { AGENT_RE, NAME_RE, checkAgentId, checkName, checkSource, copyLink, copyTree, disabledDir, fail, fsMessage, homeOf, isSkillEntry, isTrackedSource, keyIn, linkDir, lockKeyFor, lockOf, lockSkills, lstatOrNull, mkdirp, readJson, renameRetry, retryBusy, rmOpts, safeJoin, scanOf, sharedDir, statOrNull, tmpDir, treeHash, within, writeJsonAtomic, folderOf } from './util.mjs';
 
@@ -984,6 +984,7 @@ async function swapIn(at, make, ctx = {}) {
 // Lecteurs du dossier partagé : ~/.agents/skills/<nom>. Agents avec leur dossier : lien vers ce dossier. Agents personnalisés : copie.
 export async function applyBackup(opts = {}) {
   const home = homeOf(opts);
+  if ((await backupKind(home, opts.id)) === 'mcp') return (await import('./mcp-backups.mjs')).applyMcpBackup(opts);
   const { dir, meta } = await loadMeta(home, opts.id);
   const conflict = opts.conflict === undefined || opts.conflict === null ? 'skip' : opts.conflict;
   if (conflict !== 'skip' && conflict !== 'replace') throw fail('BAD_INPUT', 'Choix invalide en cas de conflit : skip ou replace.');

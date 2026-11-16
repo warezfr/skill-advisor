@@ -67,12 +67,26 @@
   function demoCount(id) {
     return (SA.state.mine || []).filter(function (r) { return r.ag && r.ag[id]; }).length;
   }
+  /* Serveurs MCP de l'agent (noms triés), lus dans SA.data.mcp : état réel ou machine d'exemple. */
+  function mcpOf(id) {
+    var m = (SA.data || {}).mcp || {};
+    return (m.servers || []).filter(function (s) { return s.ag && s.ag[id]; })
+      .map(function (s) { return s.scope === 'project' ? s.name + ' (projet)' : s.name; })
+      .sort(function (x, y) { return x.localeCompare(y, 'fr', { sensitivity: 'base' }); });
+  }
+  /* Plugins de l'agent (hors autres projets), lus dans SA.data.plugins. */
+  function pluginsOf(id) {
+    var d = (SA.data || {}).plugins || {};
+    return (d.plugins || []).filter(function (p) { return p.ag && (p.ag[id] || []).some(function (e) { return !e.other; }); })
+      .map(function (p) { return p.title || p.name; }).sort(function (x, y) { return x.localeCompare(y, 'fr', { sensitivity: 'base' }); });
+  }
   function fromDemo(a, top) {
     var s = SA.state, det = a.st !== 'no';
     return {
       id: a.id, name: a.name, st: a.st || 'no', sig: a.sig || [], cmd: a.cmd || '',
       detected: det || !!a.custom, top: top, custom: !!a.custom, hidden: !!st().hidden[a.id],
-      target: (det || !!a.custom) && !!(s.agents || {})[a.id], dir: SA.agentPath(a) || '', count: demoCount(a.id)
+      target: (det || !!a.custom) && !!(s.agents || {})[a.id], dir: SA.agentPath(a) || '', count: demoCount(a.id),
+      mcp: mcpOf(a.id), plugins: pluginsOf(a.id)
     };
   }
   function fromLive(a) {
@@ -81,7 +95,8 @@
       id: String(a.id), name: String(a.name || a.id), st: a.detected ? 'ok' : 'no', sig: [], cmd: '',
       detected: !!a.detected, top: !!a.top && !a.custom, custom: !!a.custom, hidden: !!a.hidden,
       universal: !!a.universal && !a.custom,
-      target: !!a.target, dir: a.globalDir ? String(a.globalDir) : '', count: isFinite(n) && a.count != null ? n : null
+      target: !!a.target, dir: a.globalDir ? String(a.globalDir) : '', count: isFinite(n) && a.count != null ? n : null,
+      mcp: mcpOf(String(a.id)), plugins: pluginsOf(String(a.id))
     };
   }
   /* Dossier partagé lu par les agents universels (~/.agents/skills). */
@@ -186,8 +201,14 @@
     }).join(' · ');
   }
   function countText(a) {
-    if (a.count == null) return 'nombre de skills inconnu';
-    return a.count ? SA.pl(a.count, 'skill', 'skills') : 'aucun skill';
+    var sk = a.count == null ? 'nombre de skills inconnu' : a.count ? SA.pl(a.count, 'skill', 'skills') : 'aucun skill';
+    var n = (a.mcp || []).length, k = (a.plugins || []).length;
+    return sk + (n ? ' · ' + SA.pl(n, 'serveur MCP', 'serveurs MCP') : '') + (k ? ' · ' + SA.pl(k, 'plugin', 'plugins') : '');
+  }
+  /* Liste en lecture seule des serveurs MCP de l'agent, dans son menu d'actions. */
+  function mcpHTML(a) {
+    var line = function (t, l) { return l.length ? '<p class="ag-mcp"><span class="ag-mcp-t">' + t + '</span> ' + l.map(function (n) { return '<span class="mono">' + SA.esc(n) + '</span>'; }).join(', ') + '</p>' : ''; };
+    return line('Serveurs MCP', a.mcp || []) + line('Plugins', a.plugins || []);
   }
   function badge(a) {
     if (a.custom) return ['no', 'Ajouté à la main'];
@@ -212,6 +233,7 @@
         : '<button type="button" class="btn quiet" data-ag-hide="' + id + '" data-fk="hide:' + id + '">Masquer</button>') +
       '<button type="button" class="btn quiet" data-ag-empty="' + id + '" data-fk="empty:' + id + '"' + (a.count ? '' : ' disabled') + '>Retirer tous ses skills</button>' +
       (a.custom ? '<button type="button" class="btn quiet" data-ag-remove="' + id + '" data-fk="remove:' + id + '">Retirer l’agent</button>' : '') +
+      mcpHTML(a) +
     '</div>';
   }
 

@@ -342,6 +342,7 @@ function makeServer() {
       data = { backup: bk, failed: [], state: st };
     } else if (url === '/api/backups/apply') data = srv.applyReply ? srv.applyReply(b) : { applied: [], skipped: [], failed: [], backups: [], state: st };
     else if (url === '/api/backups/import') data = srv.importReply || { backup: { id: '20261113-130000-imp', label: 'Importée', origin: 'import', at: '2026-11-13T13:00:00.000Z', size: 10, items: [{ name: 'alpha', src: null, agents: [], verdict: 'orange' }] }, warnings: ['alpha : un motif à relire.'], state: st };
+    else if (srv.extra && srv.extra[url]) data = Object.assign(srv.extra[url](b, st), { state: st });
     else return Promise.resolve(reply(404, { error: 'NOT_FOUND', message: 'Route inconnue.' }));
     return Promise.resolve(reply(200, data));
   };
@@ -819,6 +820,43 @@ function clickEv(target) { return Object.assign(keyEv(''), { target }); }
   eq(SA.state.sv.focus, 'rg-no', '57 : focus sur « Annuler » de la question ROUGE');
   V._do.cancelRestore();
   eq(SA.state.sv.focus, 'restore:' + ID, '57 : Annuler rend le focus à « Restaurer »');
+}
+
+// Sauvegarde de serveurs MCP : libellés, restauration et application par /api/mcp/*, sans contrôle de skill.
+{
+  const t = await liveWin();
+  const { SA, V, srv } = t;
+  const mcp = { id: '20261116-100000-mcp-github', kind: 'mcp', label: 'Serveurs MCP : github, fetch', note: '', origin: 'manual', at: '2026-11-16T10:00:00.000Z', size: 917,
+    items: [{ name: 'github', scope: 'global', src: '', agents: ['claude-code', 'cursor'], verdict: null, secrets: 'vars', vars: ['GITHUB_TOKEN'] },
+      { name: 'plugin:x:y', scope: 'global', src: '', agents: ['claude-code'], verdict: null, secrets: 'vars', vars: [] }], name: 'github', src: '', agents: ['claude-code', 'cursor'] };
+  srv.state.backups = [mcp].concat(srv.state.backups);
+  SA.state.backups = [Object.assign({}, mcp)].concat(SA.state.backups);
+  srv.extra = {
+    '/api/mcp/restore': () => ({ applied: [{ name: 'github', agent: 'claude-code' }], skipped: [{ name: 'github', agent: 'cursor', reason: 'Un serveur de ce nom existe déjà chez cet agent.' }], failed: [], backups: [],
+      warnings: ['Valeurs secrètes remplacées par des variables : définissez GITHUB_TOKEN dans votre environnement, ou dans les réglages de l’agent.'] }),
+    '/api/mcp/apply': (b) => ({ applied: b.names.map((n) => ({ name: n, agent: b.agents[0] })), skipped: [], failed: [], backups: [], warnings: [] }),
+  };
+  let html = V.render();
+  clean('live mcp render', html);
+  ok(/2 serveurs MCP/.test(txt(html)), 'mcp : nombre de serveurs, pas de skills');
+  ok(/Variables à définir après une restauration/.test(html) && /GITHUB_TOKEN/.test(html), 'mcp : variables à définir');
+  ok(/aria-label="Serveurs MCP de la sauvegarde"/.test(html), 'mcp : liste nommée');
+  await V._do.restore(mcp.id);
+  eq([t.last().url, t.last().body], ['/api/mcp/restore', { id: mcp.id }], 'mcp : restauration par /api/mcp/restore');
+  html = V.render();
+  ok(/1 serveur remis, 1 passé/.test(txt(html)) && /GITHUB_TOKEN/.test(html), 'mcp : bilan et avertissement de restauration');
+
+  V._do.openApply(mcp.id);
+  let dr = V._do.drawerHTML();
+  ok(/Serveurs à appliquer/.test(dr) && /Si le serveur existe déjà/.test(dr) && !/Dossier partagé/.test(dr) && !/malgré l’avertissement/.test(dr), 'mcp : tiroir propre aux serveurs');
+  ok(/Chaque agent les reçoit dans sa propre forme/.test(dr), 'mcp : variables expliquées dans le tiroir');
+  for (const k of Object.keys(V._do.ap().agents)) V._do.setAgent(k, false);
+  V._do.setAgent('codex', true);
+  await V._do.submitApply();
+  const call = t.last();
+  eq([call.url, call.body], ['/api/mcp/apply', { id: mcp.id, names: ['github', 'plugin:x:y'], agents: ['codex'], conflict: 'skip' }], 'mcp : application par /api/mcp/apply, nom hors NAME accepté, sans force');
+  ok(/2 applications faites/.test(V._do.drawerHTML()), 'mcp : bilan de l’application');
+  ok(!/dossier partagé/.test(V._do.drawerHTML()) && !/dossier partagé/.test(V.render()), 'mcp : bilan sans « dossier partagé »');
 }
 
 console.log(`${checks} checks, ${fails} failure(s)`);

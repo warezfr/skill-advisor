@@ -194,11 +194,20 @@ window.SA = window.SA || {};
     var items = Array.isArray(b.items) && b.items.length ? b.items : [{
       name: b.name, src: b.src, agents: b.agents || Object.keys(b.ag || {}), verdict: b.verdict || verdictOf(b)
     }];
+    var mcp = b.kind === 'mcp';
     items = items.map(function (i) {
-      return { name: String(i.name == null ? '' : i.name), src: i.src ? String(i.src) : '', agents: (i.agents || []).map(String), verdict: own(VERDICTS, i.verdict) ? i.verdict : null };
+      var o = { name: String(i.name == null ? '' : i.name), src: i.src ? String(i.src) : '', agents: (i.agents || []).map(String), verdict: own(VERDICTS, i.verdict) ? i.verdict : null };
+      /* Serveur MCP : portée, et valeurs secrètes gardées ou remplacées par des variables (noms à définir). */
+      if (mcp) {
+        o.scope = i.scope === 'project' ? 'project' : 'global';
+        o.secrets = i.secrets === 'kept' ? 'kept' : 'vars';
+        o.vars = Array.isArray(i.vars) ? i.vars.filter(function (v) { return typeof v === 'string'; }) : [];
+      }
+      return o;
     });
     var size = Number(b.size);
     return {
+      kind: mcp ? 'mcp' : 'skill',
       id: String(b.id == null ? '' : b.id), label: String(b.label || items[0].name || 'Sauvegarde'), note: b.note ? String(b.note) : '',
       origin: own(SA.ORIGIN, b.origin) ? b.origin : 'remove', at: b.at ? String(b.at) : '', size: isFinite(size) && size > 0 ? size : 0,
       items: items, raw: b
@@ -444,6 +453,8 @@ window.SA = window.SA || {};
     if (s.route === 'recherche') return 'recherche';
     if (s.route === 'gestion') return 'gestion';
     if (s.route === 'agents') return 'agents';
+    if (s.route === 'mcp') return 'mcp';
+    if (s.route === 'plugins') return 'plugins';
     if (s.route === 'sauvegardes') return 'sauvegardes';
     return IDS[s.step - 1] || 'objectif';
   }
@@ -532,7 +543,7 @@ window.SA = window.SA || {};
     return true;
   };
 
-  var ORDER = { accueil: 0, wizard: 1, recherche: 2, gestion: 3, sauvegardes: 4, agents: 5 };
+  var ORDER = { accueil: 0, wizard: 1, recherche: 2, gestion: 3, mcp: 4, plugins: 5, sauvegardes: 6, agents: 7 };
   SA.setRoute = function (route) {
     if (busy || SA.expired() || !(route in ORDER)) return false;
     var s = SA.state;
@@ -790,13 +801,15 @@ window.SA = window.SA || {};
     else if (s.route === 'recherche') html = two('Recherche', SA.baseLabel());
     else if (s.route === 'gestion') html = two('Gestion', 'Mes skills');
     else if (s.route === 'sauvegardes') html = two('Gestion', 'Sauvegardes');
+    else if (s.route === 'mcp') html = two('Gestion', 'Serveurs MCP');
+    else if (s.route === 'plugins') html = two('Gestion', 'Plugins');
     else html = two('Gestion', 'Agents');
     return { html: html, count: count };
   }
   /* Pour les essais : le fil d'Ariane sans page. */
   SA.crumbHtml = function () { return crumbParts().html; };
   /* Titre de la page (constat 52) : le nom de l'écran, comme dans le menu, puis « Skill Advisor ». */
-  var TITLES = { accueil: 'Ma machine', wizard: 'Conseil', recherche: 'Recherche', gestion: 'Mes skills', sauvegardes: 'Sauvegardes', agents: 'Agents' };
+  var TITLES = { accueil: 'Ma machine', wizard: 'Conseil', recherche: 'Recherche', gestion: 'Mes skills', mcp: 'Serveurs MCP', plugins: 'Plugins', sauvegardes: 'Sauvegardes', agents: 'Agents' };
   function renderTitle() {
     var r = SA.state.route, t = (own(TITLES, r) ? TITLES[r] + ' · ' : '') + 'Skill Advisor';
     if (document.title !== t) document.title = t;
@@ -924,7 +937,7 @@ window.SA = window.SA || {};
       out.push(sec('Filtres actifs', act.length
         ? '<ul class="ds-list">' + act.map(function (a) { return '<li' + cls('srf:' + a, '') + '><span>' + SA.esc(a) + '</span></li>'; }).join('') + '</ul>'
         : '<p class="ds-none">Aucun filtre.</p>'));
-    } else if (s.route === 'accueil' || s.route === 'gestion' || s.route === 'sauvegardes') {
+    } else if (s.route === 'accueil' || s.route === 'gestion' || s.route === 'sauvegardes' || s.route === 'mcp' || s.route === 'plugins') {
       if (n) out.push(cart);
       out.push(machine());
       out.push(sec('Agents actifs', agentList('ga:', holderAgents(s.mine))));

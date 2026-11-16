@@ -5,7 +5,10 @@ import { fileURLToPath } from 'node:url';
 import { NAME_RE, childEnv, fail, homeOf } from './util.mjs';
 
 const WORKER = fileURLToPath(new URL('./skills-worker.mjs', import.meta.url));
-const OURS = new Set(['BAD_NAME', 'BAD_SOURCE', 'BAD_INPUT', 'NOT_FOUND', 'CLI_FAILED', 'GITHUB_LIMIT', 'NETWORK', 'SOURCE_NOT_FOUND', 'OUTSIDE_HOME']);
+const MCP_WORKER = fileURLToPath(new URL('./mcp-worker.mjs', import.meta.url));
+const OURS = new Set(['BAD_NAME', 'BAD_SOURCE', 'BAD_INPUT', 'NOT_FOUND', 'CLI_FAILED', 'GITHUB_LIMIT', 'NETWORK', 'SOURCE_NOT_FOUND', 'OUTSIDE_HOME',
+  // Écritures MCP (mcp-worker.mjs).
+  'EXISTS', 'UNSUPPORTED', 'WRITE_FAILED', 'BROKEN_CONFIG', 'CONFLICT']);
 
 export const GITHUB_MESSAGE = 'GitHub limite les téléchargements anonymes. Réessayez dans une heure, ou installez git pour passer par lui.';
 export const NETWORK_MESSAGE = 'Pas de connexion à la source. Vérifiez le réseau, puis réessayez.';
@@ -52,7 +55,8 @@ export function parseOutdated(text) {
 // Rend { request(fn, args, { timeoutMs }), close() }. Un délai dépassé tue l'enfant et fait échouer la session.
 export function session(opts = {}) {
   const home = homeOf(opts);
-  const child = spawn(process.execPath, [WORKER], { cwd: opts.cwd || home, env: childEnv(home), stdio: ['pipe', 'pipe', 'pipe'] });
+  // opts.worker === 'mcp' : processus enfant d'add-mcp (serveurs MCP) au lieu du paquet skills.
+  const child = spawn(process.execPath, [opts.worker === 'mcp' ? MCP_WORKER : WORKER], { cwd: opts.cwd || home, env: childEnv(home), stdio: ['pipe', 'pipe', 'pipe'] });
   let buf = '', stderr = '', dead = null;
   // Décodage UTF-8 d'un seul tenant : un caractère accentué peut tomber entre deux morceaux.
   child.stdout.setEncoding('utf8');

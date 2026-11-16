@@ -142,7 +142,9 @@ export function lockPath(home) {
 const PASS = ['PATH', 'Path', 'TMPDIR', 'TEMP', 'TMP', 'SystemRoot', 'windir', 'ComSpec', 'PATHEXT', 'LANG', 'LC_ALL',
   'GITHUB_TOKEN', 'GH_TOKEN', 'HTTPS_PROXY', 'HTTP_PROXY', 'NO_PROXY', 'https_proxy', 'http_proxy', 'no_proxy'];
 const REAL_ONLY = ['XDG_CONFIG_HOME', 'XDG_STATE_HOME', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME', 'VIBE_HOME', 'HERMES_HOME',
-  'AUTOHAND_HOME', 'GROK_HOME', 'SARVAM_HOME', 'REASONIX_HOME', 'FLATPAK_XDG_CONFIG_HOME'];
+  'AUTOHAND_HOME', 'GROK_HOME', 'SARVAM_HOME', 'REASONIX_HOME', 'FLATPAK_XDG_CONFIG_HOME',
+  // add-mcp 2.6.1 : dossiers de réglages MCP propres à certains agents.
+  'CLINE_DIR', 'COPILOT_HOME', 'JUNIE_HOME', 'KIMI_CODE_HOME', 'PI_CODING_AGENT_DIR'];
 
 export function childEnv(home) {
   const env = {};
