@@ -1,0 +1,55 @@
+# Catalogues des serveurs MCP et des plugins : reconstruits chaque jour depuis les sources publiques
+# (registre officiel MCP, places de marché ouvertes, GitHub, npm, Docker, OSV), puis publiés sur la branche
+# orpheline « catalog-data » en un seul commit remplacé à chaque fois : l'historique de main ne grossit pas
+# et la CI (qui ne vise que main et les PR) ne tourne pas. L'application lit cette branche, sinon sa copie fournie.
+name: Catalogues
+
+on:
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: catalogs
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Catalogues MCP et plugins
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+      - run: npm ci --ignore-scripts
+      # Jeton de l'action : lecture publique de GitHub (GraphQL), rien d'autre.
+      - name: Catalogue des serveurs MCP
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node tools/mcp-catalog.mjs --work .cache/mcp --out out/mcp.json --demo out/mcp-catalog-data.js
+      - name: Catalogue des plugins
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node tools/plugin-catalog.mjs --work .cache/plugins --out out/plugins.json --demo out/plugin-catalog-data.js
+      # Un catalogue anormalement petit (source en panne, quota) n'écrase jamais la version publiée.
+      - name: Contrôle des catalogues
+        run: node tools/check-catalogs.mjs out/mcp.json out/plugins.json
+      - name: Publication sur la branche catalog-data
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd out
+          printf '%s\n' '# Catalogues de Skill Advisor' '' 'Fichiers générés chaque jour par .github/workflows/catalogs.yml (branche main). Ne pas modifier à la main.' > README.md
+          git init -q -b catalog-data
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add mcp.json plugins.json mcp-catalog-data.js plugin-catalog-data.js README.md
+          git commit -q -m "Catalogues du $(date -u +%Y-%m-%d)"
+          git push --force -q "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" catalog-data:catalog-data

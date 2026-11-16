@@ -24,6 +24,8 @@ function env(net) {
   const e = { ...process.env };
   delete e.SA_NET;
   delete e.CATALOG_URL;
+  // Catalogues MCP et plugins en ligne (branche catalog-data) : jamais pendant les tests, sauf --net.
+  if (!net) e.SA_CATALOG_DATA = 'off';
   if (net) e.SA_NET = '1';
   return e;
 }

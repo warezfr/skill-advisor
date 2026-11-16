@@ -9,14 +9,18 @@ import { agentOf, mcpIdsFor, mcpState, mcpUpsert } from './mcp.mjs';
 import { keyPathOf, readEntry } from './mcp-write.mjs';
 import { writeMcpBackup } from './mcp-backups.mjs';
 import { fail, homeOf } from './util.mjs';
+import { freshCatalog } from './catalog-data.mjs';
 
 const CATALOG = fileURLToPath(new URL('../../catalog/mcp.json', import.meta.url));
 let catalogP = null;
 
-// Catalogue MCP fourni, lu une fois. Rend { generatedAt, servers: [] } même s'il manque.
-export function mcpCatalog(opts = {}) {
-  if (opts.file) return fs.readFile(opts.file, 'utf8').then((t) => JSON.parse(t));
-  if (!catalogP) catalogP = fs.readFile(CATALOG, 'utf8').then((t) => JSON.parse(t), () => ({ generatedAt: null, servers: [] }));
+// Catalogue MCP : celui de la branche catalog-data (mis à jour chaque jour, cache de 24 h), sinon la copie fournie,
+// lue une fois. Rend { generatedAt, servers: [], source: 'online'|'cache'|'bundled' } même s'il manque.
+export async function mcpCatalog(opts = {}) {
+  if (opts.file) return JSON.parse(await fs.readFile(opts.file, 'utf8'));
+  const fresh = opts.home ? await freshCatalog('mcp', { home: opts.home }) : null;
+  if (fresh) return { ...fresh.value, source: fresh.source };
+  if (!catalogP) catalogP = fs.readFile(CATALOG, 'utf8').then((t) => ({ ...JSON.parse(t), source: 'bundled' }), () => ({ generatedAt: null, servers: [], source: 'bundled' }));
   return catalogP;
 }
 
@@ -68,7 +72,7 @@ export function localName(server) {
 // Rend { installed: [{ agent, mcpId }], skipped, failed, held: null|{ verdict, vulns }, backups, warnings, name }.
 export async function installMcp(opts = {}) {
   const home = homeOf(opts);
-  const cat = await mcpCatalog(opts.catalogFile ? { file: opts.catalogFile } : {});
+  const cat = await mcpCatalog(opts.catalogFile ? { file: opts.catalogFile } : { home });
   const server = (cat.servers || []).find((s) => s.id === opts.id);
   if (!server) throw fail('NOT_FOUND', 'Serveur absent du catalogue.');
   const agents = Array.isArray(opts.agents) ? opts.agents.filter((a) => typeof a === 'string' && /^[a-z0-9][a-z0-9-]{0,63}$/.test(a)) : [];

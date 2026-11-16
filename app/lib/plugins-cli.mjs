@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import { childEnv, fail, homeOf } from './util.mjs';
 import { pluginState, PLUGIN_AGENTS } from './plugins.mjs';
+import { freshCatalog } from './catalog-data.mjs';
 
 // Commandes par agent et par geste. scope : 'global' ou 'project' (Claude Code seulement).
 const CLAUDE_SCOPE = { global: 'user', project: 'project' };
@@ -125,10 +126,13 @@ export async function pluginAction(opts = {}) {
 
 const CATALOG = fileURLToPath(new URL('../../catalog/plugins.json', import.meta.url));
 let catalogP = null;
-// Catalogue des plugins fourni, lu une fois. Rend { generatedAt, plugins: [] } même s'il manque.
-export function pluginCatalog(opts = {}) {
-  if (opts.file) return fsp.readFile(opts.file, 'utf8').then((t) => JSON.parse(t));
-  if (!catalogP) catalogP = fsp.readFile(CATALOG, 'utf8').then((t) => JSON.parse(t), () => ({ generatedAt: null, plugins: [] }));
+// Catalogue des plugins : celui de la branche catalog-data (cache de 24 h), sinon la copie fournie, lue une fois.
+// Rend { generatedAt, plugins: [], source } même s'il manque.
+export async function pluginCatalog(opts = {}) {
+  if (opts.file) return JSON.parse(await fsp.readFile(opts.file, 'utf8'));
+  const fresh = opts.home ? await freshCatalog('plugins', { home: opts.home }) : null;
+  if (fresh) return { ...fresh.value, source: fresh.source };
+  if (!catalogP) catalogP = fsp.readFile(CATALOG, 'utf8').then((t) => ({ ...JSON.parse(t), source: 'bundled' }), () => ({ generatedAt: null, plugins: [], source: 'bundled' }));
   return catalogP;
 }
 
@@ -148,7 +152,7 @@ export function installCommand(entry, scope) {
 // Un plugin au contrôle « Motif à risque » est retenu (held) sauf force. Rend { installed, held, message }.
 export async function installPlugin(opts = {}) {
   const home = homeOf(opts);
-  const cat = await pluginCatalog(opts.catalogFile ? { file: opts.catalogFile } : {});
+  const cat = await pluginCatalog(opts.catalogFile ? { file: opts.catalogFile } : { home });
   const entry = (cat.plugins || []).find((p) => p.id === opts.id);
   if (!entry) throw fail('NOT_FOUND', 'Plugin absent du catalogue.');
   if (entry.verdict === 'rouge' && !opts.force) return { installed: false, held: { verdict: 'rouge' }, id: entry.id };
