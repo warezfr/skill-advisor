@@ -342,8 +342,12 @@ function makeServer() {
       data = { backup: bk, failed: [], state: st };
     } else if (url === '/api/backups/apply') data = srv.applyReply ? srv.applyReply(b) : { applied: [], skipped: [], failed: [], backups: [], state: st };
     else if (url === '/api/backups/import') data = srv.importReply || { backup: { id: '20261113-130000-imp', label: 'Importée', origin: 'import', at: '2026-11-13T13:00:00.000Z', size: 10, items: [{ name: 'alpha', src: null, agents: [], verdict: 'orange' }] }, warnings: ['alpha : un motif à relire.'], state: st };
-    else if (srv.extra && srv.extra[url]) data = Object.assign(srv.extra[url](b, st), { state: st });
-    else return Promise.resolve(reply(404, { error: 'NOT_FOUND', message: 'Route inconnue.' }));
+    else if (srv.extra && srv.extra[url]) {
+      data = srv.extra[url](b, st);
+      // __status : réponse d'erreur du serveur (code et message), sans état.
+      if (data && data.__status) return Promise.resolve(reply(data.__status, { error: data.error, message: data.message }));
+      data = Object.assign(data, { state: st });
+    } else return Promise.resolve(reply(404, { error: 'NOT_FOUND', message: 'Route inconnue.' }));
     return Promise.resolve(reply(200, data));
   };
   return srv;
@@ -857,6 +861,92 @@ function clickEv(target) { return Object.assign(keyEv(''), { target }); }
   eq([call.url, call.body], ['/api/mcp/apply', { id: mcp.id, names: ['github', 'plugin:x:y'], agents: ['codex'], conflict: 'skip' }], 'mcp : application par /api/mcp/apply, nom hors NAME accepté, sans force');
   ok(/2 applications faites/.test(V._do.drawerHTML()), 'mcp : bilan de l’application');
   ok(!/dossier partagé/.test(V._do.drawerHTML()) && !/dossier partagé/.test(V.render()), 'mcp : bilan sans « dossier partagé »');
+}
+
+// Sauvegarde de toute la configuration : création, ligne résumée, aperçu, restauration par parties, plugins un par un.
+{
+  ok(files.indexOf('views/config.js') > -1 && files.indexOf('views/config.js') < files.indexOf('views/sauvegardes.js'), 'build : views/config.js avant views/sauvegardes.js');
+  const t = await liveWin();
+  const { SA, V, srv } = t;
+  const C = SA.cfg._do;
+  const cfg = { id: '20261116-110000-configuration', kind: 'config', label: 'Configuration complète du 16/11/2026', note: '', origin: 'manual', at: '2026-11-16T11:00:00.000Z', size: 52000, items: [],
+    parts: { skills: { count: 12, names: [] }, mcp: { count: 3, secrets: 'vars', vars: ['GITHUB_TOKEN'] }, plugins: { count: 5, auto: 4, manual: 1, hooks: 1 }, settings: { custom: 1, hidden: 2, targets: 0 } } };
+  const pre = { skills: [{ name: 'notes', verdict: null, status: 'new' }, { name: 'risky', verdict: 'rouge', status: 'new' }, { name: 'revue', verdict: null, status: 'exists' }],
+    mcp: { items: [{ name: 'github', agent: 'claude-code', off: false, status: 'new', runs: 'npx -y server-github' }, { name: 'fetch', agent: 'claude-code', off: false, status: 'exists', runs: 'uvx fetch', env: ['GITHUB_TOKEN'] }, { name: 'github', agent: 'cursor', off: false, status: 'absent', runs: 'npx' }], secrets: 'vars', vars: ['GITHUB_TOKEN'] },
+    plugins: [{ index: 0, agent: 'claude-code', pluginId: 'helper@acme', name: 'helper', market: 'acme', repo: 'acme/plugins', on: false, hooks: ['SessionStart'], why: '', status: 'auto' },
+      { index: 1, agent: 'gemini-cli', pluginId: 'conductor', name: 'conductor', market: null, repo: 'g/conductor', on: true, hooks: [], why: '', status: 'auto' },
+      { index: 2, agent: 'github-copilot', pluginId: 'raw', name: 'raw', market: null, repo: null, on: null, hooks: [], why: 'Installation directe : source inconnue.', status: 'manual' }],
+    settings: { custom: [{ name: 'Mon <agent>', dir: '~/outils', status: 'new' }], hidden: 2, targets: 0 } };
+  srv.extra = {
+    '/api/config/create': (b) => { srv.state.backups = [cfg].concat(srv.state.backups); return { backup: cfg, failed: [] }; },
+    '/api/config/preview': () => pre,
+    '/api/config/restore': (b) => ({ settings: { added: ['Mon <agent>'], same: [], skipped: [], hidden: 2, targets: 0 },
+      skills: { restored: ['notes'], skipped: [{ name: 'revue', reason: 'Déjà installé sur cette machine.' }], held: b.force ? [] : ['risky'], failed: [] },
+      mcp: { applied: [{ name: 'github', agent: 'claude-code' }], skipped: [{ name: 'github', agent: 'cursor', reason: 'Cet agent n’est pas installé sur cette machine.' }], failed: [] },
+      plugins: pre.plugins, backups: [], warnings: ['Valeurs secrètes remplacées par des variables : définissez GITHUB_TOKEN.'] }),
+    '/api/config/plugin': (b) => (b.index === 1 ? { __status: 502, error: 'CLI_FAILED', message: 'Gemini CLI a refusé : réseau absent' } : { status: 'installed', message: '', done: ['claude plugin install helper@acme --scope user'] }),
+  };
+  let html = V.render();
+  ok(/data-cfg-open/.test(html) && /Sauvegarder toute la configuration/.test(html), 'config : bouton dans la barre');
+  C.openCreate();
+  let dr = C.drawerHTML();
+  ok(/Inclure les valeurs secrètes/.test(dr) && /Une recette pour les réinstaller/.test(dr), 'config : tiroir de création');
+  C.cs().secrets = true;
+  C.cs().parts.settings = false;
+  await C.submitCreate();
+  eq([t.last().url, t.last().body], ['/api/config/create', { parts: ['skills', 'mcp', 'plugins'], secrets: true }], 'config : création envoyée');
+  html = V.render();
+  clean('config render', html);
+  ok(/Sauvegarde créée : Configuration complète du 16\/11\/2026 \(12 skills, 3 serveurs MCP, 5 plugins, dont 1 à réinstaller à la main, réglages de Skill Advisor\)/.test(txt(html)), 'config : message de création');
+  ok(/toute la configuration/.test(html) && /data-cfg-restore="20261116-110000-configuration"/.test(html), 'config : ligne résumée, bouton Restaurer…');
+  ok(!/data-sv-apply="20261116-110000-configuration"/.test(html), 'config : pas d’« Appliquer à d’autres agents »');
+
+  await C.openRestore(cfg.id);
+  eq([t.last().url, t.last().body], ['/api/config/preview', { id: cfg.id }], 'config : aperçu demandé');
+  dr = C.drawerHTML();
+  clean('config aperçu', dr);
+  ok(/2 nouveaux · 1 déjà présent/.test(txt(dr)), 'config : aperçu des skills');
+  ok(/1 réglage à écrire · 1 réglage déjà présent · 1 agent absent de cette machine/.test(txt(dr)), 'config : aperçu MCP');
+  ok(/2 à réinstaller · 1 à faire à la main/.test(txt(dr)), 'config : aperçu plugins');
+  ok(/lancera npx -y server-github/.test(txt(dr)) && /place de marché acme prise sur github\.com\/acme\/plugins/.test(txt(dr)) && /hooks SessionStart/.test(txt(dr)), 'config : sources, commandes et hooks montrés avant');
+  ok(/remplace le réglage présent/.test(txt(dr)) && /variables et en-têtes : GITHUB_TOKEN/.test(txt(dr)), 'config : réglage remplacé et variables montrés');
+  ok(/Agent ajouté à la main Mon &lt;agent&gt; : dossier ~\/outils/.test(txt(dr)), 'config : dossier de l’agent ajouté à la main montré');
+  ok(/data-cfg-force="risky"/.test(dr), 'config : case pour forcer le skill rouge');
+  ok(/Variables à définir après la restauration/.test(dr), 'config : variables annoncées');
+  C.cs().force.risky = true;
+  C.cs().conflict = 'replace';
+  await C.submitRestore();
+  eq([t.last().url, t.last().body], ['/api/config/restore', { id: cfg.id, parts: ['skills', 'mcp', 'plugins', 'settings'], conflict: 'replace', force: ['risky'] }], 'config : restauration envoyée');
+  dr = C.drawerHTML();
+  clean('config résultat', dr);
+  ok(/1 skill restauré, 1 passé, 0 non restauré/.test(txt(dr)), 'config : bilan des skills');
+  ok(/Mon &lt;agent&gt;/.test(dr) && !/Mon <agent>/.test(dr), 'config : nom échappé');
+  ok(/Cet agent n’est pas installé sur cette machine/.test(dr), 'config : agent absent signalé');
+  ok(/data-cfg-plug="0"/.test(dr) && !/data-cfg-plug-all/.test(dr) && /Installation directe : source inconnue/.test(dr), 'config : plugins un par un, sans « tout réinstaller », à la main expliqué');
+  await C.reinstall(0);
+  await C.reinstall(1);
+  const plugCalls = srv.log.filter((c) => c.url === '/api/config/plugin').map((c) => c.body);
+  eq(plugCalls, [{ id: cfg.id, index: 0 }, { id: cfg.id, index: 1 }], 'config : un plugin par requête, dans l’ordre, jamais le manuel');
+  dr = C.drawerHTML();
+  ok(/Réinstallé/.test(dr) && /Gemini CLI a refusé : réseau absent/.test(dr), 'config : réussite et échec par plugin');
+  C.close();
+  eq(SA.state.cfg.mode, '', 'config : tiroir fermé');
+}
+
+// Mode démo : la sauvegarde complète se crée en mémoire ; la réinstallation demande l'application locale.
+{
+  const d = makeWin(() => Promise.reject(new Error('aucun réseau en démo')), false);
+  const { SA } = d;
+  SA.initState({ route: 'sauvegardes', backups: SA.demoBackups() });
+  const C = SA.cfg._do;
+  C.openCreate();
+  await C.submitCreate();
+  const b = SA.state.backups[0];
+  ok(b.kind === 'config' && b.parts.skills && b.parts.plugins, 'demo config : sauvegarde complète créée');
+  clean('demo config render', SA.views.sauvegardes.render());
+  await C.openRestore(b.id);
+  await C.submitRestore();
+  ok(/déjà présents|Déjà installé/.test(C.drawerHTML()), 'demo config : tout est déjà là');
 }
 
 console.log(`${checks} checks, ${fails} failure(s)`);

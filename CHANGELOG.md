@@ -15,6 +15,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and
 - Screen « Plugins »: plugins of Claude Code, Codex, Gemini CLI, Copilot CLI and Antigravity, what each brings, hooks named, enable, disable, update and uninstall through each agent's own command; and a catalogue of 555 plugins from the open marketplaces of Claude Code and Copilot CLI.
 - The advice results also suggest MCP servers and plugins for the project. The Agents screen lists the MCP servers and plugins of each agent.
 - `tools/mcp-catalog.mjs` and `tools/plugin-catalog.mjs` build `catalog/mcp.json` and `catalog/plugins.json` from public sources.
+- Full configuration backup on the Sauvegardes screen: skills, MCP servers, plugins and Skill Advisor settings in one backup, which you can export and restore on the same machine or another one. You choose the parts, and Skip or Replace; a preview shows what will happen first. Restore uses the folders of the machine that restores, and skips agents that are not installed. Plugins are reinstalled one at a time through their agent's own command, from the GitHub source written in the backup. Plugins without a readable source are listed as "to do by hand".
 
 ## [1.0.0] - 2026-11-15
 

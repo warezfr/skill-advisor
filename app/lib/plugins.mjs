@@ -158,6 +158,48 @@ async function antigravity(home) {
 
 const READERS = { 'claude-code': claudeCode, codex, 'gemini-cli': gemini, 'github-copilot': copilot, antigravity };
 
+// --- Sources de réinstallation (sauvegarde complète) ---
+
+export const REPO_RE = /^[A-Za-z0-9][\w.-]{0,99}\/[A-Za-z0-9][\w.-]{0,99}$/;
+export const REF_RE = /^[A-Za-z0-9][\w.\/-]{0,199}$/;
+// Dépôt GitHub « owner/repo » tiré d'une source : owner/repo, ou adresse https://github.com/owner/repo(.git). Sinon null.
+export function repoOf(s) {
+  if (typeof s !== 'string') return null;
+  const m = /^https:\/\/github\.com\/([^/\s]+\/[^/\s]+?)(?:\.git)?\/?$/.exec(s);
+  const r = m ? m[1] : s;
+  return REPO_RE.test(r) && !r.includes('..') && !r.endsWith('.git') ? r : null;
+}
+
+// Où chaque agent a pris ses places de marché et ses extensions : seulement des dépôts GitHub (les autres sources ne se réinstallent pas).
+// Rend { 'claude-code': { place: repo }, codex: { place: repo }, 'gemini-cli': { extension: { repo, ref } } }.
+export async function pluginSources(opts = {}) {
+  const home = homeOf(opts);
+  const out = { 'claude-code': {}, codex: {}, 'gemini-cli': {} };
+  const fromSource = (s) => (s && typeof s === 'object' ? (s.source === 'github' ? repoOf(s.repo) : (s.source === 'git' || s.source === 'url') ? repoOf(s.url) : null) : null);
+  const known = (await readJsonc(path.join(home, '.claude', 'plugins', 'known_marketplaces.json'))) || {};
+  const extra = ((await readJsonc(path.join(home, '.claude', 'settings.json'))) || {}).extraKnownMarketplaces || {};
+  for (const src of [extra, known]) {
+    if (!src || typeof src !== 'object') continue;
+    for (const [name, v] of Object.entries(src)) { const r = v && fromSource(v.source); if (r) out['claude-code'][name] = r; }
+  }
+  const t = await readText(path.join(home, '.codex', 'config.toml'));
+  let conf = {};
+  try { conf = t ? TOML.parse(t) : {}; } catch { conf = {}; }
+  for (const [name, v] of Object.entries(conf.marketplaces && typeof conf.marketplaces === 'object' ? conf.marketplaces : {})) {
+    const r = v && typeof v === 'object' && v.source_type !== 'local' ? repoOf(v.source) : null;
+    if (r) out.codex[name] = r;
+  }
+  const root = path.join(home, '.gemini', 'extensions');
+  for (const n of await dirs(root)) {
+    const m = await readJsonc(path.join(root, n, '.gemini-extension-install.json'));
+    if (!m || (m.type !== 'git' && m.type !== 'github-release')) continue;
+    const r = repoOf(m.source);
+    const ref = typeof m.releaseTag === 'string' ? m.releaseTag : typeof m.ref === 'string' ? m.ref : null;
+    if (r) out['gemini-cli'][n] = { repo: r, ref: ref && REF_RE.test(ref) && !ref.includes('..') ? ref : null };
+  }
+  return out;
+}
+
 // État des plugins : agents (un par lecteur trouvé) et plugins (un par identifiant, avec ag[agent] = [entrées]).
 export async function pluginState(opts = {}) {
   const home = homeOf(opts);

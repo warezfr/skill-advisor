@@ -28,9 +28,10 @@ async function workDir(home, prefix) {
 // Rend un Buffer : l'archive .tar.gz de la sauvegarde. Fichiers et dossiers seulement, droits portables, sans propriétaire.
 export async function exportBackup(opts = {}) {
   const home = homeOf(opts);
-  // Sauvegarde de serveurs MCP : meta.json et servers.json, même archive et même manifeste.
-  const { dir, meta } = (await backupKind(home, opts.id)) === 'mcp'
-    ? await (await import('./mcp-backups.mjs')).loadMcpBackup(home, opts.id) : await loadMeta(home, opts.id);
+  // Sauvegarde de serveurs MCP (meta.json, servers.json) ou de toute la configuration (ses parties) : même archive, même manifeste.
+  const kind = await backupKind(home, opts.id);
+  const { dir, meta } = kind === 'mcp' ? await (await import('./mcp-backups.mjs')).loadMcpBackup(home, opts.id)
+    : kind === 'config' ? await (await import('./config-backups.mjs')).loadConfigBackup(home, opts.id) : await loadMeta(home, opts.id);
   const stage = await workDir(home, 'export-');
   try {
     const root = path.join(stage, 'b');
@@ -188,7 +189,14 @@ async function readManifest(root) {
   let man;
   try { man = JSON.parse(await fs.readFile(file, 'utf8')); } catch { throw missing(); }
   if (!isObj(man) || man.format !== FORMAT || !isObj(man.meta)) throw missing();
-  const m = man.meta;
+  return checkSkillsMeta(root, man.meta);
+}
+
+// Vérifie le meta (version 2) d'une sauvegarde de skills extraite dans root : noms, copies présentes, sources et verrous.
+// Sert aussi à la partie skills/ d'une sauvegarde complète. Rend { label, note, items, warnings }.
+export async function checkSkillsMeta(root, m) {
+  const missing = () => bad('Archive refusée : manifeste ' + MANIFEST + ' absent ou invalide.');
+  if (!isObj(m)) throw missing();
   const list = m.version === 2 ? m.items : null;
   if (!Array.isArray(list) || !list.length || list.length > 1000) throw missing();
   const items = [], seen = new Set(), warnings = [];
@@ -232,8 +240,40 @@ async function readManifest(root) {
   return { label, note, items, warnings };
 }
 
+// Déplace dans fresh les seules copies citées par man (checkSkillsMeta), puis refait le contrôle statique de chacune.
+// Le verdict gardé est celui de la copie principale. Rend { items, warnings }.
+export async function stageSkills(root, man, fresh) {
+  const moved = new Set();
+  for (const it of man.items) {
+    for (const copy of [it.name, ...it.places.map((p) => p.copy)]) {
+      if (moved.has(copy)) continue;
+      moved.add(copy);
+      const to = path.join(fresh, ...copy.split('/'));
+      await fs.mkdir(path.dirname(to), { recursive: true });
+      await renameRetry(path.join(root, ...copy.split('/')), to);
+    }
+  }
+  const warnings = [...man.warnings], items = [];
+  for (const it of man.items) {
+    const scan = scanOf(path.join(fresh, it.name));
+    const verdict = scan ? scan.verdict : null;
+    const say = (v) => '« ' + (VERDICT_TEXT[v] || 'Contrôle impossible') + ' »';
+    if (verdict === 'rouge') warnings.push('Le contrôle trouve un motif à risque dans le skill ' + it.name + '. Ne l’appliquez que si vous lui faites confiance.');
+    else if (it.before && verdict !== it.before) warnings.push('Le contrôle du skill ' + it.name + ' a changé : ' + say(verdict) + ' au lieu de ' + say(it.before) + '.');
+    // Les autres copies vont aussi dans des dossiers d'agents à la restauration : chacune est vérifiée.
+    for (const copy of new Set(it.places.map((p) => p.copy).filter((c) => c !== it.name))) {
+      const s = scanOf(path.join(fresh, ...copy.split('/')));
+      if (!s) warnings.push('Skill Advisor n’a pas pu vérifier une autre copie du skill ' + it.name + '.');
+      else if (s.verdict === 'rouge') warnings.push('Le contrôle trouve un motif à risque dans une autre copie du skill ' + it.name + '. Ne la restaurez que si vous lui faites confiance.');
+    }
+    const { before, ...rest } = it;
+    items.push({ ...rest, verdict });
+  }
+  return { items, warnings };
+}
+
 // Taille des fichiers d'un dossier (aucun lien : l'extraction n'en crée pas).
-async function sizeOf(dir) {
+export async function sizeOf(dir) {
   let n = 0;
   for (const e of await fs.readdir(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name);
@@ -262,37 +302,14 @@ export async function importBackup(opts = {}) {
     if (isObj(peek) && peek.format === FORMAT && isObj(peek.meta) && peek.meta.kind === 'mcp') {
       return await (await import('./mcp-backups.mjs')).importMcpFrom(home, root, peek.meta);
     }
+    if (isObj(peek) && peek.format === FORMAT && isObj(peek.meta) && peek.meta.kind === 'config') {
+      return await (await import('./config-backups.mjs')).importConfigFrom(home, root, peek.meta, stage);
+    }
     const man = await readManifest(root);
     // Nouveau dossier : seulement les copies citées par le manifeste.
     const fresh = path.join(stage, 'new');
     await fs.mkdir(fresh);
-    const moved = new Set();
-    for (const it of man.items) {
-      for (const copy of [it.name, ...it.places.map((p) => p.copy)]) {
-        if (moved.has(copy)) continue;
-        moved.add(copy);
-        const to = path.join(fresh, ...copy.split('/'));
-        await fs.mkdir(path.dirname(to), { recursive: true });
-        await renameRetry(path.join(root, ...copy.split('/')), to);
-      }
-    }
-    // Contrôle statique de chaque skill, à nouveau. Le verdict est celui de la copie principale.
-    const warnings = [...man.warnings], items = [];
-    for (const it of man.items) {
-      const scan = scanOf(path.join(fresh, it.name));
-      const verdict = scan ? scan.verdict : null;
-      const say = (v) => '« ' + (VERDICT_TEXT[v] || 'Contrôle impossible') + ' »';
-      if (verdict === 'rouge') warnings.push('Le contrôle trouve un motif à risque dans le skill ' + it.name + '. Ne l’appliquez que si vous lui faites confiance.');
-      else if (it.before && verdict !== it.before) warnings.push('Le contrôle du skill ' + it.name + ' a changé : ' + say(verdict) + ' au lieu de ' + say(it.before) + '.');
-      // Les autres copies vont aussi dans des dossiers d'agents à la restauration : chacune est vérifiée.
-      for (const copy of new Set(it.places.map((p) => p.copy).filter((c) => c !== it.name))) {
-        const s = scanOf(path.join(fresh, ...copy.split('/')));
-        if (!s) warnings.push('Skill Advisor n’a pas pu vérifier une autre copie du skill ' + it.name + '.');
-        else if (s.verdict === 'rouge') warnings.push('Le contrôle trouve un motif à risque dans une autre copie du skill ' + it.name + '. Ne la restaurez que si vous lui faites confiance.');
-      }
-      const { before, ...rest } = it;
-      items.push({ ...rest, verdict });
-    }
+    const { items, warnings } = await stageSkills(root, man, fresh);
     const size = await sizeOf(fresh);
     const at = new Date().toISOString();
     const root2 = backupsDir(home);

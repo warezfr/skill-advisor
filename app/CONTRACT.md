@@ -297,3 +297,52 @@ Plugin    = { id: name, name, title, on: bool, otherOnly: bool, contents: { titl
 
 - `.github/workflows/catalogs.yml` runs every day at 04:17 UTC (and by hand): it rebuilds `mcp.json` and `plugins.json` with `tools/mcp-catalog.mjs` and `tools/plugin-catalog.mjs` (the action's own `GITHUB_TOKEN`, read-only use of GitHub), checks them with `tools/check-catalogs.mjs` (at least 500 MCP servers, 300 of them with GitHub stars, and 300 plugins; otherwise nothing is published), then force-pushes a single commit to the orphan branch `catalog-data` (`mcp.json`, `plugins.json`, `mcp-catalog-data.js`, `plugin-catalog-data.js`, `README.md`). The history of `main` does not grow and CI does not run.
 - The application reads `https://raw.githubusercontent.com/warezfr/skill-advisor/catalog-data/<mcp|plugins>.json` at most once every 24 hours (`app/lib/catalog-data.mjs`): 20 MB at most, shape checked, kept in `~/.skill-advisor/cache/<name>.json` (0600). On failure: the cache, even old, then the copy in `catalog/`. `SA_CATALOG_DATA=off` turns any online read off (all tests set it); `SA_CATALOG_DATA_URL` changes the address. `GET /api/mcp/catalog` and `GET /api/plugins/catalog` add `source: "online"|"cache"|"bundled"`.
+
+## Full configuration backup (16/11/2026)
+
+- `app/lib/config-backups.mjs`. One backup of kind `config` holds every part of the home-folder configuration; nothing that belongs to a project is in it. Folder `~/.skill-advisor/backups/<id>/`:
+  - `meta.json`: `{ version: 2, kind: "config", id, label, note, origin: "manual"|"import", at, size, parts }`. Only a summary of each part (`app/lib/config-meta.mjs`). The custom agent ids appear here, so they are never given out again.
+  - `settings.json`: `{ version: 1, custom: [{ id, name, dir }], hidden, targets }`. A folder in the home folder is kept as `~/…`. `catalogUrl` and unknown keys are never saved or restored.
+  - `skills/`: a skills backup with the same id (`meta.json` version 2 and copies), covering all skills (shared folder, agent folders, disabled skills).
+  - `mcp/`: an MCP backup with the same id (`meta.json`, `servers.json` 0600) of every global server. Secrets become variables unless `secrets: true`.
+  - `plugins.json`: `{ version: 1, items: [{ agent, pluginId, name, market, version, on, hooks, how: "auto"|"manual", repo, ref, why }] }`. This is a reinstall recipe, never the plugin files.
+- Where `repo` comes from: Claude Code `known_marketplaces.json` and `extraKnownMarketplaces`, Codex `[marketplaces.X]` that are not local, and Gemini `.gemini-extension-install.json` (`git` or `github-release`). Only GitHub `owner/repo` is accepted.
+- Built-in marketplaces (`claude-plugins-official`, Codex `openai-*`, Copilot `awesome-copilot` and `copilot-plugins`) are never added from a recipe. Copilot direct installs and Antigravity plugins are always `manual`.
+- Restore uses the paths of the machine that restores, never paths from the backup:
+  - Order: settings, skills, MCP, then plugins.
+  - Settings: a custom agent is reused when its real folder is the same. Otherwise it is added with the usual checks if the folder exists, and skipped if it does not. `custom-<n>` ids are remapped in the skill places. Hidden agents are added to the hidden list. Targets are taken when none are set here, or with `replace`.
+  - Skills: restored one at a time, with the scan done again; a red skill is held unless it is in `force`. Agents absent from this machine are skipped, and no folder is created for them.
+  - MCP: same rule for absent agents.
+  - `conflict: "replace"` makes one backup per part (origin `replace`) before the first write. For skills it then uninstalls and restores; for MCP it overwrites the entry.
+- Plugins: the restore call only lists them, each with a status (`installed`, `auto`, `manual`, `no-cli`, `invalid`). `POST /api/config/plugin` reinstalls one plugin per request through its agent's CLI, with commands built server-side from the checked recipe:
+  - Claude Code: `claude plugin marketplace add owner/repo` (only if the marketplace name is missing; the name is checked after the add, and the install stops if it differs), then `claude plugin install id --scope user`, then `claude plugin disable` if it was off.
+  - Codex: `codex plugin marketplace add`, then `codex plugin add id`.
+  - Gemini: `gemini extensions install https://github.com/owner/repo [--ref tag] --consent`, then `disable` if it was off.
+  - Copilot: `copilot plugin install name@market`.
+  - `SA_PLUGIN_CLI=off` turns these commands off; the e2e tests set it.
+- Import of an archive of kind `config`:
+  - Each part is checked again: skills with the usual manifest checks and scan, MCP with `checkMcpImport`, and the plugin recipe and settings entry by entry.
+  - Only the cited files are kept, and the summary is computed again.
+  - Warnings name: each plugin source, each plugin with hooks, each command an MCP server runs, and each custom agent folder.
+- `applyBackup` refuses a `config` backup (`UNSUPPORTED`). `POST /api/backups/restore` with a `config` id restores every part with `skip`.
+
+| Method and path | Body | Response |
+|---|---|---|
+| `POST /api/config/create` | `{ label?, note?, secrets?, parts?: ["settings"\|"skills"\|"mcp"\|"plugins"] }` | `{ backup, failed: [{ part, name, message }], state }` |
+| `POST /api/config/preview` | `{ id }` | `{ backup, settings: { custom: [{ name, dir, status: new\|same\|missing }], hidden, targets }, skills: [{ name, verdict, status: new\|exists\|absent }], mcp: { items: [{ name, agent, off, status, runs }], secrets, vars }, plugins: [PluginStep] }` |
+| `POST /api/config/restore` | `{ id, parts?, conflict?: "skip"\|"replace", force?: [skill] }` | `{ settings, skills: { restored, skipped, held, failed }, mcp: { applied, skipped, failed }, plugins: [PluginStep], backups, warnings, state }` |
+| `POST /api/config/plugin` | `{ id, index }` | `{ status: "installed"\|"skipped"\|"manual", message, done: [command], state }` |
+
+`PluginStep = { index, agent, pluginId, name, market, repo, on, hooks, why, status }`.
+
+Hardening after the ECC review (16/11/2026):
+- Restore runs each part on its own. A part that fails records its error in its own report, and the other parts go on.
+- If the skills part is too large (200 MB or 100,000 entries), the backup keeps the other parts and says so in `failed`.
+- `settings.json` never accepts a network path (`\\server\share`, `//server`): reading it on Windows would send the user's identity to that server.
+- Preview:
+  - MCP entries list every entry that will be written: new ones, and the ones that « Remplacer » would overwrite. Each comes with its full command (up to 2,000 characters, `long: true` beyond), the names of its variables and headers (`env`), and the same « agent absent » rule as restore.
+  - A skill whose recorded verdict is red, or whose copy fails the scan again, shows as `rouge`, so it can be forced.
+  - The status of each skill uses the target places, as restore does.
+- The MCP backup made before a replace keeps the replaced values (0600, local), so the replace can be undone.
+- If a marketplace added from a recipe registers under another name, it is removed again and nothing is installed.
+- The interface has no « reinstall all » button. Each click on « Réinstaller » is the consent for the source shown, because Gemini CLI receives `--consent`. `Backup` of kind `config` = `{ id, kind: "config", label, note, origin, at, size, parts, items: [] }`.

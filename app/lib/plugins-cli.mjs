@@ -37,7 +37,7 @@ export const COMMANDS = {
   antigravity: { bin: 'agy', enable: (id) => ['plugin', 'enable', id], disable: (id) => ['plugin', 'disable', id], uninstall: (id) => ['plugin', 'uninstall', id] },
 };
 export const VERBS = ['enable', 'disable', 'uninstall', 'update'];
-const ID_RE = /^[A-Za-z0-9][\w.@:/+-]{0,199}$/;
+export const ID_RE = /^[A-Za-z0-9][\w.@:/+-]{0,199}$/;
 const VERB_TEXT = { enable: 'activer', disable: 'désactiver', uninstall: 'désinstaller', update: 'mettre à jour' };
 
 // Gestes possibles pour un agent (la page n'offre que ceux-là).
