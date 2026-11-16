@@ -17,6 +17,33 @@
   var db = SA.search || { items: [], cats: [], details: {} }, files = SA.files || {};
   var mine = [];
 
+  /* Serveurs MCP fictifs de la machine d'exemple : mêmes champs que l'état réel (secrets déjà masqués). */
+  function srv(name, kind, cmd, args, agents, extra) {
+    var ag = {};
+    agents.forEach(function (k) { ag[k] = [{ path: '', on: true, same: true }]; });
+    return Object.assign({ id: name, name: name, scope: 'global', kind: kind, command: cmd, args: args, url: null, env: {}, headers: {}, secrets: 0, ag: ag, on: true, differs: false }, extra || {});
+  }
+  SA.data.mcp = {
+    agents: [],
+    servers: [
+      srv('github', 'stdio', 'npx', ['-y', '@modelcontextprotocol/server-github'], ['claude', 'cursor'], { env: { GITHUB_PERSONAL_ACCESS_TOKEN: '••••' }, secrets: 1 }),
+      srv('fetch', 'stdio', 'uvx', ['mcp-server-fetch'], ['claude']),
+      srv('filesystem', 'stdio', 'npx', ['-y', '@modelcontextprotocol/server-filesystem', '~/projets'], ['cursor', 'cline']),
+      srv('docs-exemple', 'http', null, [], ['gemini'], { url: 'https://mcp.exemple.dev/mcp' })
+    ]
+  };
+
+  /* Plugins fictifs de la machine d'exemple : mêmes champs que l'état réel. */
+  SA.data.plugins = {
+    agents: [{ id: 'claude', name: 'Claude Code', count: 2, verbs: ['enable', 'disable', 'uninstall', 'update'] }, { id: 'gemini', name: 'Gemini CLI', count: 1, verbs: ['enable', 'disable', 'uninstall', 'update'] }],
+    plugins: [
+      { id: 'outils-revue', name: 'outils-revue', title: 'outils-revue', ag: { claude: [{ pluginId: 'outils-revue@exemple', scope: 'global', version: '1.4.0', on: true }] },
+        contents: { description: 'Revue de code et tests, en exemple.', skills: 6, commands: 4, agents: 2, hooks: ['PreToolUse'], mcp: [] }, on: true },
+      { id: 'docs-exemple', name: 'docs-exemple', title: 'docs-exemple', ag: { claude: [{ pluginId: 'docs-exemple@exemple', scope: 'global', version: '0.3.1', on: false }], gemini: [{ pluginId: 'docs-exemple', scope: 'global', version: '0.3.1', on: true }] },
+        contents: { description: 'Lecture de documentation, en exemple.', skills: 2, commands: 0, agents: 0, hooks: [], mcp: ['docs'] }, on: true }
+    ]
+  };
+
   /* Skills réels : les trois mieux notés de chaque catégorie, parmi ceux dont le fichier a été lu. */
   var taken = {}, real = [];
   db.cats.forEach(function (c, ci) {

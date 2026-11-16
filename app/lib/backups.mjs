@@ -2,6 +2,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { agentMap } from './registry.mjs';
+import { MCP_KIND, normalizeMcpMeta, pubMcp } from './mcp-meta.mjs';
 import { AGENT_RE, COPY_LIMIT, MAX_ENTRIES, NAME_RE, backupsDir, checkAgentId, checkName, copyTree, disabledDir, exists, fail, fsMessage, homeOf, isSkillEntry, linkDir, lockKeyFor, lockOf, lstatOrNull, lockPath, mkdirp, readJson, rmOpts, safeJoin, scanOf, sharedDir, statOrNull, treeHash, writeJsonAtomic } from './util.mjs';
 
 const ID_RE = /^(\d{8}-\d{6})-(.+)$/;
@@ -56,7 +57,8 @@ const validName = (n) => typeof n === 'string' && NAME_RE.test(n) && n !== '.' &
 
 // Lit meta.json (version 1 ou 2) sous la forme version 2. Rend null si incohérent.
 export function normalizeMeta(raw, id) {
-  if (!isObj(raw) || raw.id !== id) return null;
+  // Sauvegarde de serveurs MCP : lue par normalizeMcpMeta (mcp-meta.mjs), jamais comme une sauvegarde de skills.
+  if (!isObj(raw) || raw.id !== id || raw.kind === MCP_KIND) return null;
   const list = raw.version === 2 ? raw.items
     : [{ name: raw.name, src: raw.src, agents: raw.agents, places: raw.places, lock: raw.lock, skipped: raw.skipped, verdict: null }];
   if (!Array.isArray(list) || !list.length) return null;
@@ -95,6 +97,13 @@ export function pub(m) {
   return { id: m.id, label: m.label, note: m.note, origin: m.origin, at: m.at, size: m.size, items, name: items[0].name, src: items[0].src, agents: items[0].agents };
 }
 
+// Sorte d'une sauvegarde : 'mcp' (serveurs MCP) ou 'skill'. Lève BAD_NAME pour un identifiant invalide.
+export async function backupKind(home, id) {
+  checkId(id);
+  const raw = await readJson(path.join(safeJoin(backupsDir(home), id), 'meta.json'), null);
+  return raw && raw.kind === MCP_KIND ? MCP_KIND : 'skill';
+}
+
 // Ouvre une sauvegarde : dossier et meta.json normalisé.
 export async function loadMeta(home, id) {
   checkId(id);
@@ -127,7 +136,9 @@ export async function listBackups(opts = {}) {
   const out = [];
   for (const e of entries) {
     if (!e.isDirectory() || !ID_RE.test(e.name)) continue;
-    const meta = normalizeMeta(await readJson(path.join(root, e.name, 'meta.json'), null), e.name);
+    const raw = await readJson(path.join(root, e.name, 'meta.json'), null);
+    if (raw && raw.kind === MCP_KIND) { const m = normalizeMcpMeta(raw, e.name); if (m) out.push(pubMcp(m)); continue; }
+    const meta = normalizeMeta(raw, e.name);
     if (meta) out.push(pub(meta));
   }
   return out.sort((a, b) => (a.id < b.id ? 1 : a.id > b.id ? -1 : 0));
@@ -295,6 +306,7 @@ export async function createManualBackup(opts = {}) {
 // Plusieurs skills : tout est vérifié avant la première écriture, et tout est défait en cas d'échec.
 export async function restoreBackup(opts = {}) {
   const home = homeOf(opts);
+  if ((await backupKind(home, opts.id)) === MCP_KIND) return (await import('./mcp-backups.mjs')).restoreMcpBackup(opts);
   if (opts.force !== undefined && opts.force !== null && !Array.isArray(opts.force)) throw fail('BAD_NAME', 'La liste des skills à restaurer quand même est invalide.');
   const force = (opts.force || []).map(checkName);
   const { dir, meta } = await loadMeta(home, opts.id);

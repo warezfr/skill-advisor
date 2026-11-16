@@ -4,6 +4,18 @@ All notable changes to Skill Advisor are listed in this file.
 
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- MCP servers of 25 agents, read through `add-mcp` 2.6.1 in a child process. Secret values are masked before they leave it; a strictly unreadable settings file is reported and never written.
+- Screen « Serveurs MCP »: installed servers per agent, disable, enable, back up (one, several), remove with an optional backup; and a catalogue of the best servers from the official MCP registry, scored out of 100 like skills, installed with a pinned version into the chosen agents, with each agent's own format and variable syntax.
+- Every write to an agent's settings changes one server entry only, keeps comments (JSON, JSONC, YAML, TOML), is checked by reading the file again, keeps a copy of the old file, and is refused if the agent rewrote the file meanwhile.
+- MCP backups on the Sauvegardes screen: secrets replaced by variables by default, restore to the original agents, apply to other agents with format conversion, export and import.
+- Screen « Plugins »: plugins of Claude Code, Codex, Gemini CLI, Copilot CLI and Antigravity, what each brings, hooks named, enable, disable, update and uninstall through each agent's own command; and a catalogue of 555 plugins from the open marketplaces of Claude Code and Copilot CLI.
+- The advice results also suggest MCP servers and plugins for the project. The Agents screen lists the MCP servers and plugins of each agent.
+- `tools/mcp-catalog.mjs` and `tools/plugin-catalog.mjs` build `catalog/mcp.json` and `catalog/plugins.json` from public sources.
+
 ## [1.0.0] - 2026-11-15
 
 The first finished version: a local application that works on the real skills of your agents.

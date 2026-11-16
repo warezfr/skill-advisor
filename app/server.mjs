@@ -27,10 +27,14 @@ const NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/;
 const AGENT = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const REPO = /^[\w.-]+\/[\w.-]+$/;
 const BACKUP = /^[A-Za-z0-9][A-Za-z0-9._-]{0,199}$/;
+// Nom de serveur MCP : 1 à 200 caractères, sans caractère de contrôle (les agents acceptent presque tout).
+const MCP_NAME = /^[^\u0000-\u001f\u007f]{1,200}$/;
 
 // Codes du lib et statut HTTP. Les autres codes deviennent 500.
 const STATUS = { BAD_ARCHIVE: 400, BAD_INPUT: 400, BAD_NAME: 400, BAD_SOURCE: 400, NOT_FOUND: 404, SOURCE_NOT_FOUND: 404, EXISTS: 409, ROUGE: 409, SHARED: 409,
-  GITHUB_LIMIT: 502, NETWORK: 502, BACKUP_FAILED: 500 };
+  GITHUB_LIMIT: 502, NETWORK: 502, BACKUP_FAILED: 500,
+  // Réglages MCP : fichier mal formé, changé pendant l'écriture, agent qui ne sait pas, écriture impossible.
+  BROKEN_CONFIG: 409, CONFLICT: 409, UNSUPPORTED: 400, WRITE_FAILED: 500 };
 // Codes dont le message (en français, écrit par le lib) peut partir vers la page.
 const KNOWN = new Set([...Object.keys(STATUS), 'CLI_FAILED', 'OUTSIDE_HOME']);
 
@@ -55,7 +59,8 @@ const bad = (code, message) => new HttpError(400, code, message);
 const short = (v) => String(v).slice(0, 60);
 const CONTROL = /[\u0000-\u001f\u007f]/;
 // Message selon le type de nom contrôlé.
-const what = (re) => (re === AGENT ? 'Identifiant d\'agent invalide : ' : re === BACKUP ? 'Identifiant de sauvegarde invalide : ' : 'Nom de skill invalide : ');
+const what = (re) => (re === AGENT ? 'Identifiant d\'agent invalide : ' : re === BACKUP ? 'Identifiant de sauvegarde invalide : '
+  : re === MCP_NAME ? 'Nom de serveur MCP invalide : ' : 'Nom de skill invalide : ');
 
 // ---------- Contrôle des entrées ----------
 // Le lib refait ces contrôles : le serveur refuse tôt et répond proprement.
@@ -147,6 +152,43 @@ function createBody(b) {
     label: optText(b, 'label', 80, LABEL_BAD),
     note: optText(b, 'note', 500, NOTE_BAD)
   };
+}
+
+// Corps des gestes MCP : un serveur, sa portée, les agents visés (tous sans liste).
+function mcpBody(b) {
+  return { name: one(b, 'name', MCP_NAME, 'BAD_NAME'), scope: scope(b), agents: nonEmpty(list(b, 'agents', AGENT, 'BAD_NAME', { optional: true }), 'agents') };
+}
+function conflictOf(b, optional) {
+  if (optional && b.conflict === undefined) return 'skip';
+  if (b.conflict !== 'skip' && b.conflict !== 'replace') throw bad('BAD_INPUT', 'Le champ conflict vaut skip ou replace.');
+  return b.conflict;
+}
+// Corps de la sauvegarde MCP à la demande : servers = [{ name, scope? }], 1 à 200.
+function mcpBackupBody(b) {
+  const v = b.servers;
+  if (!Array.isArray(v) || !v.length || v.length > 200) throw bad('BAD_INPUT', 'Le champ servers doit être une liste de 1 à 200 serveurs.');
+  const servers = v.map((x) => {
+    if (!obj(x) || typeof x.name !== 'string') throw bad('BAD_INPUT', 'Chaque serveur doit être un objet { name, scope }.');
+    if (!MCP_NAME.test(x.name)) throw bad('BAD_NAME', what(MCP_NAME) + short(x.name) + '.');
+    return { name: x.name, scope: scope(x) };
+  });
+  return { servers, label: optText(b, 'label', 80, LABEL_BAD), note: optText(b, 'note', 500, NOTE_BAD), secrets: flag(b, 'secrets') };
+}
+
+// Corps de l'installation MCP : un serveur du catalogue, des agents, des valeurs de variables saisies (texte borné).
+const VAR_NAME = /^[A-Za-z_][\w-]{0,127}$/;
+function mcpInstallBody(b) {
+  if (typeof b.id !== 'string' || !b.id || b.id.length > 300 || CONTROL.test(b.id)) throw bad('BAD_INPUT', 'Le champ id doit être l\'identifiant d\'un serveur du catalogue.');
+  const values = {};
+  if (b.values !== undefined) {
+    if (!obj(b.values) || Object.keys(b.values).length > 50) throw bad('BAD_INPUT', 'Le champ values doit être un objet { NOM: valeur }.');
+    for (const [k, v] of Object.entries(b.values)) {
+      if (!VAR_NAME.test(k) || typeof v !== 'string' || v.length > 4096 || NOTE_BAD.test(v)) throw bad('BAD_INPUT', 'Valeur invalide pour ' + short(k) + '.');
+      values[k] = v;
+    }
+  }
+  if (b.name !== undefined && (typeof b.name !== 'string' || !/^[\w.-]{1,64}$/.test(b.name))) throw bad('BAD_NAME', 'Nom de serveur invalide : lettres, chiffres, point, tiret, 64 caractères au plus.');
+  return { id: b.id, agents: nonEmpty(list(b, 'agents', AGENT, 'BAD_NAME'), 'agents'), scope: scope(b), values, name: b.name, replace: flag(b, 'replace'), force: flag(b, 'force') };
 }
 
 // Corps de apply. Le serveur contrôle le format ; le lib refuse un agent inconnu (NOT_FOUND) avant toute écriture.
@@ -257,6 +299,36 @@ const ROUTES = [
     return SENT;
   }],
   ['POST', '/api/backups/import', W, async (b, lib) => withState(lib, await lib.importBackup({ data: b })), 'archive'],
+  // Serveurs MCP des agents.
+  ['POST', '/api/mcp/disable', W, async (b, lib) => withState(lib, await lib.mcpDisable(mcpBody(b)))],
+  ['POST', '/api/mcp/enable', W, async (b, lib) => withState(lib, await lib.mcpEnable(mcpBody(b)))],
+  ['POST', '/api/mcp/remove', W, async (b, lib) => withState(lib, await lib.mcpRemove({ ...mcpBody(b), backup: flag(b, 'backup'), secrets: flag(b, 'secrets') }))],
+  ['POST', '/api/mcp/backup', W, async (b, lib) => withState(lib, await lib.mcpBackup(mcpBackupBody(b)))],
+  ['POST', '/api/mcp/apply', W, async (b, lib) => withState(lib, await lib.mcpApply({
+    id: one(b, 'id', BACKUP, 'BAD_NAME'), names: nonEmpty(list(b, 'names', MCP_NAME, 'BAD_NAME', { optional: true }), 'names'),
+    agents: nonEmpty(list(b, 'agents', AGENT, 'BAD_NAME'), 'agents'), conflict: conflictOf(b) }))],
+  // Catalogue MCP fourni (catalog/mcp.json) : hors file, lecture seule.
+  ['GET', '/api/mcp/catalog', F, (b, lib) => lib.mcpCatalog()],
+  ['POST', '/api/mcp/install', W, async (b, lib) => {
+    const args = mcpInstallBody(b);
+    if (args.scope === 'project' && !(await lib.getProject())) throw bad('BAD_INPUT', 'Choisissez d\'abord le dossier du projet.');
+    return withState(lib, await lib.mcpInstall(args));
+  }],
+  // Plugins : catalogue fourni (hors file) et installation par le CLI de l'agent.
+  ['GET', '/api/plugins/catalog', F, (b, lib) => lib.pluginCatalog()],
+  ['POST', '/api/plugins/install', W, async (b, lib) => {
+    if (typeof b.id !== 'string' || !/^[A-Za-z0-9][\w.-]{0,99}@[\w.-]{1,100}$/.test(b.id)) throw bad('BAD_NAME', 'Identifiant de plugin invalide.');
+    const sc = scope(b);
+    if (sc === 'project' && !(await lib.getProject())) throw bad('BAD_INPUT', 'Choisissez d\'abord le dossier du projet.');
+    return withState(lib, await lib.pluginInstall({ id: b.id, scope: sc, force: flag(b, 'force') }));
+  }],
+  // Plugins des agents : geste par le CLI de chaque agent.
+  ['POST', '/api/plugins/action', W, async (b, lib) => {
+    if (typeof b.name !== 'string' || !/^[A-Za-z0-9][\w.@:/+-]{0,199}$/.test(b.name)) throw bad('BAD_NAME', 'Nom de plugin invalide.');
+    if (!['enable', 'disable', 'uninstall', 'update'].includes(b.verb)) throw bad('BAD_INPUT', 'Le champ verb vaut enable, disable, uninstall ou update.');
+    return withState(lib, await lib.pluginAction({ name: b.name, verb: b.verb, agents: nonEmpty(list(b, 'agents', AGENT, 'BAD_NAME', { optional: true }), 'agents') }));
+  }],
+  ['POST', '/api/mcp/restore', W, async (b, lib) => withState(lib, await lib.mcpRestore({ id: one(b, 'id', BACKUP, 'BAD_NAME'), conflict: conflictOf(b, true) }))],
   ['POST', '/api/agents/custom', W, async (b, lib) => {
     const agent = await lib.addCustomAgent({ name: text(b, 'name', 64), dir: text(b, 'dir', 1024) });
     return withState(lib, { agent });
@@ -673,7 +745,18 @@ export const WIRING = {
   removeCustomAgent: ['settings', 'removeCustomAgent', 'all'],
   hideAgent: ['settings', 'hideAgent', 'all'],
   showAgent: ['settings', 'showAgent', 'all'],
-  setTargets: ['settings', 'setTargets', 'all']
+  setTargets: ['settings', 'setTargets', 'all'],
+  mcpDisable: ['mcp', 'mcpDisable', 'all'],
+  mcpEnable: ['mcp', 'mcpEnable', 'all'],
+  mcpRemove: ['mcp-backups', 'removeMcp', 'all'],
+  mcpBackup: ['mcp-backups', 'createMcpBackup', 'all'],
+  mcpApply: ['mcp-backups', 'applyMcpBackup', 'all'],
+  mcpRestore: ['mcp-backups', 'restoreMcpBackup', 'all'],
+  mcpCatalog: ['mcp-install', 'mcpCatalog', 'home'],
+  mcpInstall: ['mcp-install', 'installMcp', 'all'],
+  pluginAction: ['plugins-cli', 'pluginAction', 'all'],
+  pluginCatalog: ['plugins-cli', 'pluginCatalog', 'home'],
+  pluginInstall: ['plugins-cli', 'installPlugin', 'all']
 };
 
 // Lib réel : modules de app/lib chargés à la demande, avec le dossier personnel et le projet choisis.

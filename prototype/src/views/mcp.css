@@ -1,0 +1,75 @@
+/* Skill Advisor · écran Serveurs MCP : recherche, filtres, lignes, menu d'actions, confirmation, sélection.
+   Seulement des classes mc-, sous .mc-mgr. Jetons seulement. */
+
+.mc-mgr .mc-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; margin-top: 24px; }
+.mc-mgr .mc-q { flex: 1 1 260px; min-width: 0; max-width: 380px; }
+.mc-mgr .mc-tools .seg { max-width: 100%; overflow-x: auto; }
+.mc-mgr .mc-tools .seg > button { padding: 0 12px; }
+.mc-mgr .mc-tools .seg .mut { margin-left: 4px; font-family: var(--f-m); font-size: 12px; font-variant-numeric: tabular-nums; }
+
+.mc-mgr .mc-msg:empty, .mc-mgr .mc-alert:empty { display: none; }
+.mc-mgr .mc-msg { margin: 12px 0 0; font-size: 13px; color: var(--ink-2); }
+.mc-mgr .mc-alert { margin: 12px 0 0; padding: 8px 12px; border-left: 2px solid var(--bad); border-radius: 0 var(--r1) var(--r1) 0; background: var(--bad-soft); font-size: 13px; color: var(--bad); }
+
+.mc-mgr .mc-bulk { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; margin-top: 16px; padding: 8px 12px; border-radius: var(--r1); background: var(--bg-2); }
+.mc-mgr .mc-bulk-n { font-size: 13px; color: var(--ink-2); }
+
+.mc-mgr .mc-empty { margin: 24px 0 0; color: var(--ink-2); }
+.mc-mgr .mc-list { margin: 16px 0 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+.mc-mgr .mc-row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  grid-template-areas: "cb main more" "cb pane pane";
+  align-items: start;
+  column-gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.mc-mgr .mc-row > .cb { grid-area: cb; margin-left: -6px; }
+.mc-mgr .mc-main { grid-area: main; min-width: 0; padding-top: 10px; }
+.mc-mgr .mc-more { grid-area: more; min-height: 36px; margin-top: 4px; padding: 0 10px; font-size: 13px; }
+.mc-mgr .mc-more[aria-expanded="true"] { background: var(--bg-2); color: var(--ink); }
+.mc-mgr .mc-pane { grid-area: pane; padding-top: 8px; }
+
+.mc-mgr .mc-l1 { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 0; }
+.mc-mgr .mc-n { font-size: 15px; font-weight: 500; color: var(--ink); overflow-wrap: anywhere; }
+.mc-mgr .mc-row.is-off .mc-n { color: var(--ink-2); }
+.mc-mgr .mc-kind { border-color: var(--line-2); color: var(--ink-2); }
+.mc-mgr .mc-cmd { margin: 6px 0 0; font-size: 12.5px; color: var(--ink-2); overflow-wrap: anywhere; }
+.mc-mgr .mc-notes { margin: 6px 0 0; font-size: 12.5px; color: var(--ink-3); }
+
+.mc-mgr .mc-ag { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0 0; padding: 0; list-style: none; }
+.mc-mgr .mc-chip { display: inline-flex; align-items: baseline; gap: 6px; padding: 2px 8px; border: 1px solid var(--line-2); border-radius: 999px; font-size: 12.5px; color: var(--ink); }
+.mc-mgr .mc-chip-s { font-size: 12px; color: var(--ink-3); }
+.mc-mgr .mc-chip.is-off { border-style: dashed; color: var(--ink-2); }
+
+.mc-mgr .mc-menu { display: flex; flex-wrap: wrap; gap: 4px; }
+.mc-mgr .mc-menu .btn { min-height: 36px; font-size: 13px; }
+.mc-mgr .mc-cf { padding: 12px 16px; border-left: 2px solid var(--bad); border-radius: 0 var(--r1) var(--r1) 0; background: var(--bad-soft); }
+.mc-mgr .mc-cf-o { margin: 4px 0 0; }
+
+@media (max-width: 760px) {
+  .mc-mgr .mc-q { max-width: none; }
+  .mc-mgr .mc-row { grid-template-areas: "cb main more" "pane pane pane"; }
+}
+
+/* Onglets et catalogue. */
+.mc-mgr .mc-tabs { margin-top: 24px; }
+.mc-mgr .mc-cc { flex: 0 1 280px; min-width: 0; }
+.mc-mgr .mc-card { padding: 16px 0; border-bottom: 1px solid var(--line); }
+.mc-mgr .mc-card .mc-l1 { gap: 6px 12px; }
+.mc-mgr .mc-score { margin-left: auto; font: 600 15px/1 var(--f-d, inherit); font-variant-numeric: tabular-nums; color: var(--ink); }
+.mc-mgr .mc-score .mut { font-size: 12px; font-weight: 400; }
+.mc-mgr .mc-id { margin: 4px 0 0; font-size: 12px; color: var(--ink-3); overflow-wrap: anywhere; }
+.mc-mgr .mc-desc { margin: 8px 0 0; font-size: 14px; color: var(--ink-2); max-width: 70ch; }
+.mc-mgr .mc-inst { margin-top: 12px; padding: 12px 16px; border-left: 2px solid var(--accent); border-radius: 0 var(--r1) var(--r1) 0; background: var(--bg-2); }
+.mc-mgr .mc-gh { margin: 0; font-size: 13px; color: var(--ink-3); }
+.mc-mgr .mc-cks { display: flex; flex-wrap: wrap; gap: 0 16px; margin: 0; padding: 0; list-style: none; }
+.mc-mgr .mc-vars { margin: 12px 0 0; padding: 0; border: 0; }
+.mc-mgr .mc-vars legend { padding: 0; font-size: 13px; color: var(--ink-3); }
+.mc-mgr .mc-var { display: grid; gap: 4px; margin: 8px 0 0; max-width: 480px; }
+.mc-mgr .mc-var label { font-size: 13px; overflow-wrap: anywhere; }
+.mc-mgr .mc-hint { margin: 8px 0 0; font-size: 12.5px; max-width: 70ch; }
+
+/* Écran Plugins (mêmes classes, sous .pl-mgr). */
+.pl-mgr .pl-hooks { color: var(--warn); }

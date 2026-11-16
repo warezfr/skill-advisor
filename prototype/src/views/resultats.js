@@ -77,6 +77,24 @@
   }
 
   function onClick(e) {
+    var po = e.target && e.target.closest ? e.target.closest('[data-plug-open]') : null;
+    if (po) {
+      var s0 = SA.state;
+      s0.pl = s0.pl || {};
+      s0.pl.tab = 'cat';
+      s0.pl.cq = String(po.getAttribute('data-plug-open'));
+      if (SA.setRoute) SA.setRoute('plugins');
+      return;
+    }
+    var mo = e.target && e.target.closest ? e.target.closest('[data-mcp-open]') : null;
+    if (mo) {
+      var s = SA.state;
+      s.mc = s.mc || {};
+      s.mc.tab = 'cat';
+      s.mc.cq = String(mo.getAttribute('data-mcp-open')).split('/').pop();
+      if (SA.setRoute) SA.setRoute('mcp');
+      return;
+    }
     if (!here()) return;
     var d = e.target.closest('[data-rs-detail]');
     if (d) {
@@ -94,6 +112,34 @@
       SA.cart.toggle(r.getAttribute('data-id'));
       SA.sync();
     }
+  }
+
+  /* Serveurs MCP conseillés pour le même objectif : les six premiers, avec un lien vers le catalogue MCP. */
+  function mcpHTML() {
+    var st = SA.state, l = SA.reco.mcp ? SA.reco.mcp(st.goal, st.answers).slice(0, 6) : [];
+    if (!l.length) return '';
+    return '<section class="rs-mcp" data-st aria-labelledby="rs-mcp-t"><h2 class="h2" id="rs-mcp-t">Serveurs MCP conseillés</h2>' +
+      '<p class="sub">Un serveur MCP donne à vos agents un outil de plus (une base, un service, un navigateur). Installez-le depuis l’écran Serveurs MCP.</p>' +
+      '<ul class="ledger rs-list">' + l.map(function (r) {
+        var e = r.e, nm = e.title || String(e.id).split('/').pop(), sc = (e.score || {}).total;
+        return '<li class="rs-mcp-i"><p class="rs-mcp-n"><span>' + SA.esc(nm) + '</span>' + (sc != null ? ' <span class="mut">' + sc + '/100</span>' : '') + '</p>' +
+          (e.description ? '<p class="sub">' + SA.esc(e.description) + '</p>' : '') +
+          (r.why.length ? '<p class="mut rs-why">Pour : ' + SA.esc(r.why.join(', ')) + '</p>' : '') +
+          '<p><button type="button" class="btn quiet" data-mcp-open="' + SA.esc(e.id) + '">Voir dans le catalogue MCP</button></p></li>';
+      }).join('') + '</ul></section>' + plugHTML();
+  }
+  /* Plugins conseillés (Claude Code, Copilot CLI) : les quatre premiers, avec un lien vers le catalogue des plugins. */
+  function plugHTML() {
+    var st = SA.state, l = SA.reco.plugins ? SA.reco.plugins(st.goal, st.answers).slice(0, 4) : [];
+    if (!l.length) return '';
+    return '<section class="rs-mcp" data-st aria-labelledby="rs-pl-t"><h2 class="h2" id="rs-pl-t">Plugins conseillés</h2>' +
+      '<p class="sub">Un plugin regroupe des skills, des commandes et des serveurs MCP pour un agent. Installez-le depuis l’écran Plugins.</p>' +
+      '<ul class="ledger rs-list">' + l.map(function (r) {
+        var e = r.e, sc = (e.score || {}).total;
+        return '<li class="rs-mcp-i"><p class="rs-mcp-n"><span>' + SA.esc(e.title || e.name) + '</span>' + (sc != null ? ' <span class="mut">' + sc + '/100</span>' : '') + '</p>' +
+          (e.description ? '<p class="sub">' + SA.esc(e.description) + '</p>' : '') +
+          '<p><button type="button" class="btn quiet" data-plug-open="' + SA.esc(e.name) + '">Voir dans le catalogue des plugins</button></p></li>';
+      }).join('') + '</ul></section>';
   }
 
   SA.views.resultats = {
@@ -118,7 +164,8 @@
         '<ul class="ledger rs-list">' + list.slice(0, n).map(row).join('') + '</ul>' +
         '<p class="rs-foot" data-st>' +
           (rest > 0 ? '<button type="button" class="btn" id="rs-more">Afficher ' + Math.min(PAGE, rest) + ' de plus</button>' : '') +
-          '<button type="button" class="lnk" data-go-route="recherche">Chercher dans toute la base</button></p>';
+          '<button type="button" class="lnk" data-go-route="recherche">Chercher dans toute la base</button></p>' +
+        mcpHTML();
     },
 
     mount: function (root) {

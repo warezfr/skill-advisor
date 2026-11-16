@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import zlib from 'node:zlib';
 import * as tar from 'tar';
-import { RESERVED, VERDICTS, VERDICT_TEXT, defaultLabel, loadMeta, normalizeMeta, placeOf, pub, stamp, validCopy } from './backups.mjs';
+import { RESERVED, VERDICTS, VERDICT_TEXT, backupKind, defaultLabel, loadMeta, normalizeMeta, placeOf, pub, stamp, validCopy } from './backups.mjs';
 import { AGENT_RE, COPY_LIMIT, MAX_ENTRIES, NAME_RE, backupsDir, copyTree, fail, fsMessage, homeOf, isTrackedSource, renameRetry, rmOpts, safeJoin, scanOf, sweepTmp, tmpDir } from './util.mjs';
 
 export const FORMAT = 'skill-advisor/backup/1';
@@ -28,7 +28,9 @@ async function workDir(home, prefix) {
 // Rend un Buffer : l'archive .tar.gz de la sauvegarde. Fichiers et dossiers seulement, droits portables, sans propriétaire.
 export async function exportBackup(opts = {}) {
   const home = homeOf(opts);
-  const { dir, meta } = await loadMeta(home, opts.id);
+  // Sauvegarde de serveurs MCP : meta.json et servers.json, même archive et même manifeste.
+  const { dir, meta } = (await backupKind(home, opts.id)) === 'mcp'
+    ? await (await import('./mcp-backups.mjs')).loadMcpBackup(home, opts.id) : await loadMeta(home, opts.id);
   const stage = await workDir(home, 'export-');
   try {
     const root = path.join(stage, 'b');
@@ -250,6 +252,16 @@ export async function importBackup(opts = {}) {
     const root = path.join(stage, 'x');
     await fs.mkdir(root);
     await extract(data, root);
+    // Manifeste d'une sauvegarde de serveurs MCP : import à part (mcp-backups.mjs).
+    const peek = await (async () => {
+      const f = path.join(root, MANIFEST);
+      const st = await fs.stat(f).catch(() => null);
+      if (!st || !st.isFile() || st.size > 4 * 1024 * 1024) return null;
+      try { return JSON.parse(await fs.readFile(f, 'utf8')); } catch { return null; }
+    })();
+    if (isObj(peek) && peek.format === FORMAT && isObj(peek.meta) && peek.meta.kind === 'mcp') {
+      return await (await import('./mcp-backups.mjs')).importMcpFrom(home, root, peek.meta);
+    }
     const man = await readManifest(root);
     // Nouveau dossier : seulement les copies citées par le manifeste.
     const fresh = path.join(stage, 'new');

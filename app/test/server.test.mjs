@@ -98,6 +98,17 @@ function fakeLib() {
       return { removed: a.names, backups: [], failed: [] };
     },
     async update(a) { log.push(['update', a]); return { updated: a.names || [], held: [], failed: [] }; },
+    async mcpDisable(a) { log.push(['mcpDisable', a]); maybeThrow([a.name]); return { done: [{ agent: 'cursor', mcpId: 'cursor' }], failed: [] }; },
+    async mcpEnable(a) { log.push(['mcpEnable', a]); maybeThrow([a.name]); return { done: [], failed: [] }; },
+    async mcpRemove(a) { log.push(['mcpRemove', a]); maybeThrow([a.name]); return { removed: [], failed: [], backups: [] }; },
+    async mcpBackup(a) { log.push(['mcpBackup', a]); return { backup: { id: '20261116-100000-mcp-github', kind: 'mcp' }, failed: [] }; },
+    async mcpApply(a) { log.push(['mcpApply', a]); return { applied: [], skipped: [], failed: [], backups: [], warnings: [] }; },
+    async pluginCatalog() { return { generatedAt: '2026-11-16T00:00:00Z', plugins: [{ id: 'x@claude-plugins-official' }] }; },
+    async pluginInstall(a) { log.push(['pluginInstall', a]); return { installed: true, held: null, id: a.id }; },
+    async pluginAction(a) { log.push(['pluginAction', a]); return { done: [{ agent: 'claude-code', pluginId: a.name + '@m' }], failed: [] }; },
+    async mcpCatalog() { log.push(['mcpCatalog']); return { generatedAt: '2026-11-16T00:00:00Z', servers: [{ id: 'com.acme/x' }] }; },
+    async mcpInstall(a) { log.push(['mcpInstall', a]); return { installed: [{ agent: 'cursor', mcpId: 'cursor' }], skipped: [], failed: [], held: null, backups: [], warnings: [], name: 'x' }; },
+    async mcpRestore(a) { log.push(['mcpRestore', a]); return { applied: [], skipped: [], failed: [], backups: [], warnings: [] }; },
     outdated: [],
     async check(a) {
       log.push(['check', a]);
@@ -1464,5 +1475,103 @@ test('catalogue : la variable CATALOG_URL sert d\'adresse par défaut', async ()
   } finally {
     if (old === undefined) delete process.env.CATALOG_URL; else process.env.CATALOG_URL = old;
     s.close(); clearCatalogCache();
+  }
+});
+
+test('serveurs MCP : disable, enable, remove, backup, apply, restore, et contrôles des corps', async () => {
+  const at = (n) => lib.log.filter((l) => l[0] === n).at(-1)[1];
+  let r = await api('POST', '/api/mcp/disable', { body: { name: 'plugin:ecc:chrome devtools', agents: ['cursor'] } });
+  assert.equal(r.status, 200);
+  assert.ok(r.json.state);
+  assert.deepEqual(at('mcpDisable'), { name: 'plugin:ecc:chrome devtools', scope: 'global', agents: ['cursor'] });
+  r = await api('POST', '/api/mcp/enable', { body: { name: 'github', scope: 'project' } });
+  assert.equal(r.status, 200);
+  assert.deepEqual(at('mcpEnable'), { name: 'github', scope: 'project', agents: undefined });
+  r = await api('POST', '/api/mcp/remove', { body: { name: 'github', backup: true, secrets: false } });
+  assert.equal(r.status, 200);
+  assert.deepEqual(at('mcpRemove'), { name: 'github', scope: 'global', agents: undefined, backup: true, secrets: false });
+  r = await api('POST', '/api/mcp/backup', { body: { servers: [{ name: 'github' }, { name: 'loc', scope: 'project' }], label: 'Avant', secrets: true } });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.backup.kind, 'mcp');
+  assert.deepEqual(at('mcpBackup'), { servers: [{ name: 'github', scope: 'global' }, { name: 'loc', scope: 'project' }], label: 'Avant', note: undefined, secrets: true });
+  r = await api('POST', '/api/mcp/apply', { body: { id: '20261116-100000-mcp-github', names: ['github'], agents: ['codex'], conflict: 'replace' } });
+  assert.equal(r.status, 200);
+  assert.deepEqual(at('mcpApply'), { id: '20261116-100000-mcp-github', names: ['github'], agents: ['codex'], conflict: 'replace' });
+  r = await api('POST', '/api/mcp/restore', { body: { id: '20261116-100000-mcp-github' } });
+  assert.equal(r.status, 200);
+  assert.deepEqual(at('mcpRestore'), { id: '20261116-100000-mcp-github', conflict: 'skip' });
+
+  for (const [p, body] of [
+    ['/api/mcp/disable', { name: 'a\u0000b' }],
+    ['/api/mcp/disable', { name: '' }],
+    ['/api/mcp/disable', { name: 'x'.repeat(201) }],
+    ['/api/mcp/disable', { name: 'g', scope: 'ailleurs' }],
+    ['/api/mcp/disable', { name: 'g', agents: [] }],
+    ['/api/mcp/disable', { name: 'g', agents: ['../x'] }],
+    ['/api/mcp/remove', { name: 'g', backup: 'oui' }],
+    ['/api/mcp/backup', { servers: [] }],
+    ['/api/mcp/backup', { servers: ['github'] }],
+    ['/api/mcp/apply', { id: '20261116-100000-mcp-github', agents: ['codex'] }],
+    ['/api/mcp/apply', { id: '../x', agents: ['codex'], conflict: 'skip' }],
+    ['/api/mcp/restore', { id: '20261116-100000-mcp-github', conflict: 'tout' }],
+  ]) {
+    r = await api('POST', p, { body });
+    assert.equal(r.status, 400, p + ' ' + JSON.stringify(body));
+  }
+  for (const [code, status] of [['BROKEN_CONFIG', 409], ['CONFLICT', 409], ['UNSUPPORTED', 400], ['WRITE_FAILED', 500], ['EXISTS', 409]]) {
+    r = await api('POST', '/api/mcp/disable', { body: { name: 'boom-' + code } });
+    assert.equal(r.status, status, code);
+    assert.equal(r.json.error, code);
+    assert.equal(r.json.message, 'Erreur ' + code + '.', 'message du lib transmis');
+  }
+});
+
+test('catalogue et installation MCP : routes, corps contrôlés, valeurs bornées', async () => {
+  const at = (n) => lib.log.filter((l) => l[0] === n).at(-1)[1];
+  let r = await api('GET', '/api/mcp/catalog');
+  assert.equal(r.status, 200);
+  assert.equal(r.json.servers[0].id, 'com.acme/x');
+  r = await api('POST', '/api/mcp/install', { body: { id: 'com.acme/x', agents: ['cursor'], values: { ACME_TOKEN: 'abc', MULTI: 'l1\nl2' }, replace: true } });
+  assert.equal(r.status, 200);
+  assert.ok(r.json.state);
+  assert.deepEqual(at('mcpInstall'), { id: 'com.acme/x', agents: ['cursor'], scope: 'global', values: { ACME_TOKEN: 'abc', MULTI: 'l1\nl2' }, name: undefined, replace: true, force: false });
+  for (const body of [
+    { agents: ['cursor'] },
+    { id: 'com.acme/x' },
+    { id: 'com.acme/x', agents: [] },
+    { id: 'com.acme/x', agents: ['cursor'], values: [] },
+    { id: 'com.acme/x', agents: ['cursor'], values: { 'bad name': 'x' } },
+    { id: 'com.acme/x', agents: ['cursor'], values: { K: 'a\u0000b' } },
+    { id: 'com.acme/x', agents: ['cursor'], values: { K: 'x'.repeat(4097) } },
+    { id: 'com.acme/x', agents: ['cursor'], name: '../x' },
+    { id: 'com.acme/x', agents: ['cursor'], force: 'oui' },
+    { id: 'com.acme/x', agents: ['cursor'], scope: 'project' },
+  ]) {
+    r = await api('POST', '/api/mcp/install', { body });
+    assert.equal(r.status, 400, JSON.stringify(body).slice(0, 120));
+  }
+});
+
+test('plugins : geste par /api/plugins/action, corps contrôlé', async () => {
+  let r = await api('POST', '/api/plugins/action', { body: { name: 'ecc', verb: 'disable', agents: ['claude-code'] } });
+  assert.equal(r.status, 200);
+  assert.ok(r.json.state);
+  assert.deepEqual(lib.log.filter((l) => l[0] === 'pluginAction').at(-1)[1], { name: 'ecc', verb: 'disable', agents: ['claude-code'] });
+  for (const body of [{ name: '-all', verb: 'disable' }, { name: 'a b', verb: 'disable' }, { name: 'ecc', verb: 'delete' }, { name: 'ecc', verb: 'enable', agents: [] }, { verb: 'enable' }]) {
+    r = await api('POST', '/api/plugins/action', { body });
+    assert.equal(r.status, 400, JSON.stringify(body));
+  }
+});
+
+test('plugins : catalogue et installation par /api/plugins/*', async () => {
+  let r = await api('GET', '/api/plugins/catalog');
+  assert.equal(r.status, 200);
+  assert.equal(r.json.plugins[0].id, 'x@claude-plugins-official');
+  r = await api('POST', '/api/plugins/install', { body: { id: 'code-review@claude-plugins-official', force: true } });
+  assert.equal(r.status, 200);
+  assert.deepEqual(lib.log.filter((l) => l[0] === 'pluginInstall').at(-1)[1], { id: 'code-review@claude-plugins-official', scope: 'global', force: true });
+  for (const body of [{ id: 'sans-place' }, { id: '-x@m' }, { id: 'a b@m' }, { id: 'x@m', scope: 'project' }, { id: 'x@m', force: 'oui' }]) {
+    r = await api('POST', '/api/plugins/install', { body });
+    assert.equal(r.status, 400, JSON.stringify(body));
   }
 });

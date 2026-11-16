@@ -7,6 +7,9 @@ import { listAgents, readsShared } from './registry.mjs';
 import { readSettings } from './settings.mjs';
 import { listBackups } from './backups.mjs';
 import { catalogInfo as catalogOf } from './catalog.mjs';
+import { mcpState } from './mcp.mjs';
+import { pluginState } from './plugins.mjs';
+import { verbsOf } from './plugins-cli.mjs';
 import { AGENT_RE, NAME_RE, disabledDir, homeOf, keyIn, lockPath, lstatOrNull, osName, readJson, saDir, scanOf, sharedDir, statOrNull } from './util.mjs';
 
 const CATALOG = fileURLToPath(new URL('../../catalog/catalog.json', import.meta.url));
@@ -91,7 +94,10 @@ export async function getState(opts = {}) {
   if (opts.project === undefined && opts.cwd) project = (await real(opts.cwd)) !== (await real(home)) ? opts.cwd : null;
   if (project && (await real(project)) === (await real(home))) project = null;
   const scope = project ? 'all' : 'global';
-  const [snap, settings, lockRaw, checked, cat, backups, version, catalogInfo] = await Promise.all([
+  // Serveurs MCP : lus à part ; un échec ne bloque pas l'état des skills.
+  const mcpP = mcpState({ home, project }).catch((e) => ({ error: e.message || 'Lecture des réglages MCP impossible.', detected: [], agents: [], servers: [] }));
+  const plugP = pluginState({ home, project }).catch(() => ({ error: 'Lecture des plugins impossible.', agents: [], plugins: [] }));
+  const [snap, settings, lockRaw, checked, cat, backups, version, catalogInfo, mcp, plugins] = await Promise.all([
     call('snapshot', [{ cwd: project || home, scope }], { home, cwd: project || home }),
     readSettings({ home }),
     readJson(lockPath(home), null),
@@ -100,6 +106,8 @@ export async function getState(opts = {}) {
     listBackups({ home }),
     appVersion(),
     catalogState(home),
+    mcpP,
+    plugP,
   ]);
   const agents = await listAgents({ home, settings, supported: snap.supported, detected: snap.detected });
   const lock = (lockRaw && lockRaw.skills) || {};
@@ -203,5 +211,13 @@ export async function getState(opts = {}) {
     delete r.off; delete r._extra;
   }
   mine.sort((a, b) => a.name.localeCompare(b.name) || a.scope.localeCompare(b.scope));
-  return { mode: 'live', os: osName(), version, home, cwd, project: project || null, catalog: catalogInfo, agents, mine, backups, settings };
+  // Écran Agents : nombre de serveurs MCP de chaque agent (tous ses fichiers de réglages, global et projet).
+  const mcpCount = {};
+  for (const x of mcp.agents) mcpCount[x.id] = (mcpCount[x.id] || 0) + x.count;
+  for (const a of agents) a.mcp = mcpCount[a.id] || 0;
+  // Nombre de plugins de chaque agent (dossier personnel et projet ouvert).
+  const plugCount = {};
+  for (const x of plugins.agents) { plugCount[x.id] = x.count; x.verbs = verbsOf(x.id); }
+  for (const a of agents) a.plugins = plugCount[a.id] || 0;
+  return { mode: 'live', os: osName(), version, home, cwd, project: project || null, catalog: catalogInfo, agents, mine, backups, settings, mcp, plugins };
 }

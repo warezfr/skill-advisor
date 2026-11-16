@@ -500,6 +500,44 @@
     manual: manual,
     item: function (id) { build(); return idx[id] || null; },
 
+    /* Serveurs MCP conseillés : catalogue MCP (SA.mcpCatalog, ou le catalogue complet passé en list), classés par
+       catégories de l'objectif et des réponses, puis par mots-clés des réponses, puis par note. → [{ e, rel, why }] */
+    mcp: function (goal, answers, list) {
+      var m = MAP[goal];
+      if (!m) return [];
+      list = list || ((SA.mcpCatalog || {}).servers || []);
+      answers = answers || {};
+      var cats = {}, kws = [], why = {};
+      (m.base || []).forEach(function (c) { cats[c] = cats[c] || 1; });
+      Object.keys(m).forEach(function (qid) {
+        if (qid === 'base') return;
+        var a = answers[qid];
+        if (a == null || a === '') return;
+        (Array.isArray(a) ? a : [a]).forEach(function (v) {
+          var rule = m[qid][v];
+          if (!rule) return;
+          (rule.cats || []).forEach(function (c) { cats[c] = 2; why[c] = optLabel(goal, qid, v); });
+          (rule.kw || []).forEach(function (k) { k = String(k).replace(/^=/, '').toLowerCase(); if (k.length > 2) { kws.push(k); why['kw:' + k] = optLabel(goal, qid, v); } });
+        });
+      });
+      var out = [];
+      list.forEach(function (e) {
+        var rel = 0, w = [];
+        (e.cats || []).forEach(function (c) { if (cats[c]) { rel += cats[c]; if (why[c] && w.indexOf(why[c]) < 0) w.push(why[c]); } });
+        var text = (String(e.id).split('/').pop() + ' ' + (e.title || '') + ' ' + (e.description || '')).toLowerCase();
+        kws.forEach(function (k) { if (text.indexOf(k) > -1) { rel += 3; if (w.indexOf(why['kw:' + k]) < 0) w.push(why['kw:' + k]); } });
+        if (!rel || e.verdict === 'rouge') return;
+        out.push({ e: e, rel: rel, why: w });
+      });
+      out.sort(function (a, b) { return (b.rel * 10 + ((b.e.score || {}).total || 0)) - (a.rel * 10 + ((a.e.score || {}).total || 0)); });
+      return out;
+    },
+
+    /* Plugins conseillés : même règle que les serveurs MCP, sur le catalogue des plugins (champ plugins). */
+    plugins: function (goal, answers, list) {
+      return SA.reco.mcp(goal, answers, list || ((SA.pluginCatalog || {}).plugins || []));
+    },
+
     /* → [{ id, it, rel, why: [libellés des réponses reconnues], base: libellé de catégorie ou '', off: [libellés d'options rivales] }] */
     rank: function (goal, answers) {
       build();
