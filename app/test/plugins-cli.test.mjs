@@ -28,8 +28,11 @@ test('findBin : PATH, et PATHEXT sous Windows', async (t) => {
   await fs.mkdir(bin);
   await fs.writeFile(path.join(bin, 'claude'), '');
   await fs.writeFile(path.join(bin, 'gemini.cmd'), '');
-  assert.equal(findBin('claude', { PATH: bin }, 'linux'), path.join(bin, 'claude'));
-  assert.equal(findBin('codex', { PATH: bin }, 'linux'), null);
+  // Mode Linux seulement hors Windows : un chemin C:\… contient « : », le séparateur de PATH sous Linux.
+  if (process.platform !== 'win32') {
+    assert.equal(findBin('claude', { PATH: bin }, 'linux'), path.join(bin, 'claude'));
+    assert.equal(findBin('codex', { PATH: bin }, 'linux'), null);
+  }
   assert.equal(path.basename(findBin('gemini', { PATH: bin, PATHEXT: '.EXE;.CMD' }, 'win32')).toLowerCase(), 'gemini.cmd');
 });
 
