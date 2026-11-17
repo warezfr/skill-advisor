@@ -109,6 +109,10 @@ function fakeLib() {
     async mcpCatalog() { log.push(['mcpCatalog']); return { generatedAt: '2026-11-16T00:00:00Z', servers: [{ id: 'com.acme/x' }] }; },
     async mcpInstall(a) { log.push(['mcpInstall', a]); return { installed: [{ agent: 'cursor', mcpId: 'cursor' }], skipped: [], failed: [], held: null, backups: [], warnings: [], name: 'x' }; },
     async mcpRestore(a) { log.push(['mcpRestore', a]); return { applied: [], skipped: [], failed: [], backups: [], warnings: [] }; },
+    async configCreate(a) { log.push(['configCreate', a]); return { backup: { id: '20261116-100000-configuration', kind: 'config' }, failed: [] }; },
+    async configPreview(a) { log.push(['configPreview', a]); return { backup: { id: a.id, kind: 'config' }, skills: [], mcp: null, plugins: [], settings: null }; },
+    async configRestore(a) { log.push(['configRestore', a]); return { settings: null, skills: null, mcp: null, plugins: [], backups: [], warnings: [] }; },
+    async configPlugin(a) { log.push(['configPlugin', a]); return { status: 'installed', message: '', done: ['claude plugin install x@m --scope user'] }; },
     outdated: [],
     async check(a) {
       log.push(['check', a]);
@@ -1523,6 +1527,41 @@ test('serveurs MCP : disable, enable, remove, backup, apply, restore, et contrô
     assert.equal(r.status, status, code);
     assert.equal(r.json.error, code);
     assert.equal(r.json.message, 'Erreur ' + code + '.', 'message du lib transmis');
+  }
+});
+
+test('sauvegarde complète : create, preview, restore, plugin, et contrôles des corps', async () => {
+  const at = (n) => lib.log.filter((l) => l[0] === n).at(-1)[1];
+  const id = '20261116-100000-configuration';
+  let r = await api('POST', '/api/config/create', { body: { label: 'Mac', secrets: false, parts: ['skills', 'mcp', 'skills'] } });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.backup.kind, 'config');
+  assert.ok(r.json.state);
+  assert.deepEqual(at('configCreate'), { label: 'Mac', note: undefined, secrets: false, parts: ['skills', 'mcp'] });
+  r = await api('POST', '/api/config/preview', { body: { id } });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.backup.id, id);
+  r = await api('POST', '/api/config/restore', { body: { id, conflict: 'replace', force: ['risky'] } });
+  assert.equal(r.status, 200);
+  assert.deepEqual(at('configRestore'), { id, parts: undefined, conflict: 'replace', force: ['risky'] });
+  r = await api('POST', '/api/config/plugin', { body: { id, index: 2 } });
+  assert.equal(r.status, 200);
+  assert.equal(r.json.status, 'installed');
+  assert.deepEqual(at('configPlugin'), { id, index: 2 });
+  for (const [p, body] of [
+    ['/api/config/create', { parts: [] }],
+    ['/api/config/create', { parts: ['secrets'] }],
+    ['/api/config/create', { label: 'a\u0000b' }],
+    ['/api/config/create', { secrets: 'oui' }],
+    ['/api/config/preview', { id: '../x' }],
+    ['/api/config/restore', { id, conflict: 'tout' }],
+    ['/api/config/restore', { id, parts: 'skills' }],
+    ['/api/config/plugin', { id, index: -1 }],
+    ['/api/config/plugin', { id, index: '1' }],
+    ['/api/config/plugin', { id, index: 500 }],
+  ]) {
+    r = await api('POST', p, { body });
+    assert.equal(r.status, 400, p + ' ' + JSON.stringify(body));
   }
 });
 

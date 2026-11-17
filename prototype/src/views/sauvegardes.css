@@ -88,3 +88,8 @@
 @media (max-width: 760px) {
   .sv-ap .sv-q { max-width: none; }
 }
+
+/* Tiroirs de la sauvegarde complète (config.js) : l'explication d'une partie passe sous sa case ; état d'un plugin sur sa colonne. */
+.cfg .sv-cks > li > .sv-hint { flex-basis: 100%; margin: 0 0 8px 32px; }
+.cfg .sv-res .cfg-st { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; font-size: 13px; }
+.cfg .sv-res li { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) minmax(0, 1.4fr); }

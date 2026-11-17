@@ -121,7 +121,7 @@
     if (k > -1) raws().splice(k, 1);
     return { ok: true, text: b.label + ' restaurée : ' + SA.pl(b.items.length, 'skill remis', 'skills remis') + ' à leur place.' };
   }
-  SA.backup = { fromRows: fromRows, restoreDemo: restoreDemo, cut: cut, forceNames: function (b, said) { return forceNames(b, said); } };
+  SA.backup = { fromRows: fromRows, restoreDemo: restoreDemo, cut: cut, forceNames: function (b, said) { return forceNames(b, said); }, say: function (m, e) { return say(m, e); } };
 
   /* ------------------------------------------------------------ appels */
   function repaint(focus) {
@@ -688,7 +688,8 @@
     var s = st(), id = esc(b.id), dis = s.busy ? ' disabled' : '';
     var red = b.items.filter(function (i) { return i.verdict === 'rouge'; }).length;
     var orange = b.items.filter(function (i) { return i.verdict === 'orange'; }).length;
-    var meta = [when(b.at), unit(b, b.items.length), b.size ? SA.size(b.size) : ''].filter(Boolean);
+    var cfg = b.kind === 'config';
+    var meta = [when(b.at), cfg ? 'toute la configuration' : unit(b, b.items.length), b.size ? SA.size(b.size) : ''].filter(Boolean);
     var ask = s.del === b.id
       ? '<div class="cfm sv-cf" role="group" aria-label="Supprimer ' + esc(b.label) + '"><p class="cfm-t">Supprimer cette sauvegarde ? Vous ne pourrez pas la récupérer.</p>' +
         '<p class="cfm-a"><button type="button" class="btn danger" data-sv-del-ok data-fk="del-ok"' + dis + '>Supprimer</button>' +
@@ -700,8 +701,10 @@
       : '';
     /* Pendant une question, les gestes de la ligne restent en place mais inactifs. */
     var off = ask ? ' disabled' : dis;
-    var act = '<button type="button" class="btn" data-sv-restore="' + id + '" data-fk="restore:' + id + '"' + off + '>Restaurer</button>' +
-        '<button type="button" class="btn" data-sv-apply="' + id + '" data-fk="apply:' + id + '"' + off + '>Appliquer à d’autres agents</button>' +
+    /* Sauvegarde complète : restaurer passe par son tiroir (config.js) ; elle ne s'applique pas à d'autres agents. */
+    var act = (cfg ? '<button type="button" class="btn" data-cfg-restore="' + id + '" data-fk="restore:' + id + '"' + off + '>Restaurer…</button>'
+        : '<button type="button" class="btn" data-sv-restore="' + id + '" data-fk="restore:' + id + '"' + off + '>Restaurer</button>' +
+        '<button type="button" class="btn" data-sv-apply="' + id + '" data-fk="apply:' + id + '"' + off + '>Appliquer à d’autres agents</button>') +
         '<button type="button" class="btn quiet" data-sv-export="' + id + '" data-fk="export:' + id + '"' + off + '>Exporter</button>' +
         '<button type="button" class="btn quiet" data-sv-del="' + id + '" data-fk="del:' + id + '"' + off + '>Supprimer</button>';
     return '<li class="sv-row" data-st>' +
@@ -712,9 +715,10 @@
         '<p class="sv-meta mut">' + meta.map(function (m) { return '<span>' + esc(m) + '</span>'; }).join('') + '</p>' +
         (b.note ? '<p class="sv-note">' + esc(b.note) + '</p>' : '') +
         (isMcp(b) && varsOf(b).length ? '<p class="sv-note mut">Variables à définir après une restauration : <span class="mono">' + esc(varsOf(b).join(', ')) + '</span></p>' : '') +
-        '<ul class="sv-items" aria-label="' + (isMcp(b) ? 'Serveurs MCP de la sauvegarde' : 'Skills de la sauvegarde') + '">' + b.items.map(function (i) {
+        (cfg ? '<ul class="sv-items" aria-label="Parties de la sauvegarde">' + (SA.cfg ? SA.cfg.summary(b) : []).map(function (x) { return '<li>' + esc(x) + '</li>'; }).join('') + '</ul>'
+        : '<ul class="sv-items" aria-label="' + (isMcp(b) ? 'Serveurs MCP de la sauvegarde' : 'Skills de la sauvegarde') + '">' + b.items.map(function (i) {
           return '<li><span class="mono">' + esc(i.name) + '</span>' + (i.verdict === 'rouge' || i.verdict === 'orange' ? '<span class="vh"> : ' + (i.verdict === 'rouge' ? 'motif à risque' : 'à regarder') + '</span>' : '') + '</li>';
-        }).join('') + '</ul>' +
+        }).join('') + '</ul>') +
       '</div>' +
       '<div class="sv-act" role="group" aria-label="Actions pour ' + esc(b.label) + '">' + act + '</div>' +
       ask +
@@ -726,8 +730,9 @@
     return '<div class="sv">' +
       '<p class="eye" data-st>Sauvegardes</p>' +
       SA.h1(n ? SA.pl(n, 'sauvegarde', 'sauvegardes') : 'Aucune sauvegarde') +
-      '<p class="lede" data-st>Une sauvegarde garde une copie de skills ou de serveurs MCP tels qu’ils étaient. Restaurez-la à sa place, appliquez-la à d’autres agents, ou exportez-la vers une autre machine.</p>' +
+      '<p class="lede" data-st>Une sauvegarde garde une copie de skills, de serveurs MCP ou de toute la configuration tels qu’ils étaient. Restaurez-la à sa place, appliquez-la à d’autres agents, ou exportez-la vers une autre machine.</p>' +
       '<div class="sv-bar" data-st>' +
+        '<button type="button" class="btn primary" data-cfg-open data-fk="cfg-open"' + (s.busy ? ' disabled' : '') + '>Sauvegarder toute la configuration</button>' +
         '<button type="button" class="btn" data-sv-import data-fk="import"' + (s.busy ? ' disabled' : '') + '>Importer une sauvegarde</button>' +
         '<input type="file" id="sv-file" class="vh" accept=".tar.gz,.tgz,application/gzip" tabindex="-1" aria-hidden="true">' +
         '<button type="button" class="btn quiet" data-go-route="gestion">Sauvegarder depuis Mes skills</button>' +
@@ -742,6 +747,7 @@
       '<section class="gs-why sv-why" data-st><h2 class="h2">Bon à savoir</h2>' +
         '<p class="sub"><strong>Restaurer</strong> remet chaque skill dans les dossiers d’où il vient. Si un skill du même nom y est déjà, Skill Advisor n’écrit rien.</p>' +
         '<p class="sub"><strong>Appliquer</strong> copie les skills choisis dans d’autres agents. Pour un skill présent mais différent, vous choisissez : le passer, ou le remplacer après une sauvegarde de la version présente.</p>' +
+        '<p class="sub"><strong>Toute la configuration</strong> : skills, serveurs MCP, plugins et réglages de Skill Advisor en une sauvegarde. Les plugins y sont notés pour être réinstallés par la commande de leur agent, pas copiés. Exportez-la pour retrouver votre configuration sur une autre machine.</p>' +
         '<p class="sub"><strong>Exporter</strong> crée une archive .tar.gz. <strong>Importer</strong> la lit sur une autre machine et contrôle de nouveau chaque skill.</p>' +
         '<p class="sub"><strong>Serveurs MCP</strong> : sans la case « Inclure les valeurs secrètes », les clés et jetons sont remplacés par des variables (${NOM}). Définissez-les dans votre environnement après une restauration.</p>' +
       '</section>' +

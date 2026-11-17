@@ -13,7 +13,7 @@ const CSS = ['shell.css', 'views/wizard-a.css', 'views/wizard-b.css', 'views/rec
 const JS = [
   'data.js', 'search-data.js', 'mcp-catalog-data.js', 'plugin-catalog-data.js', 'file-data.js', 'reco.js', 'machine-data.js', 'live.js', 'core.js', 'views/detail.js',
   'views/accueil.js', 'views/objectif.js', 'views/questions.js', 'views/resultats.js', 'views/confirmation.js',
-  'views/guide.js', 'views/gestion.js', 'views/sauvegardes.js', 'views/recherche.js', 'views/agents.js', 'views/mcp.js', 'views/plugins.js'
+  'views/guide.js', 'views/gestion.js', 'views/config.js', 'views/sauvegardes.js', 'views/recherche.js', 'views/agents.js', 'views/mcp.js', 'views/plugins.js'
 ];
 const REQUIRED = new Set(['index.html', 'shell.css', 'core.js']);
 

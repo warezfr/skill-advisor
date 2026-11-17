@@ -163,6 +163,13 @@ function conflictOf(b, optional) {
   if (b.conflict !== 'skip' && b.conflict !== 'replace') throw bad('BAD_INPUT', 'Le champ conflict vaut skip ou replace.');
   return b.conflict;
 }
+// Parties d'une sauvegarde complète : liste facultative, non vide, parmi settings, skills, mcp, plugins.
+const PART_NAMES = ['settings', 'skills', 'mcp', 'plugins'];
+function partsOf(b) {
+  if (b.parts === undefined) return undefined;
+  if (!Array.isArray(b.parts) || !b.parts.length || b.parts.length > 4 || b.parts.some((p) => !PART_NAMES.includes(p))) throw bad('BAD_INPUT', 'Le champ parts liste des parties parmi settings, skills, mcp, plugins.');
+  return [...new Set(b.parts)];
+}
 // Corps de la sauvegarde MCP à la demande : servers = [{ name, scope? }], 1 à 200.
 function mcpBackupBody(b) {
   const v = b.servers;
@@ -329,6 +336,15 @@ const ROUTES = [
     return withState(lib, await lib.pluginAction({ name: b.name, verb: b.verb, agents: nonEmpty(list(b, 'agents', AGENT, 'BAD_NAME', { optional: true }), 'agents') }));
   }],
   ['POST', '/api/mcp/restore', W, async (b, lib) => withState(lib, await lib.mcpRestore({ id: one(b, 'id', BACKUP, 'BAD_NAME'), conflict: conflictOf(b, true) }))],
+  // Sauvegarde de toute la configuration : création, aperçu, restauration par parties, puis un plugin par requête.
+  ['POST', '/api/config/create', W, async (b, lib) => withState(lib, await lib.configCreate({ label: optText(b, 'label', 80, LABEL_BAD), note: optText(b, 'note', 500, NOTE_BAD), secrets: flag(b, 'secrets'), parts: partsOf(b) }))],
+  ['POST', '/api/config/preview', W, async (b, lib) => lib.configPreview({ id: one(b, 'id', BACKUP, 'BAD_NAME') })],
+  ['POST', '/api/config/restore', W, async (b, lib) => withState(lib, await lib.configRestore({
+    id: one(b, 'id', BACKUP, 'BAD_NAME'), parts: partsOf(b), conflict: conflictOf(b, true), force: list(b, 'force', NAME, 'BAD_NAME', { optional: true }) }))],
+  ['POST', '/api/config/plugin', W, async (b, lib) => {
+    if (!Number.isSafeInteger(b.index) || b.index < 0 || b.index > 499) throw bad('BAD_INPUT', 'Le champ index doit être un entier de 0 à 499.');
+    return withState(lib, await lib.configPlugin({ id: one(b, 'id', BACKUP, 'BAD_NAME'), index: b.index }));
+  }],
   ['POST', '/api/agents/custom', W, async (b, lib) => {
     const agent = await lib.addCustomAgent({ name: text(b, 'name', 64), dir: text(b, 'dir', 1024) });
     return withState(lib, { agent });
@@ -756,7 +772,11 @@ export const WIRING = {
   mcpInstall: ['mcp-install', 'installMcp', 'all'],
   pluginAction: ['plugins-cli', 'pluginAction', 'all'],
   pluginCatalog: ['plugins-cli', 'pluginCatalog', 'home'],
-  pluginInstall: ['plugins-cli', 'installPlugin', 'all']
+  pluginInstall: ['plugins-cli', 'installPlugin', 'all'],
+  configCreate: ['config-backups', 'createConfigBackup', 'all'],
+  configPreview: ['config-backups', 'previewConfigBackup', 'all'],
+  configRestore: ['config-backups', 'restoreConfigBackup', 'all'],
+  configPlugin: ['config-backups', 'restoreConfigPlugin', 'all']
 };
 
 // Lib réel : modules de app/lib chargés à la demande, avec le dossier personnel et le projet choisis.

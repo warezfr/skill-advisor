@@ -17,7 +17,11 @@ const isObj = (x) => !!x && typeof x === 'object' && !Array.isArray(x);
 // Lit une sauvegarde MCP : meta vérifié et entrées. Lève NOT_FOUND ou BAD_NAME.
 export async function loadMcpBackup(home, id) {
   checkId(id);
-  const dir = safeJoin(backupsDir(home), id);
+  return loadMcpAt(safeJoin(backupsDir(home), id), id);
+}
+
+// Même lecture dans un dossier donné (partie mcp/ d'une sauvegarde complète).
+export async function loadMcpAt(dir, id) {
   const meta = normalizeMcpMeta(await readJson(path.join(dir, 'meta.json'), null), id);
   if (!meta) throw fail('NOT_FOUND', 'Sauvegarde introuvable.');
   const data = await readJson(path.join(dir, 'servers.json'), null);
@@ -33,7 +37,8 @@ export async function loadMcpBackup(home, id) {
 }
 
 // Écrit une sauvegarde. items : [{ name, scope, places: [{ agent, mcpId, off, entry }] }] (entrées brutes).
-export async function writeMcpBackup(opts) {
+// at = { dir, id } : écrit dans ce dossier neuf (partie mcp/ d'une sauvegarde complète) au lieu d'en réserver un.
+export async function writeMcpBackup(opts, at = null) {
   const home = homeOf(opts);
   const keep = !!opts.secrets;
   const items = opts.items.map((it) => {
@@ -48,7 +53,8 @@ export async function writeMcpBackup(opts) {
   });
   if (!items.length) throw fail('BAD_INPUT', 'Aucun serveur à sauvegarder.');
   const first = items[0].name.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^[^A-Za-z0-9]+/, '').slice(0, 40) || 'serveur';
-  const { id, dir } = await reserveDir(home, 'mcp-' + first);
+  if (at) await fs.mkdir(at.dir);
+  const { id, dir } = at || await reserveDir(home, 'mcp-' + first);
   try {
     const servers = JSON.stringify({ version: 1, items: items.map((i) => ({ name: i.name, scope: i.scope, places: i.places })) }, null, 2) + '\n';
     await writePrivate(path.join(dir, 'servers.json'), servers);
@@ -65,9 +71,9 @@ export async function writeMcpBackup(opts) {
   }
 }
 
-// Entrées brutes d'un serveur, chez tous ses agents (fichiers et copies désactivées).
-async function rawPlaces(home, project, name, scope) {
-  const st = await mcpState({ home, project });
+// Entrées brutes d'un serveur, chez tous ses agents (fichiers et copies désactivées). st : état déjà lu (facultatif).
+export async function rawPlaces(home, project, name, scope, st0 = null) {
+  const st = st0 || await mcpState({ home, project });
   const row = st.servers.find((s) => s.name === name && s.scope === scope);
   if (!row) return null;
   const places = [];
@@ -117,7 +123,7 @@ export async function removeMcp(opts = {}) {
 }
 
 // Fichier de réglages d'un agent add-mcp pour une portée (chemins de l'enregistrement, jamais ceux de la sauvegarde).
-async function fileFor(home, project, mcpId, scope) {
+export async function fileFor(home, project, mcpId, scope) {
   const p = (await mcpPaths({ home, cwd: project || home })).find((x) => x.id === mcpId);
   if (!p) return null;
   const file = scope === 'project' ? p.local : p.global;
@@ -129,29 +135,64 @@ async function fileFor(home, project, mcpId, scope) {
 export async function restoreMcpBackup(opts = {}) {
   const home = homeOf(opts);
   const { items, meta } = await loadMcpBackup(home, opts.id);
+  return restoreMcpItems(home, items, meta, opts);
+}
+
+// Cœur de la restauration, sur des entrées déjà lues. Deux passes : plan (lecture seule), puis écritures.
+// opts.onlyDetected : agents absents de cette machine passés (aucun fichier créé pour eux).
+// opts.oneBackup : en cas de remplacement, une seule sauvegarde de toutes les entrées remplacées, faite avant la première écriture.
+export async function restoreMcpItems(home, items, meta, opts = {}) {
   const replace = opts.conflict === 'replace';
   const applied = [], skipped = [], failed = [], backups = [], warnings = [];
+  const detected = opts.onlyDetected ? new Set((await mcpState({ home, project: opts.project })).detectedMcp || []) : null;
+  const plan = [];
   for (const it of items) {
     if (it.scope === 'project' && !opts.project) { skipped.push({ name: it.name, agent: null, reason: 'Ouvrez le projet de ce serveur pour le restaurer.' }); continue; }
     for (const p of it.places) {
       try {
         const f = await fileFor(home, opts.project, p.mcpId, it.scope);
         if (!f) throw fail('UNSUPPORTED', 'Cet agent n’a pas de réglages MCP pour cette portée.');
+        if (detected && !detected.has(p.mcpId) && !(await fs.stat(f.file).then(() => true, () => false))) {
+          skipped.push({ name: it.name, agent: p.agent, reason: 'Cet agent n’est pas installé sur cette machine.' });
+          continue;
+        }
         if (p.off) {
           const sp = stashFile(home, p.mcpId, it.scope, opts.project, it.name);
           if (await fs.stat(sp).then(() => true, () => false)) { skipped.push({ name: it.name, agent: p.agent, reason: 'Déjà désactivé chez cet agent.' }); continue; }
-          await writePrivate(sp, JSON.stringify({ v: 1, name: it.name, mcpId: p.mcpId, scope: it.scope, project: it.scope === 'project' ? opts.project : null,
-            path: f.file, key: f.key, format: f.format, entry: p.entry, at: new Date().toISOString() }) + '\n');
-          applied.push({ name: it.name, agent: p.agent, off: true });
+          plan.push({ it, p, f, sp });
           continue;
         }
         const present = await readEntry(f.file, f.format, keyPathOf(f.key), it.name);
         if (present !== undefined && !replace) { skipped.push({ name: it.name, agent: p.agent, reason: 'Un serveur de ce nom existe déjà chez cet agent.' }); continue; }
-        if (present !== undefined) backups.push(await writeMcpBackup({ home, origin: 'replace', items: [{ name: it.name, scope: it.scope, places: [{ agent: p.agent, mcpId: p.mcpId, off: false, entry: present }] }] }));
-        await writeEntry({ home, file: f.file, format: f.format, keyPath: keyPathOf(f.key), name: it.name, value: p.entry, replace: present !== undefined });
-        applied.push({ name: it.name, agent: p.agent });
-      } catch (e) { failed.push({ name: it.name, agent: p.agent, message: e.code ? e.message : 'Écriture impossible.' }); }
+        plan.push({ it, p, f, present });
+      } catch (e) { failed.push({ name: it.name, agent: p.agent, message: e.code ? e.message : 'Lecture impossible.' }); }
     }
+  }
+  // Remplacements : entrées présentes sauvegardées avant toute écriture (une sauvegarde, ou une par entrée).
+  const olds = plan.filter((x) => x.present !== undefined && !x.sp);
+  const one = (x) => ({ name: x.it.name, scope: x.it.scope, places: [{ agent: x.p.agent, mcpId: x.p.mcpId, off: false, entry: x.present }] });
+  if (olds.length && opts.oneBackup) {
+    const merged = new Map();
+    for (const x of olds) {
+      const k = x.it.scope + '\u0000' + x.it.name;
+      if (!merged.has(k)) merged.set(k, { name: x.it.name, scope: x.it.scope, places: [] });
+      merged.get(k).places.push(one(x).places[0]);
+    }
+    // Copie locale (0600) de ce qui est écrasé, valeurs secrètes comprises : un retour arrière reste possible.
+    backups.push(await writeMcpBackup({ home, origin: 'replace', secrets: true, items: [...merged.values()] }));
+  } else for (const x of olds) backups.push(await writeMcpBackup({ home, origin: 'replace', items: [one(x)] }));
+  for (const x of plan) {
+    const { it, p, f } = x;
+    try {
+      if (x.sp) {
+        await writePrivate(x.sp, JSON.stringify({ v: 1, name: it.name, mcpId: p.mcpId, scope: it.scope, project: it.scope === 'project' ? opts.project : null,
+          path: f.file, key: f.key, format: f.format, entry: p.entry, at: new Date().toISOString() }) + '\n');
+        applied.push({ name: it.name, agent: p.agent, off: true });
+        continue;
+      }
+      await writeEntry({ home, file: f.file, format: f.format, keyPath: keyPathOf(f.key), name: it.name, value: p.entry, replace: x.present !== undefined });
+      applied.push({ name: it.name, agent: p.agent });
+    } catch (e) { failed.push({ name: it.name, agent: p.agent, message: e.code ? e.message : 'Écriture impossible.' }); }
   }
   const vars = [...new Set(meta.items.filter((i) => i.secrets === 'vars').flatMap((i) => i.vars))];
   if (vars.length && applied.length) warnings.push('Valeurs secrètes remplacées par des variables : définissez ' + vars.join(', ') + ' dans votre environnement, ou dans les réglages de l’agent.');
@@ -201,6 +242,33 @@ export async function applyMcpBackup(opts = {}) {
 // Import d'une archive déjà extraite et contrôlée (archive.mjs) : servers.json vérifié, nouvel identifiant.
 // L'état des secrets (variables ou valeurs gardées) est repris du manifeste. Rend { backup, warnings }.
 export async function importMcpFrom(home, root, m) {
+  const { items, warnings } = await checkMcpImport(root, m);
+  const first = items[0].name.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^[^A-Za-z0-9]+/, '').slice(0, 40) || 'serveur';
+  const { id, dir } = await reserveDir(home, 'mcp-' + first);
+  try {
+    const meta = await writeMcpPart(dir, id, items, m);
+    return { backup: pubMcp(normalizeMcpMeta(meta, id)), warnings };
+  } catch (e) {
+    await fs.rm(dir, rmOpts()).catch(() => {});
+    throw e;
+  }
+}
+
+// Écrit servers.json et meta.json (origin import) d'entrées vérifiées par checkMcpImport. Rend meta.
+export async function writeMcpPart(dir, id, items, m) {
+  const servers = JSON.stringify({ version: 1, items: items.map((i) => ({ name: i.name, scope: i.scope, places: i.places })) }, null, 2) + '\n';
+  await writePrivate(path.join(dir, 'servers.json'), servers);
+  const meta = {
+    version: 2, kind: MCP_KIND, id, label: typeof m.label === 'string' ? m.label.slice(0, 80) : '', note: typeof m.note === 'string' ? m.note.slice(0, 500) : '',
+    origin: 'import', at: new Date().toISOString(), size: Buffer.byteLength(servers),
+    items: items.map((i) => ({ name: i.name, scope: i.scope, agents: [...new Set(i.places.map((p) => p.agent))], secrets: i.secrets, vars: i.vars })),
+  };
+  await writeJsonAtomic(path.join(dir, 'meta.json'), meta);
+  return meta;
+}
+
+// Vérifie servers.json d'une archive extraite, avec le meta du manifeste. Rend { items, warnings } ; lève BAD_ARCHIVE.
+export async function checkMcpImport(root, m) {
   const bad = (msg) => fail('BAD_ARCHIVE', msg);
   const file = path.join(root, 'servers.json');
   const st = await fs.stat(file).catch(() => null);
@@ -224,20 +292,5 @@ export async function importMcpFrom(home, root, m) {
     warnings.push('Le serveur ' + it.name + ' lance : ' + String(what).slice(0, 160) + '. Ne l’appliquez que si vous lui faites confiance.');
   }
   if (!items.length) throw bad('Archive refusée : aucun serveur.');
-  const first = items[0].name.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^[^A-Za-z0-9]+/, '').slice(0, 40) || 'serveur';
-  const { id, dir } = await reserveDir(home, 'mcp-' + first);
-  try {
-    const servers = JSON.stringify({ version: 1, items: items.map((i) => ({ name: i.name, scope: i.scope, places: i.places })) }, null, 2) + '\n';
-    await writePrivate(path.join(dir, 'servers.json'), servers);
-    const meta = {
-      version: 2, kind: MCP_KIND, id, label: typeof m.label === 'string' ? m.label.slice(0, 80) : '', note: typeof m.note === 'string' ? m.note.slice(0, 500) : '',
-      origin: 'import', at: new Date().toISOString(), size: Buffer.byteLength(servers),
-      items: items.map((i) => ({ name: i.name, scope: i.scope, agents: [...new Set(i.places.map((p) => p.agent))], secrets: i.secrets, vars: i.vars })),
-    };
-    await writeJsonAtomic(path.join(dir, 'meta.json'), meta);
-    return { backup: pubMcp(normalizeMcpMeta(meta, id)), warnings };
-  } catch (e) {
-    await fs.rm(dir, rmOpts()).catch(() => {});
-    throw e;
-  }
+  return { items, warnings };
 }

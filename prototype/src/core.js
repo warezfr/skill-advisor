@@ -191,7 +191,8 @@ window.SA = window.SA || {};
      (désinstallation en démo, sauvegarde d'avant l'étape 1). */
   SA.normBackup = function (b) {
     b = b || {};
-    var items = Array.isArray(b.items) && b.items.length ? b.items : [{
+    var cfg = b.kind === 'config';
+    var items = cfg ? [] : Array.isArray(b.items) && b.items.length ? b.items : [{
       name: b.name, src: b.src, agents: b.agents || Object.keys(b.ag || {}), verdict: b.verdict || verdictOf(b)
     }];
     var mcp = b.kind === 'mcp';
@@ -207,10 +208,10 @@ window.SA = window.SA || {};
     });
     var size = Number(b.size);
     return {
-      kind: mcp ? 'mcp' : 'skill',
-      id: String(b.id == null ? '' : b.id), label: String(b.label || items[0].name || 'Sauvegarde'), note: b.note ? String(b.note) : '',
+      kind: cfg ? 'config' : mcp ? 'mcp' : 'skill',
+      id: String(b.id == null ? '' : b.id), label: String(b.label || (items[0] && items[0].name) || 'Sauvegarde'), note: b.note ? String(b.note) : '',
       origin: own(SA.ORIGIN, b.origin) ? b.origin : 'remove', at: b.at ? String(b.at) : '', size: isFinite(size) && size > 0 ? size : 0,
-      items: items, raw: b
+      items: items, parts: cfg && b.parts && typeof b.parts === 'object' ? b.parts : null, raw: b
     };
   };
   SA.size = function (n) {

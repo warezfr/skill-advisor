@@ -3,6 +3,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { agentMap } from './registry.mjs';
 import { MCP_KIND, normalizeMcpMeta, pubMcp } from './mcp-meta.mjs';
+import { CONFIG_KIND, normalizeConfigMeta, pubConfig } from './config-meta.mjs';
 import { AGENT_RE, COPY_LIMIT, MAX_ENTRIES, NAME_RE, backupsDir, checkAgentId, checkName, copyTree, disabledDir, exists, fail, fsMessage, homeOf, isSkillEntry, linkDir, lockKeyFor, lockOf, lstatOrNull, lockPath, mkdirp, readJson, rmOpts, safeJoin, scanOf, sharedDir, statOrNull, treeHash, writeJsonAtomic } from './util.mjs';
 
 const ID_RE = /^(\d{8}-\d{6})-(.+)$/;
@@ -57,8 +58,8 @@ const validName = (n) => typeof n === 'string' && NAME_RE.test(n) && n !== '.' &
 
 // Lit meta.json (version 1 ou 2) sous la forme version 2. Rend null si incohérent.
 export function normalizeMeta(raw, id) {
-  // Sauvegarde de serveurs MCP : lue par normalizeMcpMeta (mcp-meta.mjs), jamais comme une sauvegarde de skills.
-  if (!isObj(raw) || raw.id !== id || raw.kind === MCP_KIND) return null;
+  // Sauvegarde de serveurs MCP ou de toute la configuration : lue par mcp-meta.mjs ou config-meta.mjs, jamais comme une sauvegarde de skills.
+  if (!isObj(raw) || raw.id !== id || raw.kind === MCP_KIND || raw.kind === CONFIG_KIND) return null;
   const list = raw.version === 2 ? raw.items
     : [{ name: raw.name, src: raw.src, agents: raw.agents, places: raw.places, lock: raw.lock, skipped: raw.skipped, verdict: null }];
   if (!Array.isArray(list) || !list.length) return null;
@@ -97,22 +98,26 @@ export function pub(m) {
   return { id: m.id, label: m.label, note: m.note, origin: m.origin, at: m.at, size: m.size, items, name: items[0].name, src: items[0].src, agents: items[0].agents };
 }
 
-// Sorte d'une sauvegarde : 'mcp' (serveurs MCP) ou 'skill'. Lève BAD_NAME pour un identifiant invalide.
+// Sorte d'une sauvegarde : 'mcp' (serveurs MCP), 'config' (toute la configuration) ou 'skill'. Lève BAD_NAME pour un identifiant invalide.
 export async function backupKind(home, id) {
   checkId(id);
   const raw = await readJson(path.join(safeJoin(backupsDir(home), id), 'meta.json'), null);
-  return raw && raw.kind === MCP_KIND ? MCP_KIND : 'skill';
+  return raw && (raw.kind === MCP_KIND || raw.kind === CONFIG_KIND) ? raw.kind : 'skill';
 }
 
-// Ouvre une sauvegarde : dossier et meta.json normalisé.
-export async function loadMeta(home, id) {
-  checkId(id);
-  const dir = safeJoin(backupsDir(home), id);
+// Ouvre une sauvegarde de skills rangée dans dir (dossier d'une sauvegarde, ou partie skills/ d'une sauvegarde complète).
+export async function loadMetaAt(dir, id) {
   const raw = await readJson(path.join(dir, 'meta.json'), null);
   if (!raw) throw fail('NOT_FOUND', 'Sauvegarde introuvable.');
   const meta = normalizeMeta(raw, id);
   if (!meta) throw fail('BAD_NAME', 'Sauvegarde incohérente.');
   return { dir, meta };
+}
+
+// Ouvre une sauvegarde : dossier et meta.json normalisé.
+export async function loadMeta(home, id) {
+  checkId(id);
+  return loadMetaAt(safeJoin(backupsDir(home), id), id);
 }
 
 export async function readLockEntry(home, name) {
@@ -138,6 +143,7 @@ export async function listBackups(opts = {}) {
     if (!e.isDirectory() || !ID_RE.test(e.name)) continue;
     const raw = await readJson(path.join(root, e.name, 'meta.json'), null);
     if (raw && raw.kind === MCP_KIND) { const m = normalizeMcpMeta(raw, e.name); if (m) out.push(pubMcp(m)); continue; }
+    if (raw && raw.kind === CONFIG_KIND) { const m = normalizeConfigMeta(raw, e.name); if (m) out.push(pubConfig(m)); continue; }
     const meta = normalizeMeta(raw, e.name);
     if (meta) out.push(pub(meta));
   }
@@ -157,7 +163,8 @@ export async function reserveDir(home, name) {
 
 // Écrit une sauvegarde. items : [{ name, src, agents, places: [{ agent, off, path }], lock }] ; la première place est la copie principale.
 // Liens internes suivis, liens externes et boucles ignorés. Limites : toute la sauvegarde.
-async function writeBackup(home, { origin, label, note, items }) {
+// at = { dir, id } : écrit dans ce dossier neuf (partie skills/ d'une sauvegarde complète) au lieu d'en réserver un.
+export async function writeBackup(home, { origin, label, note, items }, at = null) {
   for (const it of items) {
     checkName(it.name);
     if (it.name === 'meta.json' || it.name === 'skill-advisor-backup.json' || (items.length > 1 && RESERVED.has(it.name))) {
@@ -167,8 +174,8 @@ async function writeBackup(home, { origin, label, note, items }) {
   const names = items.map((i) => i.name).join(', ');
   let dir = null;
   try {
-    const r = await reserveDir(home, items[0].name);
-    dir = r.dir;
+    let r = at;
+    if (r) { await fs.mkdir(r.dir); dir = r.dir; } else { r = await reserveDir(home, items[0].name); dir = r.dir; }
     const counter = { n: 0 };
     let size = 0;
     const out = [];
@@ -198,8 +205,7 @@ async function writeBackup(home, { origin, label, note, items }) {
       const scan = scanOf(it.places[0].path);
       out.push({ name: it.name, src: it.src || '', agents: it.agents || [], places, lock: it.lock || null, skipped, copy: it.name, verdict: scan ? scan.verdict : null });
     }
-    const at = new Date().toISOString();
-    const meta = { version: 2, id: r.id, label: label || defaultLabel(out.map((i) => i.name)), note: note || '', origin, at, size, items: out };
+    const meta = { version: 2, id: r.id, label: label || defaultLabel(out.map((i) => i.name)), note: note || '', origin, at: new Date().toISOString(), size, items: out };
     await writeJsonAtomic(path.join(dir, 'meta.json'), meta);
     return pub(normalizeMeta(meta, r.id));
   } catch (e) {
@@ -283,7 +289,15 @@ export async function createManualBackup(opts = {}) {
   const list = [...new Set(opts.names.map(checkName))];
   const label = text(opts.label, 80, 'Nom de la sauvegarde', false);
   const note = text(opts.note, 500, 'Note', true);
-  const map = await agentMap({ home });
+  const { items, failed } = await collectSkills(home, await agentMap({ home }), list);
+  if (!items.length) throw fail('NOT_FOUND', failed.length === 1 ? failed[0].message : 'Aucun des skills choisis n’a été trouvé.');
+  // origin replace : copie de ce qu'une restauration va remplacer (sauvegarde complète).
+  const backup = await writeBackup(home, { origin: opts.origin === 'replace' ? 'replace' : 'manual', label, note, items });
+  return { backup, failed };
+}
+
+// Ce qu'il faut sauvegarder de chaque skill nommé : places, agents, verrou. Rend { items, failed }.
+export async function collectSkills(home, map, list) {
   const items = [], failed = [];
   for (const name of list) {
     if (RESERVED.has(name)) { failed.push({ name, message: 'Le nom ' + name + ' est réservé aux sauvegardes. Renommez ce skill pour le sauvegarder.' }); continue; }
@@ -294,9 +308,19 @@ export async function createManualBackup(opts = {}) {
     const lock = lk ? lk.entry : null;
     items.push({ name, src: (lock && typeof lock.source === 'string' && lock.source) || '', agents, places, lock });
   }
-  if (!items.length) throw fail('NOT_FOUND', failed.length === 1 ? failed[0].message : 'Aucun des skills choisis n’a été trouvé.');
-  const backup = await writeBackup(home, { origin: 'manual', label, note, items });
-  return { backup, failed };
+  return { items, failed };
+}
+
+// Noms de tous les skills du dossier personnel : dossier partagé, dossiers des agents (même absents), skills désactivés.
+export async function allSkillNames(home, map) {
+  const names = new Set();
+  const scan = async (dir) => {
+    for (const n of await fs.readdir(dir).catch(() => [])) if (NAME_RE.test(n) && n !== '.' && n !== '..' && (await isSkillEntry(path.join(dir, n)))) names.add(n);
+  };
+  await scan(sharedDir(home));
+  for (const a of Object.values(map)) if (!a.shared && a.dir) await scan(a.dir);
+  for (const d of await disabledIds(home)) await scan(safeJoin(disabledDir(home), d));
+  return [...names].sort();
 }
 
 // Remet chaque copie à sa place : dossier partagé ou dossier de l'agent (agent disparu : copie ignorée).
@@ -306,11 +330,21 @@ export async function createManualBackup(opts = {}) {
 // Plusieurs skills : tout est vérifié avant la première écriture, et tout est défait en cas d'échec.
 export async function restoreBackup(opts = {}) {
   const home = homeOf(opts);
-  if ((await backupKind(home, opts.id)) === MCP_KIND) return (await import('./mcp-backups.mjs')).restoreMcpBackup(opts);
+  const kind = await backupKind(home, opts.id);
+  if (kind === MCP_KIND) return (await import('./mcp-backups.mjs')).restoreMcpBackup(opts);
+  if (kind === CONFIG_KIND) return (await import('./config-backups.mjs')).restoreConfigBackup(opts);
   if (opts.force !== undefined && opts.force !== null && !Array.isArray(opts.force)) throw fail('BAD_NAME', 'La liste des skills à restaurer quand même est invalide.');
   const force = (opts.force || []).map(checkName);
   const { dir, meta } = await loadMeta(home, opts.id);
-  const map = await agentMap({ home });
+  return restoreSkillsAt(home, dir, meta, { force });
+}
+
+// Restaure les skills de meta, rangés dans dir. onlyDetected : les agents absents de cette machine sont passés
+// (sauvegarde complète restaurée sur une autre machine), jamais de dossier créé pour eux.
+export async function restoreSkillsAt(home, dir, meta, opts = {}) {
+  const force = opts.force || [];
+  const map = opts.map || await agentMap({ home });
+  const here = (id) => !opts.onlyDetected || id === UNIVERSAL || !!(map[id] && map[id].detected);
   const plan = [], used = new Set(), links = [], locks = [], red = [];
   for (const it of meta.items) {
     const name = it.name;
@@ -319,7 +353,7 @@ export async function restoreBackup(opts = {}) {
       const src = path.join(dir, ...p.copy.split('/'));
       if (!(await statOrNull(path.join(src, 'SKILL.md')))) throw fail('NOT_FOUND', 'La sauvegarde ne contient plus le skill ' + name + '.');
       const a = map[p.agent];
-      let to = p.off ? safeJoin(safeJoin(disabledDir(home), p.agent), name)
+      let to = !here(p.agent) ? null : p.off ? safeJoin(safeJoin(disabledDir(home), p.agent), name)
         : p.agent === UNIVERSAL ? safeJoin(sharedDir(home), name) : a && !a.shared && a.dir ? safeJoin(a.dir, name) : null;
       if (!to || used.has(to)) continue;
       used.add(to);
@@ -360,7 +394,7 @@ export async function restoreBackup(opts = {}) {
     if (!used.has(target)) continue;
     for (const id of it.agents) {
       const a = map[id];
-      if (!a || a.shared || !a.dir || it.places.some((p) => p.off && p.agent === id)) continue;
+      if (!a || a.shared || !a.dir || !here(id) || it.places.some((p) => p.off && p.agent === id)) continue;
       const at = safeJoin(a.dir, it.name);
       if (!used.has(at) && !(await exists(at))) links.push({ dir: a.dir, at, target });
     }

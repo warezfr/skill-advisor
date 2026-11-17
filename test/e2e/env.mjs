@@ -44,6 +44,8 @@ export async function startServer(home) {
   for (const k of ['SA_NET', 'CATALOG_URL', 'XDG_CONFIG_HOME', 'XDG_STATE_HOME', 'CLAUDE_CONFIG_DIR', 'CODEX_HOME']) delete env[k];
   // Catalogues MCP et plugins en ligne : jamais pendant les essais.
   env.SA_CATALOG_DATA = 'off';
+  // Aucune commande d'agent (claude, gemini…) lancée par une restauration de plugins.
+  env.SA_PLUGIN_CLI = 'off';
   const srv = spawn(process.execPath, [path.join(ROOT, 'app', 'server.mjs'), '--no-open', '--port', '0', '--home', home],
     { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
   let out = '', err = '';

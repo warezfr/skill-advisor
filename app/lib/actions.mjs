@@ -984,7 +984,9 @@ async function swapIn(at, make, ctx = {}) {
 // Lecteurs du dossier partagé : ~/.agents/skills/<nom>. Agents avec leur dossier : lien vers ce dossier. Agents personnalisés : copie.
 export async function applyBackup(opts = {}) {
   const home = homeOf(opts);
-  if ((await backupKind(home, opts.id)) === 'mcp') return (await import('./mcp-backups.mjs')).applyMcpBackup(opts);
+  const kind = await backupKind(home, opts.id);
+  if (kind === 'mcp') return (await import('./mcp-backups.mjs')).applyMcpBackup(opts);
+  if (kind === 'config') throw fail('UNSUPPORTED', 'Une sauvegarde de toute la configuration se restaure ; elle ne s’applique pas à d’autres agents.');
   const { dir, meta } = await loadMeta(home, opts.id);
   const conflict = opts.conflict === undefined || opts.conflict === null ? 'skip' : opts.conflict;
   if (conflict !== 'skip' && conflict !== 'replace') throw fail('BAD_INPUT', 'Choix invalide en cas de conflit : skip ou replace.');
