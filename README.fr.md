@@ -6,7 +6,7 @@
 
 [English](README.md) · **Français** · [Español](README.es.md) · [العربية](README.ar.md)
 
-![Version 1.0.0](https://img.shields.io/badge/version-1.0.0-2563eb)
+![Version 1.1.0](https://img.shields.io/badge/version-1.1.0-2563eb)
 ![Licence : MIT](https://img.shields.io/badge/license-MIT-2563eb)
 ![Node.js 22.20+](https://img.shields.io/badge/node-22.20%2B-16a34a)
 ![Testé par l'intégration continue sur macOS, Ubuntu, Windows](https://img.shields.io/badge/tested-macOS%20%C2%B7%20Ubuntu%20%C2%B7%20Windows-64748b)
